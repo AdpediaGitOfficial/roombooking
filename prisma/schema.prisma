@@ -417,18 +417,37 @@ model Request {
   data              Json
   status            RequestStatus @default(DRAFT)
   currentStepOrder  Int?
+  submissionVersion Int           @default(1)
+  decidedAt         DateTime?
   fulfilledAt       DateTime?
+  fulfilmentNote    String?
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
 
-  requestType     RequestType        @relation(fields: [requestTypeId], references: [id])
-  workflowVersion WorkflowVersion    @relation(fields: [workflowVersionId], references: [id])
-  requester       User               @relation("RequestRequester", fields: [requesterId], references: [id])
+  requestType     RequestType         @relation(fields: [requestTypeId], references: [id])
+  workflowVersion WorkflowVersion     @relation(fields: [workflowVersionId], references: [id])
+  requester       User                @relation("RequestRequester", fields: [requesterId], references: [id])
   decisions       ApprovalDecision[]
+  submissions     RequestSubmission[]
   allocations     Allocation[]
 
   @@index([requesterId, status])
   @@index([status])
+}
+
+// Every submitted version of the form data is kept, so a request returned
+// for changes preserves what was previously submitted (SRS edge case
+// "Rejected request resubmitted").
+model RequestSubmission {
+  id          String   @id @default(cuid())
+  requestId   String
+  version     Int
+  data        Json
+  submittedAt DateTime @default(now())
+
+  request Request @relation(fields: [requestId], references: [id])
+
+  @@unique([requestId, version])
 }
 
 enum DecisionAction {
@@ -438,13 +457,14 @@ enum DecisionAction {
 }
 
 model ApprovalDecision {
-  id         String         @id @default(cuid())
-  requestId  String
-  stepId     String
-  approverId String
-  action     DecisionAction
-  comment    String?
-  createdAt  DateTime       @default(now())
+  id                String         @id @default(cuid())
+  requestId         String
+  stepId            String
+  approverId        String
+  action            DecisionAction
+  comment           String?
+  submissionVersion Int            @default(1)
+  createdAt         DateTime       @default(now())
 
   request  Request      @relation(fields: [requestId], references: [id])
   step     ApprovalStep @relation(fields: [stepId], references: [id])

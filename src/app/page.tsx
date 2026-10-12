@@ -9,7 +9,7 @@ const modules: Array<[string, string, string?]> = [
   ["Accommodation", "Sites, buildings, rooms, beds, allocations, check-in/out", "/accommodation"],
   ["Staff self-service", "My stay, profile, requests", "/my"],
   ["Maintenance", "Work orders, assignment, contractor access"],
-  ["Forms & approvals", "Room change, visitor, family, exit clearance"],
+  ["Forms & approvals", "Room change, visitor, family, exit clearance", "/approvals"],
   ["Facility booking", "Shared facilities and calendars"],
   ["Keys", "Issue, return, lost and damaged keys"],
   ["Inventory", "Stock and serialised assets"],

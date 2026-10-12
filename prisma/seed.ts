@@ -56,8 +56,13 @@ async function main() {
     return user;
   }
 
-  await ensureUser("admin@example.com", "System Administrator", Role.SYSTEM_ADMIN);
+  const adminUser = await ensureUser("admin@example.com", "System Administrator", Role.SYSTEM_ADMIN);
+  // The demo admin also acts as the accommodation administrator (final approval step).
+  if (!(await prisma.roleAssignment.findFirst({ where: { userId: adminUser.id, role: Role.ACCOMMODATION_ADMIN, siteId: null, buildingId: null } }))) {
+    await prisma.roleAssignment.create({ data: { userId: adminUser.id, role: Role.ACCOMMODATION_ADMIN } });
+  }
   await ensureUser("officer@example.com", "Reception Officer", Role.ACCOMMODATION_OFFICER);
+  await ensureUser("manager@example.com", "Line Manager", Role.APPROVER);
   const staffUser = await ensureUser("staff@example.com", "Sample Resident", Role.STAFF);
   await prisma.staffProfile.upsert({
     where: { organizationId_employeeId: { organizationId: org.id, employeeId: "E1001" } },
@@ -108,40 +113,47 @@ async function main() {
   }
 
   // Standard request types from the Scope of Work (WF-01) with a two-step route.
-  const requestTypes: Array<{ code: string; name: string; fields: Prisma.InputJsonObject[] }> = [
+  const requestTypes: Array<{ code: string; name: string; description: string; fields: Prisma.InputJsonObject[] }> = [
     {
       code: "ROOM_CHANGE",
       name: "Room change request",
+      description: "Ask to move to a different room or building.",
       fields: [
-        { name: "reason", label: "Reason for change", type: "textarea", required: true },
-        { name: "preferredBuilding", label: "Preferred building", type: "text", required: false },
-        { name: "effectiveDate", label: "Requested effective date", type: "date", required: true },
+        { name: "reason", label: "Reason for change", type: "textarea", required: true, help: "Tell us what is wrong with the current room or why you need to move." },
+        { name: "preferredBuilding", label: "Preferred building", type: "select", required: false, optionsSource: "buildings" },
+        { name: "effectiveDate", label: "Requested move date", type: "date", required: true },
       ],
     },
     {
       code: "VISITOR_STAY",
       name: "Visitor stay request",
+      description: "Permission for a visitor to stay overnight in your accommodation.",
       fields: [
-        { name: "visitorName", label: "Visitor name", type: "text", required: true },
-        { name: "relationship", label: "Relationship", type: "text", required: true },
+        { name: "visitorName", label: "Visitor full name", type: "text", required: true },
+        { name: "relationship", label: "Relationship to you", type: "select", required: true, options: ["Spouse", "Parent", "Sibling", "Child", "Friend", "Other"] },
         { name: "arrivalDate", label: "Arrival date", type: "date", required: true },
         { name: "departureDate", label: "Departure date", type: "date", required: true },
+        { name: "idProvided", label: "I will present the visitor's ID at reception on arrival", type: "checkbox", required: true },
       ],
     },
     {
       code: "FAMILY_ACCOMMODATION",
       name: "Family accommodation request",
+      description: "Apply for family accommodation instead of shared staff housing.",
       fields: [
-        { name: "familyMembers", label: "Number of family members", type: "number", required: true },
+        { name: "familyMembers", label: "Number of family members joining you", type: "number", required: true, min: 1, max: 10 },
         { name: "justification", label: "Justification", type: "textarea", required: true },
+        { name: "preferredBuilding", label: "Preferred building", type: "select", required: false, optionsSource: "buildings" },
       ],
     },
     {
       code: "EXIT_CLEARANCE",
       name: "Exit clearance",
+      description: "Start your departure process: keys, assets and check-out.",
       fields: [
-        { name: "lastWorkingDay", label: "Last working day", type: "date", required: true },
-        { name: "forwardingContact", label: "Forwarding contact", type: "text", required: false },
+        { name: "lastWorkingDay", label: "Last working day", type: "date", required: true, help: "Your accommodation end date will be set to this day once approved." },
+        { name: "forwardingContact", label: "Forwarding phone or email", type: "text", required: false },
+        { name: "itemsReturned", label: "I will return all keys and issued items before leaving", type: "checkbox", required: true },
       ],
     },
   ];
@@ -149,8 +161,8 @@ async function main() {
   for (const rt of requestTypes) {
     const type = await prisma.requestType.upsert({
       where: { organizationId_code: { organizationId: org.id, code: rt.code } },
-      update: { name: rt.name },
-      create: { organizationId: org.id, code: rt.code, name: rt.name },
+      update: { name: rt.name, description: rt.description },
+      create: { organizationId: org.id, code: rt.code, name: rt.name, description: rt.description },
     });
     const version = await prisma.workflowVersion.upsert({
       where: { requestTypeId_version: { requestTypeId: type.id, version: 1 } },

@@ -7,6 +7,7 @@ import { recordAudit } from "@/lib/audit";
 import { enqueueNotification } from "@/lib/notifications";
 import { OCCUPYING_STATUSES, isoDate, todayInTimezone } from "@/modules/accommodation/occupancy";
 import { AllocationError } from "./errors";
+import { fulfilRoomChangeTx } from "@/modules/requests/service";
 
 type Tx = Prisma.TransactionClient;
 type Db = Tx | PrismaClient;
@@ -377,6 +378,8 @@ export type TransferInput = {
   reason: string;
   actorId: string;
   today?: string;
+  /** An APPROVED room-change request this move fulfils (WF-08). */
+  requestId?: string | null;
 };
 
 export async function transfer(input: TransferInput) {
@@ -415,8 +418,12 @@ export async function transfer(input: TransferInput) {
         }
       }
 
+      if (input.requestId) {
+        await fulfilRoomChangeTx(tx, { requestId: input.requestId, staffId: current.staffId, allocationId: created.id, actorId: input.actorId });
+      }
+
       await recordAudit(
-        { actorId: input.actorId, action: "ALLOCATION_TRANSFERRED", entityType: "Allocation", entityId: current.id, after: { fromBedCode: current.bed.code, toBedId: input.toBedId, toAllocationId: created.id, effectiveDate: input.effectiveDate, reason } },
+        { actorId: input.actorId, action: "ALLOCATION_TRANSFERRED", entityType: "Allocation", entityId: current.id, after: { fromBedCode: current.bed.code, toBedId: input.toBedId, toAllocationId: created.id, effectiveDate: input.effectiveDate, reason, requestId: input.requestId ?? null } },
         tx,
       );
       return created;
@@ -444,8 +451,8 @@ export async function getAllocation(id: string) {
 
 export type AllocationListFilter = "active" | "upcoming" | "history" | "all";
 
-export async function listAllocations(filter: AllocationListFilter) {
-  const where: Prisma.AllocationWhereInput =
+export async function listAllocations(filter: AllocationListFilter, staffId?: string | null) {
+  const byStatus: Prisma.AllocationWhereInput =
     filter === "active"
       ? { status: "CHECKED_IN" }
       : filter === "upcoming"
@@ -453,6 +460,7 @@ export async function listAllocations(filter: AllocationListFilter) {
         : filter === "history"
           ? { status: { in: ["CHECKED_OUT", "CANCELLED", "REJECTED", "EXPIRED"] } }
           : {};
+  const where: Prisma.AllocationWhereInput = staffId ? { ...byStatus, staffId } : byStatus;
   return prisma.allocation.findMany({
     where,
     include: { staff: true, bed: { include: bedWithLocation } },

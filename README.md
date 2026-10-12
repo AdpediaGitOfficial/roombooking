@@ -46,6 +46,7 @@ The seed creates three demo accounts, all with password `ChangeMe123!`
 | admin@example.com | System Administrator |
 | officer@example.com | Accommodation Officer |
 | staff@example.com | Staff / Resident (linked to employee E1001) |
+| manager@example.com | Approver (line manager step) |
 
 ## Accommodation and bed management
 
@@ -102,6 +103,27 @@ a mobile-first portal with bottom navigation:
 
 All queries in `src/modules/self-service/service.ts` are scoped to the
 signed-in user's own staff record and notifications (SRS 3.1, SS-01..03).
+
+## Digital forms and approvals
+
+Request types carry a JSON form schema (`WorkflowVersion.formSchema`) and an
+ordered approval route (`ApprovalStep`). A request pins the workflow version
+current at submission, so changing a form or route never affects requests in
+flight. `src/modules/requests/service.ts` enforces the SRS rules:
+
+- validation on the server from the schema plus per-type rules (for example departure after arrival);
+- submit with an idempotency token, so a double click returns the existing request;
+- approvers must hold the step's role, cannot decide their own request, and must comment where the step requires it or when rejecting or returning;
+- two approvers deciding the same step at once resolve to one winner;
+- "changes requested" lets the requester edit and resubmit; every submitted version and every decision is kept;
+- the requester can withdraw while the request is pending or returned;
+- fulfilment runs exactly once inside the approval transaction: visitor and family requests complete on approval, exit clearance sets the resident's allocation end date, and an approved room change is completed by the officer's transfer, which references the request and closes it.
+
+Pages: `/my/requests` (resident: list, new, detail, resubmit, withdraw) and
+`/approvals` (inbox of steps waiting on your role; administrators also see all
+requests by status). Seeded routes: line manager approval, then accommodation
+administrator approval with a mandatory comment. Demo approver:
+`manager@example.com`.
 
 ## Authentication
 
@@ -161,6 +183,7 @@ src/
   modules/accommodation/  occupancy rules and queries, server actions, components
   modules/allocations/    allocation engine (service), server actions, components
   modules/self-service/   resident portal: stay, profile, password, notifications
+  modules/requests/       form schemas, approval workflow service, actions, components
   lib/notifications.ts   notification outbox writer
   lib/audit.ts         append-only audit writer
   proxy.ts             request gate (redirect to /login)

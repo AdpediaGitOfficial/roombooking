@@ -89,7 +89,7 @@ export function CancelForm({ allocationId }: { allocationId: string }) {
   );
 }
 
-export function TransferForm(props: { allocationId: string; toBedId: string; effectiveDate: string; reason: string }) {
+export function TransferForm(props: { allocationId: string; toBedId: string; effectiveDate: string; reason: string; requestId?: string }) {
   const [state, action, pending] = useActionState<ActionState, FormData>(transferAction, {});
   return (
     <form action={action}>
@@ -97,6 +97,7 @@ export function TransferForm(props: { allocationId: string; toBedId: string; eff
       <input type="hidden" name="toBedId" value={props.toBedId} />
       <input type="hidden" name="effectiveDate" value={props.effectiveDate} />
       <input type="hidden" name="reason" value={props.reason} />
+      {props.requestId && <input type="hidden" name="requestId" value={props.requestId} />}
       <button type="submit" disabled={pending} className={button}>{pending ? "Transferring…" : "Transfer here"}</button>
       <Feedback state={state} />
     </form>

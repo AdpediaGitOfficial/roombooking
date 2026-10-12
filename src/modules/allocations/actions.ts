@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { hasRole, requireRole } from "@/lib/auth/authorize";
 import { ALLOCATION_ADMIN_ROLES, ALLOCATION_OPERATE_ROLES } from "./access";
 import { AllocationError } from "./errors";
+import { RequestError } from "@/modules/requests/errors";
 import { allocate, cancel, checkIn, checkOut, transfer } from "./service";
 
 export type ActionState = { error?: string; message?: string };
@@ -23,7 +24,7 @@ async function run<T>(fn: () => Promise<T>): Promise<{ ok: true; value: T } | { 
   try {
     return { ok: true, value: await fn() };
   } catch (error) {
-    if (error instanceof AllocationError) return { ok: false, error: error.message };
+    if (error instanceof AllocationError || error instanceof RequestError) return { ok: false, error: error.message };
     throw error;
   }
 }
@@ -90,10 +91,13 @@ export async function transferAction(_prev: ActionState, formData: FormData): Pr
       effectiveDate: str(formData, "effectiveDate"),
       reason: str(formData, "reason"),
       actorId: user.id,
+      requestId: str(formData, "requestId") || null,
     }),
   );
   if (!result.ok) return { error: result.error };
   revalidateAccommodation(allocationId);
   revalidateAccommodation(result.value.id);
+  revalidatePath("/approvals");
+  revalidatePath("/my/requests");
   redirect(`/accommodation/allocations/${result.value.id}`);
 }

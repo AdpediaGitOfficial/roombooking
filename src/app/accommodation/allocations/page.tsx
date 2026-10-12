@@ -13,11 +13,11 @@ const FILTERS: Array<[AllocationListFilter, string]> = [
   ["all", "All"],
 ];
 
-async function AllocationList({ searchParams }: { searchParams: Promise<{ filter?: string }> }) {
+async function AllocationList({ searchParams }: { searchParams: Promise<{ filter?: string; staffId?: string; requestId?: string }> }) {
   await requireRole(ALLOCATION_VIEW_ROLES, "/accommodation/allocations");
-  const { filter: raw } = await searchParams;
+  const { filter: raw, staffId, requestId } = await searchParams;
   const filter = (FILTERS.some(([f]) => f === raw) ? raw : "active") as AllocationListFilter;
-  const allocations = await listAllocations(filter);
+  const allocations = await listAllocations(filter, staffId || null);
 
   return (
     <>
@@ -56,7 +56,13 @@ async function AllocationList({ searchParams }: { searchParams: Promise<{ filter
                 </td>
                 <td className="px-3 py-3 tabular-nums">{isoDate(a.startDate)} → {a.endDate ? isoDate(a.endDate) : "open-ended"}</td>
                 <td className="px-3 py-3"><AllocationStatusBadge status={a.status} /></td>
-                <td className="px-3 py-3 text-right"><Link href={`/accommodation/allocations/${a.id}`} className="underline">Open</Link></td>
+                <td className="px-3 py-3 text-right">
+                  {requestId && (a.status === "CONFIRMED" || a.status === "CHECKED_IN") ? (
+                    <Link href={`/accommodation/allocations/${a.id}/transfer?requestId=${requestId}&reason=${encodeURIComponent(`Room change request ${requestId.slice(-8).toUpperCase()}`)}`} className="underline">Transfer for request</Link>
+                  ) : (
+                    <Link href={`/accommodation/allocations/${a.id}`} className="underline">Open</Link>
+                  )}
+                </td>
               </tr>
             ))}
             {allocations.length === 0 && (
@@ -83,7 +89,7 @@ export default function AllocationsPage({ searchParams }: PageProps<"/accommodat
       </div>
       <div className="mt-6">
         <Suspense fallback={<p className="text-sm text-zinc-500">Loading…</p>}>
-          <AllocationList searchParams={searchParams as Promise<{ filter?: string }>} />
+          <AllocationList searchParams={searchParams as Promise<{ filter?: string; staffId?: string; requestId?: string }>} />
         </Suspense>
       </div>
     </main>

@@ -3,6 +3,7 @@ import Link from "next/link";
 const NAV = [
   ["/my", "Home"],
   ["/my/stay", "My stay"],
+  ["/my/requests", "Requests"],
   ["/my/profile", "Profile"],
 ] as const;
 

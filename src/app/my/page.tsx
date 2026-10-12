@@ -1,12 +1,18 @@
 import { Suspense } from "react";
 import { requireResident } from "@/modules/self-service/context";
 import { describeNotification, getMyStay, listMyNotifications } from "@/modules/self-service/service";
+import { prisma } from "@/lib/db";
+import Link from "next/link";
 import { markReadAction } from "@/modules/self-service/actions";
 import { StayCard } from "@/modules/self-service/components/stay-card";
 
 async function HomeContent() {
   const { user, staff } = await requireResident("/my");
-  const [stay, notifications] = await Promise.all([staff ? getMyStay(staff.id) : null, listMyNotifications(user.id)]);
+  const [stay, notifications, returned] = await Promise.all([
+    staff ? getMyStay(staff.id) : null,
+    listMyNotifications(user.id),
+    prisma.request.findMany({ where: { requesterId: user.id, status: "CHANGES_REQUESTED" }, include: { requestType: true } }),
+  ]);
   const firstName = staff?.firstName ?? user.name.split(" ")[0];
   const unread = notifications.filter((n) => !n.readAt);
 
@@ -23,11 +29,17 @@ async function HomeContent() {
         )}
       </section>
 
-      {stay && stay.pendingActions.length > 0 && (
+      {((stay && stay.pendingActions.length > 0) || returned.length > 0) && (
         <section className="mt-6">
           <h2 className="text-lg font-semibold">To do</h2>
           <ul className="mt-2 space-y-2">
-            {stay.pendingActions.map((a) => (
+            {returned.map((r) => (
+              <li key={r.id} data-action="REQUEST" className="rounded-lg bg-orange-50 p-3 text-sm text-orange-900 dark:bg-orange-950 dark:text-orange-200">
+                <div className="text-xs uppercase tracking-wide">request returned</div>
+                <div className="mt-0.5"><Link href={`/my/requests/${r.id}`} className="underline">{r.requestType.name}</Link> needs changes before it can be approved.</div>
+              </li>
+            ))}
+            {(stay?.pendingActions ?? []).map((a) => (
               <li key={`${a.kind}-${a.date}`} data-action={a.kind} className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-950 dark:text-amber-200">
                 <div className="text-xs uppercase tracking-wide">{a.kind.toLowerCase()} · {a.date}</div>
                 <div className="mt-0.5">{a.text}</div>
