@@ -20,12 +20,21 @@ async function main() {
 
   const site = await prisma.site.upsert({
     where: { organizationId_code: { organizationId: org.id, code: "HQ" } },
-    update: {},
+    update: {
+      address: "Industrial Area 3, Street 12",
+      contactPhone: "+971 4 000 0000",
+      contactEmail: "accommodation@example.com",
+      helpNotes: "Reception is open 07:00–22:00. For emergencies call security on 999.",
+    },
     create: {
       organizationId: org.id,
       code: "HQ",
       name: "Head Office Camp",
       timezone: "Asia/Dubai",
+      address: "Industrial Area 3, Street 12",
+      contactPhone: "+971 4 000 0000",
+      contactEmail: "accommodation@example.com",
+      helpNotes: "Reception is open 07:00–22:00. For emergencies call security on 999.",
     },
   });
 
@@ -52,11 +61,12 @@ async function main() {
   const staffUser = await ensureUser("staff@example.com", "Sample Resident", Role.STAFF);
   await prisma.staffProfile.upsert({
     where: { organizationId_employeeId: { organizationId: org.id, employeeId: "E1001" } },
-    update: { userId: staffUser.id },
+    update: { userId: staffUser.id, phone: "+971 50 123 4567" },
     create: {
       organizationId: org.id,
       userId: staffUser.id,
       employeeId: "E1001",
+      phone: "+971 50 123 4567",
       firstName: "Sample",
       lastName: "Resident",
       department: "Operations",
@@ -197,6 +207,23 @@ async function main() {
   await ensureAllocation("A-01-1", "E1001", "CHECKED_IN", daysFromNow(-30));
   await ensureAllocation("A-01-2", "E1002", "CONFIRMED", daysFromNow(0), daysFromNow(180));
   await ensureAllocation("A-02-1", "E1003", "CONFIRMED", daysFromNow(14));
+  // Welcome notification for the linked demo resident (idempotent).
+  const residentAllocation = await prisma.allocation.findFirst({ where: { staff: { employeeId: "E1001" }, status: "CHECKED_IN" }, include: { bed: { include: { room: { include: { building: true } } } } } });
+  if (residentAllocation) {
+    await prisma.notification.upsert({
+      where: { idempotencyKey: `allocation.confirmed:${residentAllocation.id}` },
+      update: {},
+      create: {
+        recipientId: staffUser.id,
+        channel: "IN_APP",
+        event: "allocation.confirmed",
+        template: "allocation.confirmed",
+        idempotencyKey: `allocation.confirmed:${residentAllocation.id}`,
+        payload: { allocationId: residentAllocation.id, bed: residentAllocation.bed.code, room: residentAllocation.bed.room.code, building: residentAllocation.bed.room.building.name, startDate: iso(residentAllocation.startDate), endDate: null },
+      },
+    });
+  }
+
   const blockedBed = await prisma.bed.findFirstOrThrow({ where: { code: "A-02-2" } });
   if (blockedBed.status === "ACTIVE") {
     await prisma.bed.update({ where: { id: blockedBed.id }, data: { status: "BLOCKED", blockReason: "Mattress replacement" } });

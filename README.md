@@ -89,6 +89,20 @@ Pages: `/accommodation/allocations` (list by status), `/accommodation/allocation
 check-out, cancel), `/accommodation/allocations/:id/transfer`.
 Administrators and reception officers operate; auditors read.
 
+## Staff self-service portal
+
+Residents (users holding only the STAFF role) land on `/my` after sign-in,
+a mobile-first portal with bottom navigation:
+
+| Page | Content |
+|------|---------|
+| `/my` | Current bed, pending actions (upcoming arrival, booked move, stay ending within 14 days), in-app notifications with mark-as-read |
+| `/my/stay` | Site, building, room, bed, dates, room sharing (counts only, never other residents' details), next bed if a transfer is booked, previous stays, accommodation office contact |
+| `/my/profile` | Employment record read-only; editable phone and emergency contact; password change that signs out other sessions |
+
+All queries in `src/modules/self-service/service.ts` are scoped to the
+signed-in user's own staff record and notifications (SRS 3.1, SS-01..03).
+
 ## Authentication
 
 Sessions are owned by the application, not a third-party provider, so the
@@ -146,6 +160,7 @@ src/
   lib/auth/            password hashing, session store, cookie session, authorisation
   modules/accommodation/  occupancy rules and queries, server actions, components
   modules/allocations/    allocation engine (service), server actions, components
+  modules/self-service/   resident portal: stay, profile, password, notifications
   lib/notifications.ts   notification outbox writer
   lib/audit.ts         append-only audit writer
   proxy.ts             request gate (redirect to /login)

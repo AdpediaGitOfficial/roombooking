@@ -64,3 +64,12 @@ export async function revokeUserSessions(userId: string) {
   });
   return result.count;
 }
+
+/** Ends every other active session for a user, keeping the one identified by `keepToken`. */
+export async function revokeOtherUserSessions(userId: string, keepToken: string) {
+  const result = await prisma.session.updateMany({
+    where: { userId, revokedAt: null, tokenHash: { not: hashSessionToken(keepToken) } },
+    data: { revokedAt: new Date() },
+  });
+  return result.count;
+}

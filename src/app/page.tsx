@@ -1,11 +1,13 @@
 import { Suspense } from "react";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth/authorize";
+import { isResidentOnly } from "@/modules/self-service/context";
 import { logout } from "./login/actions";
 
 const modules: Array<[string, string, string?]> = [
   ["Accommodation", "Sites, buildings, rooms, beds, allocations, check-in/out", "/accommodation"],
-  ["Staff self-service", "My stay, profile, requests"],
+  ["Staff self-service", "My stay, profile, requests", "/my"],
   ["Maintenance", "Work orders, assignment, contractor access"],
   ["Forms & approvals", "Room change, visitor, family, exit clearance"],
   ["Facility booking", "Shared facilities and calendars"],
@@ -19,6 +21,8 @@ const modules: Array<[string, string, string?]> = [
 
 async function UserBar() {
   const user = await requireUser("/");
+  // Residents without operational roles get the mobile self-service portal.
+  if (isResidentOnly(user)) redirect("/my");
   const roles = user.roleAssignments.map((r) => r.role.replaceAll("_", " ").toLowerCase());
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
