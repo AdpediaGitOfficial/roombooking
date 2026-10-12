@@ -624,21 +624,26 @@ enum KeyStatus {
 }
 
 model Key {
-  id          String    @id @default(cuid())
-  siteId      String
-  code        String
-  label       String?
-  roomId      String?
-  facilityId  String?
-  allowCopies Boolean   @default(false)
-  status      KeyStatus @default(AVAILABLE)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id            String    @id @default(cuid())
+  siteId        String
+  code          String
+  label         String?
+  roomId        String?
+  facilityId    String?
+  allowCopies   Boolean   @default(false)
+  status        KeyStatus @default(AVAILABLE)
+  notes         String?
+  // Set on the key that replaced a lost/damaged one (KEY-04).
+  replacesKeyId String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   site         Site             @relation(fields: [siteId], references: [id])
   room         Room?            @relation(fields: [roomId], references: [id])
   facility     Facility?        @relation(fields: [facilityId], references: [id])
   transactions KeyTransaction[]
+  replaces     Key?             @relation("KeyReplacement", fields: [replacesKeyId], references: [id])
+  replacedBy   Key[]            @relation("KeyReplacement")
 
   @@unique([siteId, code])
 }
@@ -656,15 +661,18 @@ enum KeyTransactionType {
 // Issue/return records are never deleted (KEY-06). An ISSUE row stays open
 // (returnedAt null) until the matching RETURN closes it.
 model KeyTransaction {
-  id          String             @id @default(cuid())
-  keyId       String
-  type        KeyTransactionType
-  holderId    String?
-  custodianId String
-  condition   String?
-  notes       String?
-  returnedAt  DateTime?
-  createdAt   DateTime           @default(now())
+  id               String             @id @default(cuid())
+  keyId            String
+  type             KeyTransactionType
+  holderId         String?
+  // Holder outside the staff register (contractor, visitor) when holderId is null.
+  holderName       String?
+  custodianId      String
+  condition        String?
+  notes            String?
+  expectedReturnAt DateTime?
+  returnedAt       DateTime?
+  createdAt        DateTime           @default(now())
 
   key       Key           @relation(fields: [keyId], references: [id])
   holder    StaffProfile? @relation(fields: [holderId], references: [id])

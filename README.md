@@ -49,6 +49,7 @@ The seed creates three demo accounts, all with password `ChangeMe123!`
 | manager@example.com | Approver (line manager step) |
 | engineer@example.com | Maintenance engineer |
 | vendor@example.com | Vendor technician (CoolAir Services) |
+| custodian@example.com | Inventory / key custodian |
 
 ## Accommodation and bed management
 
@@ -143,6 +144,22 @@ Coordinators work the queue at `/maintenance`. Rules in
 
 Demo accounts: `engineer@example.com` (maintenance) and `vendor@example.com` (CoolAir Services contractor).
 
+## Key register
+
+`/keys` lists every key with its status and current holder, summary tiles
+(available, issued, overdue, exceptions) and filters; `/keys/:id` shows the
+permanent transaction history and the actions for its state. Rules in
+`src/modules/keys/service.ts`:
+
+- keys are registered per site against a room or a facility; copies are separate key records;
+- issue records holder (resident or named outsider), custodian, condition, expected return and notes; a key has one open issue at a time (database constraint) and overdue keys are flagged;
+- return closes the issue and records condition; a damaged return moves the key to damaged, then under repair, then back to available;
+- lost keys stay issued against the holder, so check-out clearance still flags them, until the key is found or replaced; replacement retires the old key, closes the issue and registers the new key linked to the old one;
+- retirement is refused while a key is out; history rows are never deleted;
+- custodians and administrators manage keys; officers issue and return, including from the allocation page at check-in and check-out; residents see the keys they hold in My stay.
+
+Demo custodian: `custodian@example.com`.
+
 ## Authentication
 
 Sessions are owned by the application, not a third-party provider, so the
@@ -203,6 +220,7 @@ src/
   modules/self-service/   resident portal: stay, profile, password, notifications
   modules/requests/       form schemas, approval workflow service, actions, components
   modules/maintenance/    work order service, actions, components
+  modules/keys/           key register service, actions, components
   lib/uploads.ts          photo validation and storage
   lib/notifications.ts   notification outbox writer
   lib/audit.ts         append-only audit writer

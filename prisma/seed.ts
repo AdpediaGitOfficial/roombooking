@@ -64,6 +64,7 @@ async function main() {
   await ensureUser("officer@example.com", "Reception Officer", Role.ACCOMMODATION_OFFICER);
   await ensureUser("manager@example.com", "Line Manager", Role.APPROVER);
   const engineer = await ensureUser("engineer@example.com", "Maintenance Engineer", Role.MAINTENANCE);
+  const custodian = await ensureUser("custodian@example.com", "Key Custodian", Role.INVENTORY_KEY_CUSTODIAN);
   const vendor = await prisma.vendor.upsert({
     where: { id: "demo-vendor-coolair" },
     update: {},
@@ -247,6 +248,18 @@ async function main() {
   const blockedBed = await prisma.bed.findFirstOrThrow({ where: { code: "A-02-2" } });
   if (blockedBed.status === "ACTIVE") {
     await prisma.bed.update({ where: { id: blockedBed.id }, data: { status: "BLOCKED", blockReason: "Mattress replacement" } });
+  }
+
+  // Key handover for the checked-in demo resident (idempotent: one open issue per key).
+  const keyA01 = await prisma.key.findFirstOrThrow({ where: { code: "K-A-01" } });
+  const residentProfile = await prisma.staffProfile.findUniqueOrThrow({ where: { organizationId_employeeId: { organizationId: org.id, employeeId: "E1001" } } });
+  const openIssue = await prisma.keyTransaction.findFirst({ where: { keyId: keyA01.id, type: "ISSUE", returnedAt: null } });
+  if (!openIssue && keyA01.status === "AVAILABLE") {
+    await prisma.keyTransaction.create({ data: { keyId: keyA01.id, type: "ISSUE", holderId: residentProfile.id, custodianId: custodian.id, condition: "Good", notes: "Handed over at check-in" } });
+    await prisma.key.update({ where: { id: keyA01.id }, data: { status: "ISSUED" } });
+  } else if (openIssue && keyA01.status === "AVAILABLE") {
+    // Repair inconsistent state: an open issue means the key is out.
+    await prisma.key.update({ where: { id: keyA01.id }, data: { status: "ISSUED" } });
   }
 
   // Sample maintenance tickets (idempotent by description).

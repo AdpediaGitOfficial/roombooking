@@ -3,6 +3,7 @@ import { requireResident } from "@/modules/self-service/context";
 import { getMyStay } from "@/modules/self-service/service";
 import { StayCard } from "@/modules/self-service/components/stay-card";
 import { isoDate } from "@/modules/accommodation/occupancy";
+import { keysHeldBy } from "@/modules/keys/service";
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -18,7 +19,7 @@ async function StayContent() {
   if (!staff) {
     return <p className="mt-4 text-sm text-zinc-600 dark:text-zinc-400">Your account is not linked to a staff record yet. Contact the accommodation office.</p>;
   }
-  const stay = await getMyStay(staff.id);
+  const [stay, heldKeys] = await Promise.all([getMyStay(staff.id), keysHeldBy(staff.id)]);
   const site = stay.current?.bed.room.building.site ?? stay.upcoming?.bed.room.building.site ?? null;
 
   return (
@@ -41,6 +42,23 @@ async function StayContent() {
         <section className="mt-6">
           <h2 className="text-lg font-semibold">{stay.current ? "Your next bed" : "Upcoming stay"}</h2>
           <div className="mt-2"><StayCard allocation={stay.upcoming} /></div>
+        </section>
+      )}
+
+      {heldKeys.length > 0 && (
+        <section className="mt-6" data-held-keys>
+          <h2 className="text-lg font-semibold">Keys you hold</h2>
+          <ul className="mt-2 divide-y divide-zinc-200 rounded-lg border border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
+            {heldKeys.map((t) => (
+              <li key={t.id} className="flex justify-between gap-3 p-3 text-sm">
+                <div>
+                  <div className="font-medium">{t.key.code}{t.key.label ? ` · ${t.key.label}` : ""}</div>
+                  <div className="text-xs text-zinc-500">{t.key.room ? `${t.key.room.building.name} room ${t.key.room.code}` : t.key.facility?.name ?? ""} · issued {t.createdAt.toISOString().slice(0, 10)}</div>
+                </div>
+                <div className="text-right text-xs text-zinc-500">{t.expectedReturnAt ? `return by ${t.expectedReturnAt.toISOString().slice(0, 10)}` : "return at check-out"}</div>
+              </li>
+            ))}
+          </ul>
         </section>
       )}
 
