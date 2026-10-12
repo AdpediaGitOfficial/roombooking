@@ -1,0 +1,808 @@
+// Staff Accommodation Management – core data model.
+// Mirrors section 4 (Core Data Model) and section 8 (Status Models) of the SRS.
+// Integrity rules that Prisma cannot express (date-range exclusion on bed
+// allocations, partial unique indexes, append-only audit) live in
+// prisma/migrations/*/migration.sql.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Organisation and accommodation hierarchy
+// ---------------------------------------------------------------------------
+
+enum RecordStatus {
+  ACTIVE
+  INACTIVE
+}
+
+model Organization {
+  id        String       @id @default(cuid())
+  code      String       @unique
+  name      String
+  status    RecordStatus @default(ACTIVE)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  sites        Site[]
+  users        User[]
+  staff        StaffProfile[]
+  vendors      Vendor[]
+  requestTypes RequestType[]
+}
+
+model Site {
+  id             String       @id @default(cuid())
+  organizationId String
+  code           String
+  name           String
+  address        String?
+  timezone       String       @default("UTC")
+  status         RecordStatus @default(ACTIVE)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  organization    Organization     @relation(fields: [organizationId], references: [id])
+  buildings       Building[]
+  facilities      Facility[]
+  roleAssignments RoleAssignment[]
+  keys            Key[]
+  inventoryItems  InventoryItem[]
+  lostFoundItems  LostFoundItem[]
+  workOrders      WorkOrder[]
+
+  @@unique([organizationId, code])
+}
+
+enum BuildingType {
+  BUILDING
+  VILLA
+  APARTMENT
+}
+
+model Building {
+  id        String       @id @default(cuid())
+  siteId    String
+  code      String
+  name      String
+  type      BuildingType @default(BUILDING)
+  address   String?
+  status    RecordStatus @default(ACTIVE)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  site            Site             @relation(fields: [siteId], references: [id])
+  rooms           Room[]
+  roleAssignments RoleAssignment[]
+  workOrders      WorkOrder[]
+
+  @@unique([siteId, code])
+}
+
+enum RoomStatus {
+  ACTIVE
+  BLOCKED
+  INACTIVE
+}
+
+enum GenderPolicy {
+  ANY
+  MALE
+  FEMALE
+}
+
+model Room {
+  id           String       @id @default(cuid())
+  buildingId   String
+  code         String
+  type         String?
+  floor        String?
+  capacity     Int
+  genderPolicy GenderPolicy @default(ANY)
+  status       RoomStatus   @default(ACTIVE)
+  blockReason  String?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  building         Building          @relation(fields: [buildingId], references: [id])
+  beds             Bed[]
+  keys             Key[]
+  inventoryItems   InventoryItem[]
+  assetAssignments AssetAssignment[]
+  workOrders       WorkOrder[]
+
+  @@unique([buildingId, code])
+}
+
+enum BedStatus {
+  AVAILABLE
+  BLOCKED
+  INACTIVE
+}
+
+model Bed {
+  id        String    @id @default(cuid())
+  roomId    String
+  code      String
+  status    BedStatus @default(AVAILABLE)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  room        Room         @relation(fields: [roomId], references: [id])
+  allocations Allocation[]
+
+  @@unique([roomId, code])
+}
+
+// ---------------------------------------------------------------------------
+// Users, roles and staff
+// ---------------------------------------------------------------------------
+
+enum UserStatus {
+  INVITED
+  ACTIVE
+  SUSPENDED
+  DEACTIVATED
+}
+
+model User {
+  id             String     @id @default(cuid())
+  organizationId String
+  email          String     @unique
+  name           String
+  passwordHash   String?
+  status         UserStatus @default(INVITED)
+  lastLoginAt    DateTime?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  organization    Organization     @relation(fields: [organizationId], references: [id])
+  roleAssignments RoleAssignment[]
+  staffProfile    StaffProfile?
+  vendor          Vendor?          @relation(fields: [vendorId], references: [id])
+  vendorId        String?
+  accessExpiresAt DateTime?
+
+  requests              Request[]              @relation("RequestRequester")
+  approvalDecisions     ApprovalDecision[]
+  workOrdersRequested   WorkOrder[]            @relation("WorkOrderRequester")
+  workOrdersAssigned    WorkOrder[]            @relation("WorkOrderAssignee")
+  workOrderNotes        WorkOrderNote[]
+  facilityBookings      FacilityBooking[]
+  keyTransactions       KeyTransaction[]
+  inventoryTransactions InventoryTransaction[]
+  lostFoundCustody      LostFoundItem[]
+  notifications         Notification[]
+  auditEvents           AuditEvent[]
+  attachments           Attachment[]
+}
+
+// Roles from SRS section 3. Permissions are enforced server-side in code;
+// a role assignment may be scoped to a site or building.
+enum Role {
+  SYSTEM_ADMIN
+  ACCOMMODATION_ADMIN
+  ACCOMMODATION_OFFICER
+  STAFF
+  APPROVER
+  MAINTENANCE
+  VENDOR
+  INVENTORY_KEY_CUSTODIAN
+  FACILITY_MANAGER
+  AUDITOR
+}
+
+model RoleAssignment {
+  id         String   @id @default(cuid())
+  userId     String
+  role       Role
+  siteId     String?
+  buildingId String?
+  createdAt  DateTime @default(now())
+
+  user     User      @relation(fields: [userId], references: [id])
+  site     Site?     @relation(fields: [siteId], references: [id])
+  building Building? @relation(fields: [buildingId], references: [id])
+
+  @@unique([userId, role, siteId, buildingId])
+}
+
+enum EmploymentStatus {
+  ACTIVE
+  ON_LEAVE
+  TERMINATED
+}
+
+model StaffProfile {
+  id               String           @id @default(cuid())
+  organizationId   String
+  userId           String?          @unique
+  employeeId       String
+  firstName        String
+  lastName         String
+  phone            String?
+  gender           GenderPolicy     @default(ANY)
+  department       String?
+  company          String?
+  employmentStatus EmploymentStatus @default(ACTIVE)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  organization     Organization      @relation(fields: [organizationId], references: [id])
+  user             User?             @relation(fields: [userId], references: [id])
+  allocations      Allocation[]
+  keyTransactions  KeyTransaction[]
+  assetAssignments AssetAssignment[]
+  lostFoundClaims  LostFoundClaim[]
+
+  @@unique([organizationId, employeeId])
+}
+
+model Vendor {
+  id             String       @id @default(cuid())
+  organizationId String
+  name           String
+  contactName    String?
+  contactPhone   String?
+  contactEmail   String?
+  status         RecordStatus @default(ACTIVE)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  users        User[]
+  workOrders   WorkOrder[]
+}
+
+// ---------------------------------------------------------------------------
+// Allocation (SRS 8.1)
+// ---------------------------------------------------------------------------
+
+enum AllocationStatus {
+  DRAFT
+  PENDING_APPROVAL
+  CONFIRMED
+  CHECKED_IN
+  CHECKED_OUT
+  CANCELLED
+  REJECTED
+  EXPIRED
+}
+
+model Allocation {
+  id           String           @id @default(cuid())
+  staffId      String
+  bedId        String
+  startDate    DateTime         @db.Date
+  endDate      DateTime?        @db.Date
+  status       AllocationStatus @default(DRAFT)
+  reason       String?
+  requestId    String?
+  checkedInAt  DateTime?
+  checkedOutAt DateTime?
+  checklist    Json?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  staff   StaffProfile @relation(fields: [staffId], references: [id])
+  bed     Bed          @relation(fields: [bedId], references: [id])
+  request Request?     @relation(fields: [requestId], references: [id])
+
+  @@index([staffId, status])
+  @@index([bedId, status])
+}
+
+// ---------------------------------------------------------------------------
+// Digital forms and approval workflow (SRS 5.4, 8.2)
+// ---------------------------------------------------------------------------
+
+model RequestType {
+  id             String       @id @default(cuid())
+  organizationId String
+  code           String
+  name           String
+  description    String?
+  status         RecordStatus @default(ACTIVE)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  organization Organization      @relation(fields: [organizationId], references: [id])
+  versions     WorkflowVersion[]
+  requests     Request[]
+
+  @@unique([organizationId, code])
+}
+
+// A request pins the workflow version that was current when it was submitted,
+// so editing a form or route never changes in-flight requests.
+model WorkflowVersion {
+  id            String   @id @default(cuid())
+  requestTypeId String
+  version       Int
+  formSchema    Json
+  isCurrent     Boolean  @default(false)
+  createdAt     DateTime @default(now())
+
+  requestType RequestType    @relation(fields: [requestTypeId], references: [id])
+  steps       ApprovalStep[]
+  requests    Request[]
+
+  @@unique([requestTypeId, version])
+}
+
+model ApprovalStep {
+  id                String  @id @default(cuid())
+  workflowVersionId String
+  order             Int
+  name              String
+  approverRole      Role
+  requireComment    Boolean @default(false)
+
+  workflowVersion WorkflowVersion    @relation(fields: [workflowVersionId], references: [id])
+  decisions       ApprovalDecision[]
+
+  @@unique([workflowVersionId, order])
+}
+
+enum RequestStatus {
+  DRAFT
+  SUBMITTED
+  PENDING_APPROVAL
+  CHANGES_REQUESTED
+  RESUBMITTED
+  APPROVED
+  REJECTED
+  FULFILLED
+  CLOSED
+  CANCELLED
+  EXPIRED
+}
+
+model Request {
+  id                String        @id @default(cuid())
+  requestTypeId     String
+  workflowVersionId String
+  requesterId       String
+  idempotencyKey    String        @unique
+  data              Json
+  status            RequestStatus @default(DRAFT)
+  currentStepOrder  Int?
+  fulfilledAt       DateTime?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  requestType     RequestType        @relation(fields: [requestTypeId], references: [id])
+  workflowVersion WorkflowVersion    @relation(fields: [workflowVersionId], references: [id])
+  requester       User               @relation("RequestRequester", fields: [requesterId], references: [id])
+  decisions       ApprovalDecision[]
+  allocations     Allocation[]
+
+  @@index([requesterId, status])
+  @@index([status])
+}
+
+enum DecisionAction {
+  APPROVE
+  REJECT
+  REQUEST_CHANGES
+}
+
+model ApprovalDecision {
+  id         String         @id @default(cuid())
+  requestId  String
+  stepId     String
+  approverId String
+  action     DecisionAction
+  comment    String?
+  createdAt  DateTime       @default(now())
+
+  request  Request      @relation(fields: [requestId], references: [id])
+  step     ApprovalStep @relation(fields: [stepId], references: [id])
+  approver User         @relation(fields: [approverId], references: [id])
+
+  @@index([requestId])
+}
+
+// ---------------------------------------------------------------------------
+// Maintenance (SRS 5.3, 8.3)
+// ---------------------------------------------------------------------------
+
+enum WorkOrderPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum WorkOrderStatus {
+  NEW
+  TRIAGED
+  ASSIGNED
+  IN_PROGRESS
+  WAITING_STAFF
+  WAITING_PARTS
+  WAITING_ACCESS
+  RESOLVED
+  CLOSED
+  REOPENED
+  CANCELLED
+}
+
+model WorkOrder {
+  id               String            @id @default(cuid())
+  ticketNumber     String            @unique
+  siteId           String
+  buildingId       String?
+  roomId           String?
+  category         String
+  description      String
+  priority         WorkOrderPriority @default(MEDIUM)
+  status           WorkOrderStatus   @default(NEW)
+  requesterId      String
+  assigneeId       String?
+  vendorId         String?
+  preferredContact String?
+  slaDueAt         DateTime?
+  acknowledgedAt   DateTime?
+  resolvedAt       DateTime?
+  closedAt         DateTime?
+  resolutionNote   String?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  site      Site            @relation(fields: [siteId], references: [id])
+  building  Building?       @relation(fields: [buildingId], references: [id])
+  room      Room?           @relation(fields: [roomId], references: [id])
+  requester User            @relation("WorkOrderRequester", fields: [requesterId], references: [id])
+  assignee  User?           @relation("WorkOrderAssignee", fields: [assigneeId], references: [id])
+  vendor    Vendor?         @relation(fields: [vendorId], references: [id])
+  notes     WorkOrderNote[]
+
+  @@index([status, siteId])
+  @@index([assigneeId, status])
+}
+
+model WorkOrderNote {
+  id          String   @id @default(cuid())
+  workOrderId String
+  authorId    String
+  note        String
+  createdAt   DateTime @default(now())
+
+  workOrder WorkOrder @relation(fields: [workOrderId], references: [id])
+  author    User      @relation(fields: [authorId], references: [id])
+}
+
+// ---------------------------------------------------------------------------
+// Facility booking (SRS 5.5, 8.4)
+// ---------------------------------------------------------------------------
+
+model Facility {
+  id               String       @id @default(cuid())
+  siteId           String
+  code             String
+  name             String
+  location         String?
+  capacity         Int          @default(1)
+  openingHours     Json?
+  bookingRules     Json?
+  requiresApproval Boolean      @default(false)
+  status           RecordStatus @default(ACTIVE)
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  site     Site              @relation(fields: [siteId], references: [id])
+  bookings FacilityBooking[]
+  keys     Key[]
+
+  @@unique([siteId, code])
+}
+
+enum BookingStatus {
+  PENDING_APPROVAL
+  CONFIRMED
+  CHECKED_IN
+  COMPLETED
+  CANCELLED
+  REJECTED
+  EXPIRED
+  NO_SHOW
+}
+
+model FacilityBooking {
+  id             String        @id @default(cuid())
+  facilityId     String
+  userId         String
+  startsAt       DateTime
+  endsAt         DateTime
+  headcount      Int           @default(1)
+  status         BookingStatus @default(CONFIRMED)
+  purpose        String?
+  idempotencyKey String?       @unique
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  facility Facility @relation(fields: [facilityId], references: [id])
+  user     User     @relation(fields: [userId], references: [id])
+
+  @@index([facilityId, startsAt, endsAt])
+}
+
+// ---------------------------------------------------------------------------
+// Key management (SRS 5.6, 8.5)
+// ---------------------------------------------------------------------------
+
+enum KeyStatus {
+  AVAILABLE
+  ISSUED
+  LOST
+  DAMAGED
+  UNDER_REPAIR
+  RETIRED
+}
+
+model Key {
+  id          String    @id @default(cuid())
+  siteId      String
+  code        String
+  label       String?
+  roomId      String?
+  facilityId  String?
+  allowCopies Boolean   @default(false)
+  status      KeyStatus @default(AVAILABLE)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  site         Site             @relation(fields: [siteId], references: [id])
+  room         Room?            @relation(fields: [roomId], references: [id])
+  facility     Facility?        @relation(fields: [facilityId], references: [id])
+  transactions KeyTransaction[]
+
+  @@unique([siteId, code])
+}
+
+enum KeyTransactionType {
+  ISSUE
+  RETURN
+  LOST
+  DAMAGED
+  REPAIR
+  REPLACED
+  RETIRE
+}
+
+// Issue/return records are never deleted (KEY-06). An ISSUE row stays open
+// (returnedAt null) until the matching RETURN closes it.
+model KeyTransaction {
+  id          String             @id @default(cuid())
+  keyId       String
+  type        KeyTransactionType
+  holderId    String?
+  custodianId String
+  condition   String?
+  notes       String?
+  returnedAt  DateTime?
+  createdAt   DateTime           @default(now())
+
+  key       Key           @relation(fields: [keyId], references: [id])
+  holder    StaffProfile? @relation(fields: [holderId], references: [id])
+  custodian User          @relation(fields: [custodianId], references: [id])
+
+  @@index([keyId, createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// Inventory (SRS 5.7)
+// ---------------------------------------------------------------------------
+
+enum TrackingType {
+  SERIALIZED
+  STOCK
+}
+
+enum AssetCondition {
+  NEW
+  GOOD
+  FAIR
+  DAMAGED
+  RETIRED
+}
+
+model InventoryItem {
+  id               String         @id @default(cuid())
+  siteId           String
+  sku              String
+  name             String
+  category         String
+  trackingType     TrackingType   @default(STOCK)
+  serialNumber     String?        @unique
+  quantity         Int            @default(0)
+  reorderThreshold Int?
+  roomId           String?
+  condition        AssetCondition @default(GOOD)
+  status           RecordStatus   @default(ACTIVE)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  site         Site                   @relation(fields: [siteId], references: [id])
+  room         Room?                  @relation(fields: [roomId], references: [id])
+  transactions InventoryTransaction[]
+  assignments  AssetAssignment[]
+
+  @@unique([siteId, sku, serialNumber])
+}
+
+enum InventoryTransactionType {
+  RECEIPT
+  ISSUE
+  RETURN
+  TRANSFER
+  ADJUSTMENT
+  DAMAGE
+  RETIREMENT
+}
+
+model InventoryTransaction {
+  id        String                   @id @default(cuid())
+  itemId    String
+  type      InventoryTransactionType
+  quantity  Int
+  actorId   String
+  notes     String?
+  createdAt DateTime                 @default(now())
+
+  item  InventoryItem @relation(fields: [itemId], references: [id])
+  actor User          @relation(fields: [actorId], references: [id])
+
+  @@index([itemId, createdAt])
+}
+
+// A serialised asset may have at most one open assignment (partial unique
+// index in migration SQL).
+model AssetAssignment {
+  id        String    @id @default(cuid())
+  itemId    String
+  roomId    String?
+  staffId   String?
+  startedAt DateTime  @default(now())
+  endedAt   DateTime?
+
+  item  InventoryItem @relation(fields: [itemId], references: [id])
+  room  Room?         @relation(fields: [roomId], references: [id])
+  staff StaffProfile? @relation(fields: [staffId], references: [id])
+
+  @@index([itemId, endedAt])
+}
+
+// ---------------------------------------------------------------------------
+// Lost and found (SRS 5.8)
+// ---------------------------------------------------------------------------
+
+enum LostFoundStatus {
+  REPORTED
+  STORED
+  CLAIM_PENDING
+  RETURNED
+  DISPOSED
+}
+
+model LostFoundItem {
+  id            String          @id @default(cuid())
+  siteId        String
+  reference     String          @unique
+  description   String
+  category      String?
+  foundLocation String?
+  foundAt       DateTime
+  custodianId   String
+  status        LostFoundStatus @default(REPORTED)
+  handedOverAt  DateTime?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  site      Site             @relation(fields: [siteId], references: [id])
+  custodian User             @relation(fields: [custodianId], references: [id])
+  claims    LostFoundClaim[]
+}
+
+enum ClaimOutcome {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+model LostFoundClaim {
+  id              String       @id @default(cuid())
+  itemId          String
+  claimantId      String?
+  claimantName    String?
+  claimantContact String?
+  evidence        String?
+  outcome         ClaimOutcome @default(PENDING)
+  decidedAt       DateTime?
+  createdAt       DateTime     @default(now())
+
+  item     LostFoundItem @relation(fields: [itemId], references: [id])
+  claimant StaffProfile? @relation(fields: [claimantId], references: [id])
+}
+
+// ---------------------------------------------------------------------------
+// Attachments, notifications, audit
+// ---------------------------------------------------------------------------
+
+model Attachment {
+  id           String   @id @default(cuid())
+  entityType   String
+  entityId     String
+  fileName     String
+  mimeType     String
+  sizeBytes    Int
+  storageKey   String
+  uploadedById String
+  createdAt    DateTime @default(now())
+
+  uploadedBy User @relation(fields: [uploadedById], references: [id])
+
+  @@index([entityType, entityId])
+}
+
+enum NotificationChannel {
+  IN_APP
+  EMAIL
+  WHATSAPP
+}
+
+enum NotificationStatus {
+  QUEUED
+  SENT
+  DELIVERED
+  FAILED
+}
+
+// Outbox: written in the same transaction as the business action, delivered
+// by a worker with retries. idempotencyKey prevents duplicate sends (COM-07).
+model Notification {
+  id             String              @id @default(cuid())
+  recipientId    String
+  channel        NotificationChannel
+  event          String
+  template       String
+  payload        Json
+  idempotencyKey String              @unique
+  status         NotificationStatus  @default(QUEUED)
+  attempts       Int                 @default(0)
+  lastError      String?
+  sentAt         DateTime?
+  readAt         DateTime?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  recipient User @relation(fields: [recipientId], references: [id])
+
+  @@index([status, channel])
+  @@index([recipientId, readAt])
+}
+
+// Append-only (trigger in migration SQL blocks UPDATE/DELETE).
+model AuditEvent {
+  id         String   @id @default(cuid())
+  actorId    String?
+  action     String
+  entityType String
+  entityId   String
+  before     Json?
+  after      Json?
+  source     String?
+  createdAt  DateTime @default(now())
+
+  actor User? @relation(fields: [actorId], references: [id])
+
+  @@index([entityType, entityId])
+  @@index([actorId, createdAt])
+}

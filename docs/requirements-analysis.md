@@ -127,7 +127,7 @@ Email (required), WhatsApp Business Platform (required, provider and template ap
 
 ### 6.2 Architecture recommendation
 
-Because the repository is empty, the stack is an open choice. Recommended starting point for a responsive, mobile-first, role-scoped line-of-business app:
+Stack decision (confirmed): **Node.js, Next.js (App Router, TypeScript), PostgreSQL** with Prisma for schema and migrations. The repository has been scaffolded on this stack; see the README for setup. Design choices:
 
 - **Modular monolith** with one relational database (PostgreSQL). Cross-module rules such as check-out blockers, exactly-once approval actions and transactional capacity checks are far simpler inside one transaction boundary than across services.
 - **Database-enforced integrity**: exclusion constraint on bed allocations over date ranges, unique active-assignment constraint on serialised assets, check constraints on stock, append-only audit table with row-level security.
@@ -141,6 +141,6 @@ Because the repository is empty, the stack is an open choice. Recommended starti
 ### 6.3 Immediate next steps
 
 1. Confirm the open decisions in section 5 with the client, especially hosting, authentication and the allocation state model, since they shape the data layer.
-2. Agree the stack and scaffold the repository: application skeleton, database migrations, CI, linting and a seed script for a demo site.
+2. Stack agreed and repository scaffolded (Next.js, Prisma, PostgreSQL schema with database-level integrity constraints, seed data). Still to add: authentication, CI pipeline, test harness.
 3. Implement R1 in this order: organisation/hierarchy → users/roles/auth/audit → allocation engine → staff portal → forms/approvals → maintenance → keys → notifications → dashboard.
 4. Write acceptance tests from the SRS edge-case catalogue (section 7 of the SRS) as the regression suite; the race-condition, double-submit and permission-escalation cases should be automated from the first sprint.
