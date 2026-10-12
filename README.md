@@ -47,6 +47,8 @@ The seed creates three demo accounts, all with password `ChangeMe123!`
 | officer@example.com | Accommodation Officer |
 | staff@example.com | Staff / Resident (linked to employee E1001) |
 | manager@example.com | Approver (line manager step) |
+| engineer@example.com | Maintenance engineer |
+| vendor@example.com | Vendor technician (CoolAir Services) |
 
 ## Accommodation and bed management
 
@@ -125,6 +127,22 @@ requests by status). Seeded routes: line manager approval, then accommodation
 administrator approval with a mandatory comment. Demo approver:
 `manager@example.com`.
 
+## Maintenance
+
+Residents report issues from the portal (`/my/maintenance`) with location,
+category, urgency, description, preferred contact and an optional photo.
+Coordinators work the queue at `/maintenance`. Rules in
+`src/modules/maintenance/service.ts`:
+
+- ticket numbers come from a database sequence (`MR-<year>-<n>`), and each urgency carries an SLA target (urgent 4 h, high 24 h, medium 72 h, low 168 h) used for overdue flags;
+- statuses follow the SRS model: new → triaged → assigned → in progress → waiting for resident, parts or access → resolved → closed, with reopen (within 7 days, by the requester) and cancel; each transition is checked against who may make it and audited;
+- only coordinators (system or accommodation administrators and officers) assign, to active maintenance members or vendors; engineers and vendor users see and update only tickets assigned to them;
+- resolving, reopening and cancelling require a note; internal notes are hidden from residents and vendors; vendor users see only their vendor's tickets with limited requester details, and their accounts can carry an access expiry that ends sessions;
+- photos are validated by file content (JPEG, PNG, WebP, max 5 MB), stored under `UPLOAD_DIR` and served through `/api/attachments/:id` only to people who may see the ticket;
+- residents are notified when a ticket is received, assigned, waiting on them, resolved, closed or cancelled, and asked to confirm closure or reopen.
+
+Demo accounts: `engineer@example.com` (maintenance) and `vendor@example.com` (CoolAir Services contractor).
+
 ## Authentication
 
 Sessions are owned by the application, not a third-party provider, so the
@@ -184,6 +202,8 @@ src/
   modules/allocations/    allocation engine (service), server actions, components
   modules/self-service/   resident portal: stay, profile, password, notifications
   modules/requests/       form schemas, approval workflow service, actions, components
+  modules/maintenance/    work order service, actions, components
+  lib/uploads.ts          photo validation and storage
   lib/notifications.ts   notification outbox writer
   lib/audit.ts         append-only audit writer
   proxy.ts             request gate (redirect to /login)

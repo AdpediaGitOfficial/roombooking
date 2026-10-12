@@ -13,6 +13,7 @@ async function HomeContent() {
     listMyNotifications(user.id),
     prisma.request.findMany({ where: { requesterId: user.id, status: "CHANGES_REQUESTED" }, include: { requestType: true } }),
   ]);
+  const ticketsNeedingMe = await prisma.workOrder.findMany({ where: { requesterId: user.id, status: { in: ["RESOLVED", "WAITING_STAFF"] } }, orderBy: { updatedAt: "desc" } });
   const firstName = staff?.firstName ?? user.name.split(" ")[0];
   const unread = notifications.filter((n) => !n.readAt);
 
@@ -29,10 +30,16 @@ async function HomeContent() {
         )}
       </section>
 
-      {((stay && stay.pendingActions.length > 0) || returned.length > 0) && (
+      {((stay && stay.pendingActions.length > 0) || returned.length > 0 || ticketsNeedingMe.length > 0) && (
         <section className="mt-6">
           <h2 className="text-lg font-semibold">To do</h2>
           <ul className="mt-2 space-y-2">
+            {ticketsNeedingMe.map((t) => (
+              <li key={t.id} data-action="TICKET" className="rounded-lg bg-orange-50 p-3 text-sm text-orange-900 dark:bg-orange-950 dark:text-orange-200">
+                <div className="text-xs uppercase tracking-wide">maintenance · {t.ticketNumber}</div>
+                <div className="mt-0.5"><Link href={`/my/maintenance/${t.id}`} className="underline">{t.category}</Link> {t.status === "RESOLVED" ? "was marked resolved. Please confirm or reopen." : "needs a reply from you."}</div>
+              </li>
+            ))}
             {returned.map((r) => (
               <li key={r.id} data-action="REQUEST" className="rounded-lg bg-orange-50 p-3 text-sm text-orange-900 dark:bg-orange-950 dark:text-orange-200">
                 <div className="text-xs uppercase tracking-wide">request returned</div>

@@ -42,3 +42,6 @@ next-env.d.ts
 
 # keep the template for local setup
 !.env.example
+
+# uploaded files (photos)
+/uploads

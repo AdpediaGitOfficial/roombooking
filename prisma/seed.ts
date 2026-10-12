@@ -63,6 +63,14 @@ async function main() {
   }
   await ensureUser("officer@example.com", "Reception Officer", Role.ACCOMMODATION_OFFICER);
   await ensureUser("manager@example.com", "Line Manager", Role.APPROVER);
+  const engineer = await ensureUser("engineer@example.com", "Maintenance Engineer", Role.MAINTENANCE);
+  const vendor = await prisma.vendor.upsert({
+    where: { id: "demo-vendor-coolair" },
+    update: {},
+    create: { id: "demo-vendor-coolair", organizationId: org.id, name: "CoolAir Services", contactName: "Dispatch", contactPhone: "+971 4 111 1111" },
+  });
+  const vendorUser = await ensureUser("vendor@example.com", "CoolAir Technician", Role.VENDOR);
+  await prisma.user.update({ where: { id: vendorUser.id }, data: { vendorId: vendor.id } });
   const staffUser = await ensureUser("staff@example.com", "Sample Resident", Role.STAFF);
   await prisma.staffProfile.upsert({
     where: { organizationId_employeeId: { organizationId: org.id, employeeId: "E1001" } },
@@ -241,6 +249,42 @@ async function main() {
     await prisma.bed.update({ where: { id: blockedBed.id }, data: { status: "BLOCKED", blockReason: "Mattress replacement" } });
   }
 
+  // Sample maintenance tickets (idempotent by description).
+  const roomA01 = await prisma.room.findFirstOrThrow({ where: { code: "A-01" } });
+  const roomA03 = await prisma.room.findFirstOrThrow({ where: { code: "A-03" } });
+  async function ensureTicket(desc: string, data: { requesterId: string; roomId: string; category: string; priority: "LOW" | "MEDIUM" | "HIGH" | "URGENT"; status?: "NEW" | "ASSIGNED" | "IN_PROGRESS" | "RESOLVED"; assigneeId?: string; vendorId?: string; resolutionNote?: string }) {
+    const existing = await prisma.workOrder.findFirst({ where: { description: desc } });
+    if (existing) return existing;
+    const [{ nextval }] = await prisma.$queryRaw<[{ nextval: bigint }]>`SELECT nextval('"WorkOrder_ticket_seq"')`;
+    const now = new Date();
+    const hours = { URGENT: 4, HIGH: 24, MEDIUM: 72, LOW: 168 }[data.priority];
+    return prisma.workOrder.create({
+      data: {
+        ticketNumber: `MR-${now.getUTCFullYear()}-${String(nextval).padStart(6, "0")}`,
+        siteId: site.id,
+        buildingId: (await prisma.room.findUniqueOrThrow({ where: { id: data.roomId } })).buildingId,
+        roomId: data.roomId,
+        category: data.category,
+        description: desc,
+        priority: data.priority,
+        status: data.status ?? "NEW",
+        requesterId: data.requesterId,
+        assigneeId: data.assigneeId,
+        vendorId: data.vendorId,
+        slaDueAt: new Date(now.getTime() + hours * 3600000),
+        acknowledgedAt: data.assigneeId || data.vendorId ? now : null,
+        startedAt: data.status === "IN_PROGRESS" || data.status === "RESOLVED" ? now : null,
+        resolvedAt: data.status === "RESOLVED" ? now : null,
+        resolutionNote: data.resolutionNote,
+        notes: data.assigneeId || data.vendorId ? { create: { authorId: adminUser.id, type: "ASSIGNMENT", note: `Assigned to ${data.assigneeId ? "Maintenance Engineer" : "CoolAir Services (vendor)"}` } } : undefined,
+      },
+    });
+  }
+  await ensureTicket("Hot water is intermittent in the shared bathroom; takes several minutes to warm up.", { requesterId: staffUser.id, roomId: roomA01.id, category: "Plumbing", priority: "MEDIUM" });
+  await ensureTicket("Ceiling light flickers and buzzes when switched on.", { requesterId: staffUser.id, roomId: roomA01.id, category: "Electrical", priority: "HIGH", status: "IN_PROGRESS", assigneeId: engineer.id });
+  await ensureTicket("Air conditioning blows warm air even on the lowest setting.", { requesterId: staffUser.id, roomId: roomA03.id, category: "Air conditioning", priority: "HIGH", status: "ASSIGNED", vendorId: vendor.id });
+  await ensureTicket("Wardrobe door hinge is broken and the door will not close.", { requesterId: staffUser.id, roomId: roomA01.id, category: "Furniture", priority: "LOW", status: "RESOLVED", assigneeId: engineer.id, resolutionNote: "Hinge replaced and door realigned." });
+
   await prisma.facility.upsert({
     where: { siteId_code: { siteId: site.id, code: "GYM" } },
     update: {},
@@ -259,6 +303,7 @@ async function main() {
     rooms: await prisma.room.count(),
     beds: await prisma.bed.count(),
     allocations: await prisma.allocation.count(),
+    workOrders: await prisma.workOrder.count(),
     keys: await prisma.key.count(),
     requestTypes: await prisma.requestType.count(),
     facilities: await prisma.facility.count(),

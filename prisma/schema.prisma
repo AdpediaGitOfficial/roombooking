@@ -512,11 +512,14 @@ model WorkOrder {
   assigneeId       String?
   vendorId         String?
   preferredContact String?
+  locationNote     String?
   slaDueAt         DateTime?
   acknowledgedAt   DateTime?
+  startedAt        DateTime?
   resolvedAt       DateTime?
   closedAt         DateTime?
   resolutionNote   String?
+  reopenCount      Int               @default(0)
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
 
@@ -532,12 +535,21 @@ model WorkOrder {
   @@index([assigneeId, status])
 }
 
+enum WorkOrderNoteType {
+  COMMENT
+  STATUS
+  ASSIGNMENT
+}
+
 model WorkOrderNote {
-  id          String   @id @default(cuid())
+  id          String            @id @default(cuid())
   workOrderId String
   authorId    String
+  type        WorkOrderNoteType @default(COMMENT)
   note        String
-  createdAt   DateTime @default(now())
+  // Internal notes are hidden from the requester and from vendor users.
+  internal    Boolean           @default(false)
+  createdAt   DateTime          @default(now())
 
   workOrder WorkOrder @relation(fields: [workOrderId], references: [id])
   author    User      @relation(fields: [authorId], references: [id])

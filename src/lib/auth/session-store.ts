@@ -42,6 +42,8 @@ export async function resolveSession(token: string) {
   const now = new Date();
   if (session.revokedAt || session.expiresAt <= now) return null;
   if (session.user.status !== "ACTIVE") return null;
+  // Time-limited accounts (contractors) lose access when their window ends (MNT-07).
+  if (session.user.accessExpiresAt && session.user.accessExpiresAt <= now) return null;
 
   if (now.getTime() - session.lastSeenAt.getTime() > TOUCH_INTERVAL_MS) {
     await prisma.session.update({ where: { id: session.id }, data: { lastSeenAt: now } });
