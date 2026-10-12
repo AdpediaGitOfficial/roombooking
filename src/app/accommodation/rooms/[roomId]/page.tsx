@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { hasRole, requireRole } from "@/lib/auth/authorize";
 import { ACCOMMODATION_MANAGE_ROLES, ACCOMMODATION_VIEW_ROLES } from "@/modules/accommodation/access";
+import { ALLOCATION_OPERATE_ROLES } from "@/modules/allocations/access";
 import { getRoomOccupancy } from "@/modules/accommodation/occupancy";
 import { SummaryTiles } from "@/modules/accommodation/components/summary-tiles";
 import { StateBadge } from "@/modules/accommodation/components/state-badge";
@@ -12,6 +13,7 @@ async function RoomView({ params }: { params: Promise<{ roomId: string }> }) {
   const { roomId } = await params;
   const user = await requireRole(ACCOMMODATION_VIEW_ROLES, `/accommodation/rooms/${roomId}`);
   const canManage = hasRole(user, ...ACCOMMODATION_MANAGE_ROLES);
+  const canOperate = hasRole(user, ...ALLOCATION_OPERATE_ROLES);
   const data = await getRoomOccupancy(roomId);
   if (!data) notFound();
   const { room, today, beds, summary } = data;
@@ -59,9 +61,13 @@ async function RoomView({ params }: { params: Promise<{ roomId: string }> }) {
                 <td className="px-3 py-3">
                   {bed.occupant ? (
                     <>
-                      <div>{bed.occupant.name}</div>
+                      <div>
+                        {bed.allocationId ? <Link href={`/accommodation/allocations/${bed.allocationId}`} className="underline">{bed.occupant.name}</Link> : bed.occupant.name}
+                      </div>
                       <div className="text-xs text-zinc-500">{bed.occupant.employeeId}</div>
                     </>
+                  ) : bed.state === "VACANT" && canOperate ? (
+                    <Link href={`/accommodation/allocations/new?buildingId=${room.building.id}&bedId=${bed.id}`} className="text-sm underline">Allocate…</Link>
                   ) : (
                     <span className="text-zinc-400">—</span>
                   )}

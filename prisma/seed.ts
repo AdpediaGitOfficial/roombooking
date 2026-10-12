@@ -193,6 +193,7 @@ async function main() {
 
   await ensureStaff("E1002", "Amal", "Rahman");
   await ensureStaff("E1003", "Priya", "Nair");
+  await ensureStaff("E1004", "Noor", "Haddad");
   await ensureAllocation("A-01-1", "E1001", "CHECKED_IN", daysFromNow(-30));
   await ensureAllocation("A-01-2", "E1002", "CONFIRMED", daysFromNow(0), daysFromNow(180));
   await ensureAllocation("A-02-1", "E1003", "CONFIRMED", daysFromNow(14));

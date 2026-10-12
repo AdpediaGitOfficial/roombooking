@@ -190,6 +190,7 @@ model User {
   notifications         Notification[]
   auditEvents           AuditEvent[]
   attachments           Attachment[]
+  allocations           Allocation[]
 }
 
 // Server-side sessions (ADM-05). The cookie carries a random token; only its
@@ -304,23 +305,31 @@ enum AllocationStatus {
 }
 
 model Allocation {
-  id           String           @id @default(cuid())
-  staffId      String
-  bedId        String
-  startDate    DateTime         @db.Date
-  endDate      DateTime?        @db.Date
-  status       AllocationStatus @default(DRAFT)
-  reason       String?
-  requestId    String?
-  checkedInAt  DateTime?
-  checkedOutAt DateTime?
-  checklist    Json?
-  createdAt    DateTime         @default(now())
-  updatedAt    DateTime         @updatedAt
+  id                   String           @id @default(cuid())
+  staffId              String
+  bedId                String
+  startDate            DateTime         @db.Date
+  endDate              DateTime?        @db.Date
+  status               AllocationStatus @default(DRAFT)
+  reason               String?
+  requestId            String?
+  checkedInAt          DateTime?
+  checkedOutAt         DateTime?
+  checklist            Json?
+  notes                String?
+  // Set on the allocation created by a transfer; links old and new records
+  // so movement history is traceable (ACM-07).
+  previousAllocationId String?
+  createdById          String?
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
 
-  staff   StaffProfile @relation(fields: [staffId], references: [id])
-  bed     Bed          @relation(fields: [bedId], references: [id])
-  request Request?     @relation(fields: [requestId], references: [id])
+  staff     StaffProfile @relation(fields: [staffId], references: [id])
+  bed       Bed          @relation(fields: [bedId], references: [id])
+  request   Request?     @relation(fields: [requestId], references: [id])
+  previous  Allocation?  @relation("AllocationChain", fields: [previousAllocationId], references: [id])
+  next      Allocation[] @relation("AllocationChain")
+  createdBy User?        @relation(fields: [createdById], references: [id])
 
   @@index([staffId, status])
   @@index([bedId, status])

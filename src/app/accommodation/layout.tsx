@@ -7,6 +7,8 @@ export default function AccommodationLayout({ children }: LayoutProps<"/accommod
         <Link href="/" className="underline">Home</Link>
         <span className="mx-2">/</span>
         <Link href="/accommodation" className="underline">Accommodation</Link>
+        <span className="mx-2">/</span>
+        <Link href="/accommodation/allocations" className="underline">Allocations</Link>
       </nav>
       {children}
     </div>

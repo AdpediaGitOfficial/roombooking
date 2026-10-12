@@ -67,6 +67,28 @@ System and accommodation administrators can add beds, block/unblock/retire
 beds and block rooms; officers and auditors have read-only access. Every
 change writes an audit event.
 
+## Allocation engine
+
+`src/modules/allocations/service.ts` owns every change to who holds a bed.
+Each operation runs in one database transaction, writes an audit event and
+queues an in-app notification to the resident's user account where one
+exists. The exclusion constraint on `Allocation` is the final guard against
+two people being given one bed at the same time.
+
+| Operation | Rules |
+|-----------|-------|
+| Search | Beds in service, in active rooms and buildings, matching the room's gender policy, with no confirmed or checked-in allocation overlapping the requested dates |
+| Allocate | Staff must be active; one bed per person at a time; validated dates (end exclusive) |
+| Check in | Confirmed only; early arrival moves the start date to today; arriving at a transfer destination closes the previous stay |
+| Check out | Checked-in only; outstanding keys or assets block it unless an administrator overrides with a reason; end date becomes today |
+| Transfer | Same-day moves the resident now; future-dated keeps the current bed until the effective date; before arrival the allocation is replaced; old and new records are linked |
+| Cancel | Confirmed only, reason required, administrators only |
+
+Pages: `/accommodation/allocations` (list by status), `/accommodation/allocations/new`
+(search and allocate), `/accommodation/allocations/:id` (detail, check-in,
+check-out, cancel), `/accommodation/allocations/:id/transfer`.
+Administrators and reception officers operate; auditors read.
+
 ## Authentication
 
 Sessions are owned by the application, not a third-party provider, so the
@@ -123,6 +145,8 @@ src/
   lib/db.ts            Prisma client singleton
   lib/auth/            password hashing, session store, cookie session, authorisation
   modules/accommodation/  occupancy rules and queries, server actions, components
+  modules/allocations/    allocation engine (service), server actions, components
+  lib/notifications.ts   notification outbox writer
   lib/audit.ts         append-only audit writer
   proxy.ts             request gate (redirect to /login)
 tests/                 vitest suites
