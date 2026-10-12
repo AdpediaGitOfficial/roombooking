@@ -38,6 +38,41 @@ npm run dev                     # http://localhost:3000
 `GET /api/health` returns `{"status":"ok","database":"up"}` when the app can
 reach the database.
 
+The seed creates three demo accounts, all with password `ChangeMe123!`
+(override with `SEED_PASSWORD`):
+
+| Email | Role |
+|-------|------|
+| admin@example.com | System Administrator |
+| officer@example.com | Accommodation Officer |
+| staff@example.com | Staff / Resident (linked to employee E1001) |
+
+## Authentication
+
+Sessions are owned by the application, not a third-party provider, so the
+SRS rules on session expiry, revocation and auditing can be enforced
+directly:
+
+- Passwords are hashed with scrypt (`src/lib/auth/password.ts`); the hash
+  string is self-describing so parameters can be raised later.
+- A login creates a `Session` row and sets an `HttpOnly`, `SameSite=Lax`
+  cookie containing a random token. Only the SHA-256 hash of the token is
+  stored. Sessions expire after `SESSION_TTL_HOURS` (default 12).
+- Five failed attempts lock the account for `LOGIN_LOCKOUT_MINUTES`.
+  Unknown emails and wrong passwords return the same message, and the
+  unknown-email path still runs a hash so timing does not reveal accounts.
+- Deactivating or suspending a user ends their access on the next request;
+  `revokeUserSessions()` ends all sessions immediately (ADM-05).
+- Every sign-in, failure, lockout and sign-out writes an `AuditEvent`.
+- `src/proxy.ts` sends unauthenticated page requests to `/login` and
+  returns 401 for API routes. It only checks that a cookie exists; real
+  validation is done server-side by `requireUser()` / `requireRole()` in
+  `src/lib/auth/authorize.ts`, which every page and action must call.
+- `GET /api/auth/me` returns the signed-in user and role assignments.
+
+Not yet implemented: password reset / account recovery (SS-08), SSO and
+MFA (client decision), and per-site scoping of role checks.
+
 ## Scripts
 
 | Script | Purpose |
@@ -45,7 +80,8 @@ reach the database.
 | `npm run dev` | Development server |
 | `npm run build` / `npm start` | Production build and serve |
 | `npm run lint` | ESLint |
-| `npm run typecheck` | `tsc --noEmit` |
+| `npm run typecheck` | Next type generation + `tsc --noEmit` |
+| `npm test` | Vitest unit tests and database integration tests (needs `DATABASE_URL`) |
 | `npm run db:migrate` | Create and apply a new migration from schema changes (dev) |
 | `npm run db:deploy` | Apply pending migrations (CI/production) |
 | `npm run db:seed` | Seed demo data (idempotent) |
@@ -61,8 +97,14 @@ prisma/
   seed.ts              demo data
 src/
   app/                 Next.js App Router pages and API routes
+    login/             sign-in page, server actions (login/logout)
     api/health/        liveness + database check
+    api/auth/me/       current user
   lib/db.ts            Prisma client singleton
+  lib/auth/            password hashing, session store, cookie session, authorisation
+  lib/audit.ts         append-only audit writer
+  proxy.ts             request gate (redirect to /login)
+tests/                 vitest suites
 docs/
   requirements-analysis.md
 ```

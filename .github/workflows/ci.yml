@@ -34,4 +34,5 @@ jobs:
       - run: npm run typecheck
       - run: npm run db:deploy
       - run: npm run db:seed
+      - run: npm test
       - run: npm run build

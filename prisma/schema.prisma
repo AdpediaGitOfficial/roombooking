@@ -152,18 +152,22 @@ enum UserStatus {
 }
 
 model User {
-  id             String     @id @default(cuid())
-  organizationId String
-  email          String     @unique
-  name           String
-  passwordHash   String?
-  status         UserStatus @default(INVITED)
-  lastLoginAt    DateTime?
-  createdAt      DateTime   @default(now())
-  updatedAt      DateTime   @updatedAt
+  id                  String     @id @default(cuid())
+  organizationId      String
+  email               String     @unique
+  name                String
+  passwordHash        String?
+  passwordChangedAt   DateTime?
+  failedLoginAttempts Int        @default(0)
+  lockedUntil         DateTime?
+  status              UserStatus @default(INVITED)
+  lastLoginAt         DateTime?
+  createdAt           DateTime   @default(now())
+  updatedAt           DateTime   @updatedAt
 
   organization    Organization     @relation(fields: [organizationId], references: [id])
   roleAssignments RoleAssignment[]
+  sessions        Session[]
   staffProfile    StaffProfile?
   vendor          Vendor?          @relation(fields: [vendorId], references: [id])
   vendorId        String?
@@ -181,6 +185,25 @@ model User {
   notifications         Notification[]
   auditEvents           AuditEvent[]
   attachments           Attachment[]
+}
+
+// Server-side sessions (ADM-05). The cookie carries a random token; only its
+// SHA-256 hash is stored. Revoking a session or deactivating the user ends
+// access on the next request.
+model Session {
+  id         String    @id @default(cuid())
+  userId     String
+  tokenHash  String    @unique
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  ipAddress  String?
+  userAgent  String?
+  lastSeenAt DateTime  @default(now())
+  createdAt  DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, expiresAt])
 }
 
 // Roles from SRS section 3. Permissions are enforced server-side in code;

@@ -141,6 +141,6 @@ Stack decision (confirmed): **Node.js, Next.js (App Router, TypeScript), Postgre
 ### 6.3 Immediate next steps
 
 1. Confirm the open decisions in section 5 with the client, especially hosting, authentication and the allocation state model, since they shape the data layer.
-2. Stack agreed and repository scaffolded (Next.js, Prisma, PostgreSQL schema with database-level integrity constraints, seed data). Still to add: authentication, CI pipeline, test harness.
-3. Implement R1 in this order: organisation/hierarchy → users/roles/auth/audit → allocation engine → staff portal → forms/approvals → maintenance → keys → notifications → dashboard.
+2. Stack agreed and repository scaffolded (Next.js, Prisma, PostgreSQL schema with database-level integrity constraints, seed data). CI pipeline and vitest harness added. Authentication implemented: scrypt passwords, server-side sessions with revocation, lockout, audit of sign-in events, route gating (covers ADM-04/05 baseline and SS-01 login; SS-08 recovery, SSO and MFA pending client decisions).
+3. Implement R1 in this order: organisation/hierarchy → users/roles admin UI → allocation engine → staff portal → forms/approvals → maintenance → keys → notifications → dashboard.
 4. Write acceptance tests from the SRS edge-case catalogue (section 7 of the SRS) as the regression suite; the race-condition, double-submit and permission-escalation cases should be automated from the first sprint.

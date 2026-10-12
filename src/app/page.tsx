@@ -1,3 +1,7 @@
+import { Suspense } from "react";
+import { requireUser } from "@/lib/auth/authorize";
+import { logout } from "./login/actions";
+
 const modules = [
   ["Accommodation", "Sites, buildings, rooms, beds, allocations, check-in/out"],
   ["Staff self-service", "My stay, profile, requests"],
@@ -12,14 +16,36 @@ const modules = [
   ["Administration", "Users, roles, audit, configuration"],
 ];
 
+async function UserBar() {
+  const user = await requireUser("/");
+  const roles = user.roleAssignments.map((r) => r.role.replaceAll("_", " ").toLowerCase());
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+      <div>
+        <div className="font-medium">{user.name}</div>
+        <div className="text-sm text-zinc-600 dark:text-zinc-400">
+          {user.email}
+          {roles.length > 0 && <> · {roles.join(", ")}</>}
+        </div>
+      </div>
+      <form action={logout}>
+        <button type="submit" className="rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700">
+          Sign out
+        </button>
+      </form>
+    </div>
+  );
+}
+
 export default function Home() {
   return (
-    <main className="mx-auto max-w-3xl px-4 py-10">
+    <main className="mx-auto w-full max-w-3xl px-4 py-10">
       <h1 className="text-2xl font-semibold">Staff Accommodation Management</h1>
-      <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-        Foundation build. Modules below map to the Scope of Work; see{" "}
-        <code>docs/requirements-analysis.md</code> for the release plan.
-      </p>
+      <div className="mt-6">
+        <Suspense fallback={<div className="h-16 animate-pulse rounded-lg bg-zinc-100 dark:bg-zinc-900" />}>
+          <UserBar />
+        </Suspense>
+      </div>
       <ul className="mt-8 grid gap-3 sm:grid-cols-2">
         {modules.map(([name, desc]) => (
           <li key={name} className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
@@ -28,9 +54,6 @@ export default function Home() {
           </li>
         ))}
       </ul>
-      <p className="mt-8 text-sm">
-        Health check: <a className="underline" href="/api/health">/api/health</a>
-      </p>
     </main>
   );
 }

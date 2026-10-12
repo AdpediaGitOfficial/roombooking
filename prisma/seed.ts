@@ -3,14 +3,13 @@
  * Idempotent: re-running updates the same records by their natural keys.
  */
 import { PrismaClient, Prisma, Role, BuildingType } from "@prisma/client";
-import { createHash } from "node:crypto";
+import { hashPassword } from "../src/lib/auth/password";
 
 const prisma = new PrismaClient();
 
-// Placeholder until a real auth layer (bcrypt/argon2) is added.
-function placeholderHash(password: string) {
-  return "sha256$" + createHash("sha256").update(password).digest("hex");
-}
+// Demo credentials for local development only. Change on first login in
+// any shared environment.
+const DEMO_PASSWORD = process.env.SEED_PASSWORD ?? "ChangeMe123!";
 
 async function main() {
   const org = await prisma.organization.upsert({
@@ -30,24 +29,39 @@ async function main() {
     },
   });
 
-  const admin = await prisma.user.upsert({
-    where: { email: "admin@example.com" },
-    update: {},
+  const passwordHash = await hashPassword(DEMO_PASSWORD);
+
+  async function ensureUser(email: string, name: string, role: Role) {
+    const user = await prisma.user.upsert({
+      where: { email },
+      update: { passwordHash, status: "ACTIVE" },
+      create: { organizationId: org.id, email, name, passwordHash, status: "ACTIVE" },
+    });
+    // Composite unique keys containing NULL cannot be matched by upsert.
+    const existing = await prisma.roleAssignment.findFirst({
+      where: { userId: user.id, role, siteId: null, buildingId: null },
+    });
+    if (!existing) {
+      await prisma.roleAssignment.create({ data: { userId: user.id, role } });
+    }
+    return user;
+  }
+
+  await ensureUser("admin@example.com", "System Administrator", Role.SYSTEM_ADMIN);
+  await ensureUser("officer@example.com", "Reception Officer", Role.ACCOMMODATION_OFFICER);
+  const staffUser = await ensureUser("staff@example.com", "Sample Resident", Role.STAFF);
+  await prisma.staffProfile.upsert({
+    where: { organizationId_employeeId: { organizationId: org.id, employeeId: "E1001" } },
+    update: { userId: staffUser.id },
     create: {
       organizationId: org.id,
-      email: "admin@example.com",
-      name: "System Administrator",
-      passwordHash: placeholderHash("ChangeMe123!"),
-      status: "ACTIVE",
+      userId: staffUser.id,
+      employeeId: "E1001",
+      firstName: "Sample",
+      lastName: "Resident",
+      department: "Operations",
     },
   });
-  // Composite unique keys containing NULL cannot be matched by upsert.
-  const existingAdminRole = await prisma.roleAssignment.findFirst({
-    where: { userId: admin.id, role: Role.SYSTEM_ADMIN, siteId: null, buildingId: null },
-  });
-  if (!existingAdminRole) {
-    await prisma.roleAssignment.create({ data: { userId: admin.id, role: Role.SYSTEM_ADMIN } });
-  }
 
   // Two buildings, rooms and beds.
   const buildings = [
