@@ -1,0 +1,114 @@
+import { Suspense } from "react";
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { hasRole, requireRole } from "@/lib/auth/authorize";
+import { ACCOMMODATION_MANAGE_ROLES, ACCOMMODATION_VIEW_ROLES } from "@/modules/accommodation/access";
+import { getRoomOccupancy } from "@/modules/accommodation/occupancy";
+import { SummaryTiles } from "@/modules/accommodation/components/summary-tiles";
+import { StateBadge } from "@/modules/accommodation/components/state-badge";
+import { AddBedsForm, BedStatusForm, RoomStatusForm } from "@/modules/accommodation/components/bed-forms";
+
+async function RoomView({ params }: { params: Promise<{ roomId: string }> }) {
+  const { roomId } = await params;
+  const user = await requireRole(ACCOMMODATION_VIEW_ROLES, `/accommodation/rooms/${roomId}`);
+  const canManage = hasRole(user, ...ACCOMMODATION_MANAGE_ROLES);
+  const data = await getRoomOccupancy(roomId);
+  if (!data) notFound();
+  const { room, today, beds, summary } = data;
+
+  return (
+    <>
+      <p className="text-sm text-zinc-600 dark:text-zinc-400">
+        <Link href={`/accommodation/buildings/${room.building.id}`} className="underline">{room.building.name}</Link>
+        {" · "}{room.building.site.name}
+      </p>
+      <h1 className="mt-1 text-2xl font-semibold">Room {room.code}</h1>
+      <p className="mt-1 mb-6 text-sm text-zinc-600 dark:text-zinc-400">
+        {room.type ?? "room"}{room.floor ? ` · floor ${room.floor}` : ""} · {room.genderPolicy.toLowerCase()} · status {room.status.toLowerCase()}
+        {room.blockReason ? ` (${room.blockReason})` : ""} · as of {today}
+      </p>
+
+      <SummaryTiles summary={summary} />
+
+      <h2 className="mt-8 text-lg font-semibold">Bed spaces</h2>
+      <div className="mt-3 overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-800">
+        <table className="w-full text-sm">
+          <thead className="bg-zinc-50 text-left text-xs uppercase tracking-wide text-zinc-500 dark:bg-zinc-900">
+            <tr>
+              <th className="px-3 py-2">Bed</th>
+              <th className="px-3 py-2">Availability</th>
+              <th className="px-3 py-2">Occupant</th>
+              <th className="px-3 py-2">From / to</th>
+              <th className="px-3 py-2">Next arrival</th>
+              {canManage && <th className="px-3 py-2">Configure</th>}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
+            {beds.map((bed) => (
+              <tr key={bed.id} data-bed={bed.code} className="align-top">
+                <td className="px-3 py-3 font-medium">{bed.code}</td>
+                <td className="px-3 py-3">
+                  <StateBadge state={bed.state} />
+                  {bed.state !== "OCCUPIED" && bed.state !== "ALLOCATED" && bed.blockReason && (
+                    <div className="mt-1 text-xs text-zinc-500">{bed.blockReason}</div>
+                  )}
+                  {(bed.state === "OCCUPIED" || bed.state === "ALLOCATED") && bed.status === "BLOCKED" && (
+                    <div className="mt-1 text-xs text-red-700 dark:text-red-300">Blocked: occupant needs relocating</div>
+                  )}
+                </td>
+                <td className="px-3 py-3">
+                  {bed.occupant ? (
+                    <>
+                      <div>{bed.occupant.name}</div>
+                      <div className="text-xs text-zinc-500">{bed.occupant.employeeId}</div>
+                    </>
+                  ) : (
+                    <span className="text-zinc-400">—</span>
+                  )}
+                </td>
+                <td className="px-3 py-3 tabular-nums">
+                  {bed.since ? `${bed.since} → ${bed.until ?? "open-ended"}` : <span className="text-zinc-400">—</span>}
+                </td>
+                <td className="px-3 py-3">
+                  {bed.upcoming ? (
+                    <>
+                      <div>{bed.upcoming.occupant.name}</div>
+                      <div className="text-xs text-zinc-500">from {bed.upcoming.startDate}</div>
+                    </>
+                  ) : (
+                    <span className="text-zinc-400">—</span>
+                  )}
+                </td>
+                {canManage && (
+                  <td className="px-3 py-3">
+                    <BedStatusForm bedId={bed.id} current={bed.status} />
+                  </td>
+                )}
+              </tr>
+            ))}
+            {beds.length === 0 && (
+              <tr><td colSpan={canManage ? 6 : 5} className="px-3 py-6 text-center text-zinc-500">No beds configured.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {canManage && (
+        <div className="mt-6 grid gap-4 sm:grid-cols-2">
+          <AddBedsForm roomId={room.id} />
+          <RoomStatusForm roomId={room.id} current={room.status} />
+        </div>
+      )}
+    </>
+  );
+}
+
+export default function RoomPage({ params }: PageProps<"/accommodation/rooms/[roomId]">) {
+  return (
+    <main>
+      <Suspense fallback={<p className="text-sm text-zinc-500">Loading…</p>}>
+        <RoomView params={params} />
+      </Suspense>
+    </main>
+  );
+}

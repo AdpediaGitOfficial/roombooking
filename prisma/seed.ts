@@ -79,7 +79,7 @@ async function main() {
       const room = await prisma.room.upsert({
         where: { buildingId_code: { buildingId: building.id, code: roomCode } },
         update: {},
-        create: { buildingId: building.id, code: roomCode, capacity: b.bedsPerRoom, type: b.bedsPerRoom > 1 ? "SHARED" : "SINGLE" },
+        create: { buildingId: building.id, code: roomCode, type: b.bedsPerRoom > 1 ? "SHARED" : "SINGLE" },
       });
       for (let bed = 1; bed <= b.bedsPerRoom; bed++) {
         const bedCode = `${roomCode}-${bed}`;
@@ -160,6 +160,47 @@ async function main() {
     }
   }
 
+  // Sample residents and allocations so the occupancy views have data.
+  async function ensureStaff(employeeId: string, firstName: string, lastName: string) {
+    return prisma.staffProfile.upsert({
+      where: { organizationId_employeeId: { organizationId: org.id, employeeId } },
+      update: {},
+      create: { organizationId: org.id, employeeId, firstName, lastName, department: "Operations" },
+    });
+  }
+  async function ensureAllocation(bedCode: string, employeeId: string, status: "CONFIRMED" | "CHECKED_IN", startDate: string, endDate?: string) {
+    const bed = await prisma.bed.findFirstOrThrow({ where: { code: bedCode } });
+    const staff = await prisma.staffProfile.findUniqueOrThrow({
+      where: { organizationId_employeeId: { organizationId: org.id, employeeId } },
+    });
+    const existing = await prisma.allocation.findFirst({ where: { bedId: bed.id, staffId: staff.id } });
+    if (existing) return existing;
+    return prisma.allocation.create({
+      data: {
+        bedId: bed.id,
+        staffId: staff.id,
+        status,
+        startDate: new Date(startDate),
+        endDate: endDate ? new Date(endDate) : null,
+        checkedInAt: status === "CHECKED_IN" ? new Date() : null,
+        reason: "Seed data",
+      },
+    });
+  }
+  const today = new Date();
+  const iso = (d: Date) => d.toISOString().slice(0, 10);
+  const daysFromNow = (n: number) => iso(new Date(today.getTime() + n * 86400000));
+
+  await ensureStaff("E1002", "Amal", "Rahman");
+  await ensureStaff("E1003", "Priya", "Nair");
+  await ensureAllocation("A-01-1", "E1001", "CHECKED_IN", daysFromNow(-30));
+  await ensureAllocation("A-01-2", "E1002", "CONFIRMED", daysFromNow(0), daysFromNow(180));
+  await ensureAllocation("A-02-1", "E1003", "CONFIRMED", daysFromNow(14));
+  const blockedBed = await prisma.bed.findFirstOrThrow({ where: { code: "A-02-2" } });
+  if (blockedBed.status === "ACTIVE") {
+    await prisma.bed.update({ where: { id: blockedBed.id }, data: { status: "BLOCKED", blockReason: "Mattress replacement" } });
+  }
+
   await prisma.facility.upsert({
     where: { siteId_code: { siteId: site.id, code: "GYM" } },
     update: {},
@@ -177,6 +218,7 @@ async function main() {
     buildings: await prisma.building.count(),
     rooms: await prisma.room.count(),
     beds: await prisma.bed.count(),
+    allocations: await prisma.allocation.count(),
     keys: await prisma.key.count(),
     requestTypes: await prisma.requestType.count(),
     facilities: await prisma.facility.count(),

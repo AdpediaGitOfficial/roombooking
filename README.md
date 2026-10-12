@@ -47,6 +47,26 @@ The seed creates three demo accounts, all with password `ChangeMe123!`
 | officer@example.com | Accommodation Officer |
 | staff@example.com | Staff / Resident (linked to employee E1001) |
 
+## Accommodation and bed management
+
+A room is a container for individually tracked bed spaces. Capacity is the
+count of beds in service; each bed's availability is derived from
+allocations as of the site's local date (`src/modules/accommodation/occupancy.ts`):
+
+| Bed state | Meaning |
+|-----------|---------|
+| Occupied | A resident is checked in |
+| Allocated · awaiting check-in | A confirmed allocation has started, nobody has checked in |
+| Vacant | In service with no current allocation (a future arrival may be shown) |
+| Blocked | Temporarily out of use with a reason, or the room is not active |
+| Retired | Permanently removed from capacity |
+
+Pages: `/accommodation` (sites and buildings), `/accommodation/buildings/:id`
+(rooms), `/accommodation/rooms/:id` (beds, occupants, dates, next arrival).
+System and accommodation administrators can add beds, block/unblock/retire
+beds and block rooms; officers and auditors have read-only access. Every
+change writes an audit event.
+
 ## Authentication
 
 Sessions are owned by the application, not a third-party provider, so the
@@ -102,6 +122,7 @@ src/
     api/auth/me/       current user
   lib/db.ts            Prisma client singleton
   lib/auth/            password hashing, session store, cookie session, authorisation
+  modules/accommodation/  occupancy rules and queries, server actions, components
   lib/audit.ts         append-only audit writer
   proxy.ts             request gate (redirect to /login)
 tests/                 vitest suites

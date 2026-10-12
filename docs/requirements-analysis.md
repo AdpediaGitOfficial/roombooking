@@ -98,11 +98,39 @@ Email (required), WhatsApp Business Platform (required, provider and template ap
 7. **Check-out blockers**: the SRS requires check-out to show outstanding keys/assets and allow an authorised override. This couples Accommodation, Key and Inventory modules, so they cannot be built as fully independent services.
 8. The SRS repeatedly marks items as "Decision required". None of those decisions are recorded in the Scope of Work, so they are open.
 
+## 4a. Clarified: bed-level accommodation model
+
+The client has confirmed that a room is a container for individually
+tracked bed spaces, not a single allocation unit. The agreed model:
+
+- **Beds are configured per room** by administrators. Room capacity is the
+  number of beds in service; it is derived, not typed in.
+- **Each bed has its own availability**, computed from allocations as of
+  the site's local calendar date. Allocation statuses that hold a bed are
+  Confirmed and Checked In; a bed can hold at most one such allocation for
+  any overlapping date range (database exclusion constraint).
+- **Bed configuration states**: *In service*, *Blocked* (temporary, with a
+  mandatory reason, e.g. repair or cleaning), *Retired* (permanently out of
+  capacity). A bed with a current occupant cannot be retired. Blocking a
+  whole room marks its unoccupied beds as blocked.
+- **Per-bed availability states** shown to administrators: *Occupied*
+  (checked in), *Allocated, awaiting check-in* (confirmed allocation that
+  has started), *Vacant*, *Blocked*, *Retired*. A future-dated confirmed
+  allocation is shown as the bed's next arrival but does not change
+  today's counts.
+- **Room and building summaries**: total bed capacity, occupied (split into
+  checked in and awaiting check-in), vacant, blocked, retired and upcoming
+  arrivals, with the current occupant and dates listed per bed.
+
+This supersedes the earlier reading of ACM-02 where room capacity was a
+configured number. SRS requirement text for ACM-01, ACM-02, ACM-03 and
+ACM-09 should be updated to match; the implementation already follows it.
+
 ## 5. Decisions required from the client before build
 
 - Hosting: cloud (which region/provider) or on-premise; this affects authentication, email/WhatsApp egress and backups.
 - Authentication: local accounts, SSO provider, MFA policy, account recovery.
-- Whether "Allocated" and "Checked In" are distinct states; whether open-ended allocations are allowed.
+- Confirm "Allocated, awaiting check-in" and "Checked In" as distinct bed states (both count as occupied in capacity figures); whether open-ended allocations are allowed.
 - Approval routes per request type, delegation and escalation policy, self-approval exception policy.
 - Whether a request pins the workflow version at submission (SRS recommends yes).
 - Facility booking rules: duration, advance window, buffer, cancellation cutoff, per-user limits, no-show definition.
@@ -142,5 +170,5 @@ Stack decision (confirmed): **Node.js, Next.js (App Router, TypeScript), Postgre
 
 1. Confirm the open decisions in section 5 with the client, especially hosting, authentication and the allocation state model, since they shape the data layer.
 2. Stack agreed and repository scaffolded (Next.js, Prisma, PostgreSQL schema with database-level integrity constraints, seed data). CI pipeline and vitest harness added. Authentication implemented: scrypt passwords, server-side sessions with revocation, lockout, audit of sign-in events, route gating (covers ADM-04/05 baseline and SS-01 login; SS-08 recovery, SSO and MFA pending client decisions).
-3. Implement R1 in this order: organisation/hierarchy → users/roles admin UI → allocation engine → staff portal → forms/approvals → maintenance → keys → notifications → dashboard.
+3. Accommodation hierarchy and bed management implemented (overview, building and room views with per-bed availability; add, block, unblock, retire beds; block rooms). Next in R1: allocation engine (search, allocate, transfer, check-in/out) → users/roles admin UI → staff portal → forms/approvals → maintenance → keys → notifications → dashboard.
 4. Write acceptance tests from the SRS edge-case catalogue (section 7 of the SRS) as the regression suite; the race-condition, double-submit and permission-escalation cases should be automated from the first sprint.

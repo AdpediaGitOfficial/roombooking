@@ -1,9 +1,10 @@
 import { Suspense } from "react";
+import Link from "next/link";
 import { requireUser } from "@/lib/auth/authorize";
 import { logout } from "./login/actions";
 
-const modules = [
-  ["Accommodation", "Sites, buildings, rooms, beds, allocations, check-in/out"],
+const modules: Array<[string, string, string?]> = [
+  ["Accommodation", "Sites, buildings, rooms, beds, allocations, check-in/out", "/accommodation"],
   ["Staff self-service", "My stay, profile, requests"],
   ["Maintenance", "Work orders, assignment, contractor access"],
   ["Forms & approvals", "Room change, visitor, family, exit clearance"],
@@ -47,9 +48,9 @@ export default function Home() {
         </Suspense>
       </div>
       <ul className="mt-8 grid gap-3 sm:grid-cols-2">
-        {modules.map(([name, desc]) => (
+        {modules.map(([name, desc, href]) => (
           <li key={name} className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
-            <div className="font-medium">{name}</div>
+            <div className="font-medium">{href ? <Link href={href} className="underline">{name}</Link> : name}</div>
             <div className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">{desc}</div>
           </li>
         ))}

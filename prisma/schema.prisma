@@ -97,13 +97,15 @@ enum GenderPolicy {
   FEMALE
 }
 
+// A room is a container for individually tracked bed spaces. Its capacity
+// is the number of non-retired beds; occupancy is derived per bed from
+// allocations (see src/modules/accommodation/occupancy.ts).
 model Room {
   id           String       @id @default(cuid())
   buildingId   String
   code         String
   type         String?
   floor        String?
-  capacity     Int
   genderPolicy GenderPolicy @default(ANY)
   status       RoomStatus   @default(ACTIVE)
   blockReason  String?
@@ -120,19 +122,22 @@ model Room {
   @@unique([buildingId, code])
 }
 
+// Configuration state of a bed space. Whether it is occupied is computed
+// from allocations, not stored here.
 enum BedStatus {
-  AVAILABLE
+  ACTIVE
   BLOCKED
-  INACTIVE
+  RETIRED
 }
 
 model Bed {
-  id        String    @id @default(cuid())
-  roomId    String
-  code      String
-  status    BedStatus @default(AVAILABLE)
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  id          String    @id @default(cuid())
+  roomId      String
+  code        String
+  status      BedStatus @default(ACTIVE)
+  blockReason String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   room        Room         @relation(fields: [roomId], references: [id])
   allocations Allocation[]
