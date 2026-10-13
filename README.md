@@ -439,7 +439,11 @@ MFA (client decision), and per-site scoping of role checks.
 
 ## Deployment
 
-`render.yaml` describes the whole stack for [Render](https://render.com):
+Two ways to go live:
+
+- **Your own Linux server** (Node, PostgreSQL, PM2, nginx, cron): follow
+  [docs/deployment.md](docs/deployment.md), step by step.
+- **Render**: `render.yaml` describes the whole stack for [Render](https://render.com):
 the PostgreSQL database, the web app with a persistent disk for photos, and
 a cron job that runs the scheduled jobs every minute. No Docker and no
 server to manage.
