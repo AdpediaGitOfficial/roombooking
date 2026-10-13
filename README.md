@@ -301,6 +301,20 @@ every export is audited (RPT-07). Chart colours come from the validated
 reference palette in `src/app/globals.css` with light and dark steps, legends
 and table views.
 
+## Bulk import and export
+
+Administrators load staff profiles or buildings, rooms and beds from CSV at
+`/admin/import` (ACM-10). A file is parsed and validated into a preview that
+shows every row with its outcome (create, update, unchanged or error), the
+exact problems on each failing row, and duplicates within the file; nothing
+is written at that step. The import then runs in a single transaction, so a
+failure writes nothing, and rows with errors stop it unless the administrator
+explicitly chooses to import the valid rows and leave the rest out. Existing
+employee IDs and rooms are updated rather than duplicated; new beds are added
+to existing rooms. Templates and exports of the current data use the same
+layout, so a download can be edited and re-imported. Previews, imports,
+discards and exports are audited.
+
 ## Report suite
 
 `/reports` is the hub for the filtered reports (RPT-02..RPT-08), each with

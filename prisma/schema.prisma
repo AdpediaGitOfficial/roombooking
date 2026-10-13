@@ -36,6 +36,7 @@ model Organization {
   vendors      Vendor[]
   requestTypes RequestType[]
   broadcasts   Broadcast[]
+  imports      ImportBatch[]
 }
 
 model Site {
@@ -221,6 +222,7 @@ model User {
   delegationsReceived       ApprovalDelegation[]   @relation("DelegationsReceived")
   delegationsCreated        ApprovalDelegation[]   @relation("DelegationsCreated")
   delegationsRevoked        ApprovalDelegation[]   @relation("DelegationsRevoked")
+  importsCreated            ImportBatch[]          @relation("ImportsCreated")
   notifications             Notification[]
   auditEvents               AuditEvent[]
   attachments               Attachment[]
@@ -1001,6 +1003,36 @@ model LostFoundEvent {
   actor User          @relation("LostFoundEvents", fields: [actorId], references: [id])
 
   @@index([itemId, createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// Bulk import (ACM-10): a batch is previewed with row-level results, then
+// committed in one transaction or discarded.
+// ---------------------------------------------------------------------------
+
+enum ImportStatus {
+  PREVIEW
+  IMPORTED
+  DISCARDED
+}
+
+model ImportBatch {
+  id             String       @id @default(cuid())
+  organizationId String
+  kind           String
+  fileName       String
+  rows           Json
+  summary        Json
+  status         ImportStatus @default(PREVIEW)
+  result         Json?
+  createdById    String
+  importedAt     DateTime?
+  createdAt      DateTime     @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  createdBy    User         @relation("ImportsCreated", fields: [createdById], references: [id])
+
+  @@index([organizationId, status, createdAt])
 }
 
 // ---------------------------------------------------------------------------
