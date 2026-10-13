@@ -1,9 +1,11 @@
 // Runs the scheduled jobs once by calling POST /api/jobs/notifications:
 // outbox delivery (email, WhatsApp) and the booking and request sweeps.
-// Meant for a systemd timer or cron: `npm run jobs`.
+// Meant for a cron job or scheduler: `npm run jobs`.
 //
-// Reads JOBS_SECRET (and PORT) from the environment, falling back to the
-// .env file in the project root. No dependencies, so it runs with plain node.
+// Reads JOBS_SECRET and the app address from the environment, falling back
+// to the .env file in the project root. The target is JOBS_URL if set, else
+// APP_BASE_URL + /api/jobs/notifications, else the local server on PORT.
+// No dependencies, so it runs with plain node.
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
@@ -34,7 +36,9 @@ if (!secret) {
   console.error("JOBS_SECRET is not set; add it to .env");
   process.exit(2);
 }
-const url = env.JOBS_URL ?? `http://127.0.0.1:${env.PORT ?? 3000}/api/jobs/notifications`;
+const url =
+  env.JOBS_URL ??
+  (env.APP_BASE_URL ? `${env.APP_BASE_URL.replace(/\/$/, "")}/api/jobs/notifications` : `http://127.0.0.1:${env.PORT ?? 3000}/api/jobs/notifications`);
 
 const response = await fetch(url, { method: "POST", headers: { authorization: `Bearer ${secret}` } });
 const body = await response.text();

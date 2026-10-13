@@ -1,0 +1,90 @@
+# Render blueprint: https://render.com/docs/blueprint-spec
+# Creates everything the app needs from this repository in one step:
+# a PostgreSQL database, the web app with a persistent disk for photos, and a
+# cron job that runs the scheduled jobs every minute. See README, "Deployment".
+databases:
+  - name: staff-accommodation-db
+    databaseName: sam
+    user: sam
+    plan: basic-256mb
+
+services:
+  - type: web
+    name: staff-accommodation
+    runtime: node
+    plan: starter
+    buildCommand: npm ci && npm run build
+    preDeployCommand: npx prisma migrate deploy
+    startCommand: npm start
+    healthCheckPath: /api/health
+    autoDeploy: true
+    disk:
+      name: uploads
+      mountPath: /var/data/uploads
+      sizeGB: 5
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: staff-accommodation-db
+          property: connectionString
+      - key: UPLOAD_DIR
+        value: /var/data/uploads
+      - key: APP_BASE_URL
+        fromService:
+          type: web
+          name: staff-accommodation
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: JOBS_SECRET
+        generateValue: true
+      # Fill these in the Render dashboard after the first deploy.
+      - key: MAIL_FROM
+        value: "Staff Accommodation <no-reply@example.com>"
+      - key: EMAIL_TRANSPORT
+        value: log            # change to smtp once SMTP_* are set
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: WHATSAPP_TRANSPORT
+        value: disabled       # change to meta once the WHATSAPP_* values are set
+      - key: WHATSAPP_ACCESS_TOKEN
+        sync: false
+      - key: WHATSAPP_PHONE_NUMBER_ID
+        sync: false
+      - key: WHATSAPP_VERIFY_TOKEN
+        sync: false
+      - key: WHATSAPP_APP_SECRET
+        sync: false
+      - key: DEFAULT_COUNTRY_CODE
+        sync: false
+
+  # Calls POST /api/jobs/notifications on the web service: outbox delivery
+  # (email, WhatsApp) and the booking and request sweeps.
+  - type: cron
+    name: staff-accommodation-jobs
+    runtime: node
+    plan: starter
+    schedule: "* * * * *"
+    buildCommand: echo "nothing to build"
+    startCommand: node scripts/jobs.mjs
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: APP_BASE_URL
+        fromService:
+          type: web
+          name: staff-accommodation
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: JOBS_SECRET
+        fromService:
+          type: web
+          name: staff-accommodation
+          envVarKey: JOBS_SECRET

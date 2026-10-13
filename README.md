@@ -439,75 +439,41 @@ MFA (client decision), and per-site scoping of role checks.
 
 ## Deployment
 
-One Linux server with Node.js 22, PostgreSQL 16 and nginx is enough. The
-files under `deploy/` are the service definitions; `scripts/deploy.sh` is
-the update command.
+`render.yaml` describes the whole stack for [Render](https://render.com):
+the PostgreSQL database, the web app with a persistent disk for photos, and
+a cron job that runs the scheduled jobs every minute. No Docker and no
+server to manage.
 
-First-time setup (Ubuntu shown; paths match the unit files):
+1. Push this repository to GitHub and sign in to Render.
+2. **New → Blueprint**, pick the repository, and apply. Render creates the
+   database, builds the app, applies the migrations and starts it; the app
+   is live at the `onrender.com` address the dashboard shows.
+3. Optional demo data: open the web service's **Shell** tab and run
+   `npm run db:seed` (accounts and password in "Getting started").
+4. In the web service's **Environment** tab fill in the SMTP values and set
+   `EMAIL_TRANSPORT=smtp`; for WhatsApp fill in the `WHATSAPP_*` values and
+   set `WHATSAPP_TRANSPORT=meta`. Until then email is logged, not sent, and
+   WhatsApp is off.
+5. Add a custom domain under **Settings → Custom Domains** if wanted;
+   `APP_BASE_URL` (used in email links) follows the Render address, so set
+   it to the custom domain afterwards.
 
-```bash
-# packages
-curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - && sudo apt install -y nodejs postgresql nginx certbot python3-certbot-nginx
+Every push to the deployed branch redeploys automatically. Migrations run
+before each new version starts, and a failed migration or build keeps the
+previous version running.
 
-# database and deploy user
-sudo -u postgres psql -c "CREATE USER sam WITH PASSWORD 'choose-a-password';" -c "CREATE DATABASE sam OWNER sam;"
-sudo useradd -r -m -d /srv/staff-accommodation sam
-sudo -iu sam git clone <repository-url> /srv/staff-accommodation
-sudo -iu sam cp /srv/staff-accommodation/.env.example /srv/staff-accommodation/.env   # then edit, see below
+What the blueprint sets up:
 
-# services
-sudo cp /srv/staff-accommodation/deploy/staff-accommodation*.service /srv/staff-accommodation/deploy/staff-accommodation-jobs.timer /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now staff-accommodation staff-accommodation-jobs.timer
+| Resource | Purpose |
+|----------|---------|
+| `staff-accommodation-db` | PostgreSQL 16 with daily backups managed by Render |
+| `staff-accommodation` | The web app; health check on `/api/health`; `uploads` disk mounted at `UPLOAD_DIR` for photos |
+| `staff-accommodation-jobs` | Cron job calling `POST /api/jobs/notifications` with the generated `JOBS_SECRET`: outbox delivery plus booking and request sweeps |
 
-# first build (and every later update)
-sudo -iu sam /srv/staff-accommodation/scripts/deploy.sh
-sudo -iu sam bash -c "cd /srv/staff-accommodation && npm run db:seed"   # optional demo data
-
-# TLS
-sudo cp /srv/staff-accommodation/deploy/nginx.conf /etc/nginx/sites-available/staff-accommodation
-sudo ln -s /etc/nginx/sites-available/staff-accommodation /etc/nginx/sites-enabled/
-sudo certbot --nginx -d accommodation.example.com
-```
-
-`deploy.sh` installs dependencies, applies pending migrations, builds, restarts
-the service and waits for `/api/health`. Each step stops on error, so a
-failed migration or build leaves the running version in place. Updating is
-`git pull` followed by `deploy.sh`.
-
-The jobs timer runs `npm run jobs` every minute. That calls
-`POST /api/jobs/notifications`, which delivers the email and WhatsApp outbox
-and runs the booking and request sweeps (reminders, escalation, expiry). A
-cron entry (`* * * * * cd /srv/staff-accommodation && npm run jobs`) does
-the same where systemd timers are not wanted.
-
-Before go-live, set in `.env`:
-
-- `DATABASE_URL` with the real password.
-- `JOBS_SECRET`: random, at least 32 characters; the jobs endpoint rejects
-  every call without it and the jobs script refuses to run.
-- `APP_BASE_URL`: the public `https://` origin, used in email and WhatsApp
-  links.
-- `MAIL_FROM` and the `SMTP_*` settings, or `EMAIL_TRANSPORT=disabled`.
-- The `WHATSAPP_*` settings if WhatsApp is in use, including the webhook
-  verify token and app secret, and `DEFAULT_COUNTRY_CODE` for local numbers.
-- `SEED_PASSWORD` only if the demo accounts are seeded on a shared
-  environment; change those passwords or delete the accounts afterwards.
-
-Notes:
-
-- Serve the app over HTTPS. Session cookies carry the `Secure` flag in
-  production, so sign-in over plain HTTP will not keep a session. The
-  WhatsApp webhook must be reachable at `APP_BASE_URL/api/webhooks/whatsapp`.
-- Photos live under `UPLOAD_DIR` (default `uploads/` in the checkout). Back
-  it up together with the database: the database holds the attachment
-  metadata and the directory holds the files.
-- `GET /api/health` returns `503` when the database is unreachable.
-- Logs: `journalctl -u staff-accommodation -f` for the app and
-  `journalctl -u staff-accommodation-jobs` for the jobs; permanently failed
-  deliveries are listed at `/admin/notifications`.
-- Database backups: `pg_dump sam | gzip > sam-$(date +%F).sql.gz` on a
-  daily cron, kept off the server.
+Any other Node host works the same way: run `npm ci && npm run build`,
+`npx prisma migrate deploy`, then `npm start` with the variables from
+`.env.example`, keep `UPLOAD_DIR` on persistent storage, and schedule
+`npm run jobs` every minute with `APP_BASE_URL` and `JOBS_SECRET` set.
 
 ## Scripts
 
@@ -524,7 +490,7 @@ Notes:
 | `npm run db:studio` | Browse the database |
 | `npm run db:reset` | Drop, recreate, migrate and seed (dev only) |
 | `npm run notifications:worker` | Email delivery worker (long-running, development) |
-| `npm run jobs` | One run of the scheduled jobs via the jobs endpoint (timer or cron) |
+| `npm run jobs` | One run of the scheduled jobs via the jobs endpoint (cron) |
 
 ## Project layout
 
@@ -555,9 +521,8 @@ scripts/notifications-worker.ts  standalone delivery process
   lib/audit.ts         append-only audit writer
   proxy.ts             request gate (redirect to /login)
 tests/                 vitest suites
-deploy/                systemd units and nginx site for a single-server deployment
-scripts/deploy.sh      install, migrate, build, restart
-scripts/jobs.mjs       calls the jobs endpoint (timer or cron)
+render.yaml            Render blueprint: database, web app with photo disk, jobs cron
+scripts/jobs.mjs       calls the jobs endpoint (cron)
 docs/
   requirements-analysis.md
 ```
