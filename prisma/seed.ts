@@ -74,6 +74,8 @@ async function main() {
   const vendorUser = await ensureUser("vendor@example.com", "CoolAir Technician", Role.VENDOR);
   await prisma.user.update({ where: { id: vendorUser.id }, data: { vendorId: vendor.id } });
   const staffUser = await ensureUser("staff@example.com", "Sample Resident", Role.STAFF);
+  // Demo resident has opted in to WhatsApp so the WhatsApp queue shows something with the log transport.
+  await prisma.user.update({ where: { id: staffUser.id }, data: { whatsappNumber: "+971500000001", whatsappNotifications: true, whatsappConsentAt: new Date() } });
   await prisma.staffProfile.upsert({
     where: { organizationId_employeeId: { organizationId: org.id, employeeId: "E1001" } },
     update: { userId: staffUser.id, phone: "+971 50 123 4567" },

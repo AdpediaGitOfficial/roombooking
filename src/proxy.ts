@@ -5,7 +5,7 @@ import { NextResponse, type NextRequest } from "next/server";
 // src/lib/auth (requireUser / requireRole); this only checks cookie presence.
 const SESSION_COOKIE = "sam_session";
 // /api/jobs authenticates with its own bearer secret, not a session cookie.
-const PUBLIC_PATHS = ["/login", "/invite", "/api/health", "/api/jobs"];
+const PUBLIC_PATHS = ["/login", "/invite", "/api/health", "/api/jobs", "/api/webhooks"];
 
 function isPublic(pathname: string) {
   return PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));

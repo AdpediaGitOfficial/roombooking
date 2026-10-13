@@ -1,45 +1,65 @@
 import { Suspense } from "react";
 import Link from "next/link";
-import type { NotificationStatus } from "@prisma/client";
+import type { NotificationChannel, NotificationStatus } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { requireRole } from "@/lib/auth/authorize";
 import { ADMIN_VIEW_ROLES } from "@/modules/admin/access";
 import { outboxStats } from "@/modules/notifications/worker";
 import { transportFromEnv } from "@/modules/notifications/transport";
-import { RetryButton, RunWorkerButton, SendTestEmailButton } from "@/modules/notifications/components/forms";
+import { whatsappTransportFromEnv } from "@/modules/notifications/whatsapp";
+import { requiredTemplates } from "@/modules/notifications/whatsapp-templates";
+import { RetryButton, RunWorkerButton, SendTestEmailButton, SendTestWhatsAppButton } from "@/modules/notifications/components/forms";
 
 const STATUSES: NotificationStatus[] = ["QUEUED", "SENT", "DELIVERED", "FAILED"];
 
-async function Content({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
+async function Content({ searchParams }: { searchParams: Promise<{ status?: string; channel?: string }> }) {
   await requireRole(ADMIN_VIEW_ROLES, "/admin/notifications");
-  const { status: raw } = await searchParams;
+  const { status: raw, channel: rawChannel } = await searchParams;
   const status = STATUSES.includes(raw as NotificationStatus) ? (raw as NotificationStatus) : null;
-  let transportInfo: { name: string; description: string };
-  try { const t = transportFromEnv(); transportInfo = { name: t.name, description: t.description }; } catch (e) { transportInfo = { name: "error", description: e instanceof Error ? e.message : String(e) }; }
-  const [{ stats, due, oldestQueuedAt }, recent] = await Promise.all([
+  const channel: NotificationChannel = rawChannel === "WHATSAPP" ? "WHATSAPP" : "EMAIL";
+  const describe = (f: () => { name: string; description: string }) => { try { const t = f(); return { name: t.name, description: t.description }; } catch (e) { return { name: "error", description: e instanceof Error ? e.message : String(e) }; } };
+  const transportInfo = describe(() => transportFromEnv());
+  const waInfo = describe(() => whatsappTransportFromEnv());
+  const [{ stats, due, dueWhatsApp, oldestQueuedAt, oldestWhatsAppQueuedAt }, recent, unread, consented] = await Promise.all([
     outboxStats(),
-    prisma.notification.findMany({ where: { channel: "EMAIL", ...(status ? { status } : {}) }, include: { recipient: { select: { name: true, email: true } } }, orderBy: { createdAt: "desc" }, take: 100 }),
+    prisma.notification.findMany({ where: { channel, ...(status ? { status } : {}) }, include: { recipient: { select: { name: true, email: true } } }, orderBy: { createdAt: "desc" }, take: 100 }),
+    prisma.notification.count({ where: { channel: "IN_APP", readAt: null } }),
+    prisma.user.count({ where: { whatsappNotifications: true, whatsappConsentAt: { not: null }, whatsappNumber: { not: null } } }),
   ]);
   const email = stats.EMAIL ?? {};
+  const wa = stats.WHATSAPP ?? {};
+  const query = (c: NotificationChannel, s: string) => `/admin/notifications?channel=${c}${s ? `&status=${s}` : ""}`;
   return (
     <>
-      <div className="grid gap-4 md:grid-cols-[1fr_auto]">
+      <div className="grid gap-4 md:grid-cols-2">
         <div className="rounded-lg border border-zinc-200 p-4 text-sm dark:border-zinc-800">
           <div className="text-xs uppercase tracking-wide text-zinc-500">Email transport</div>
           <div className="mt-1 font-medium" data-transport={transportInfo.name}>{transportInfo.name}</div>
           <div className="text-zinc-600 dark:text-zinc-400">{transportInfo.description}</div>
-          <div className="mt-2 text-xs text-zinc-500">Deliveries run from the worker process (`npm run notifications:worker`) or a scheduler calling POST /api/jobs/notifications with the job secret.</div>
+          <div className="mt-2 flex flex-wrap gap-2"><RunWorkerButton /><SendTestEmailButton /></div>
         </div>
-        <div className="flex flex-col gap-2"><RunWorkerButton /><SendTestEmailButton /></div>
+        <div className="rounded-lg border border-zinc-200 p-4 text-sm dark:border-zinc-800">
+          <div className="text-xs uppercase tracking-wide text-zinc-500">WhatsApp transport</div>
+          <div className="mt-1 font-medium" data-whatsapp-transport={waInfo.name}>{waInfo.name}</div>
+          <div className="text-zinc-600 dark:text-zinc-400">{waInfo.description}</div>
+          <div className="mt-1 text-xs text-zinc-500">{consented} {consented === 1 ? "person has" : "people have"} opted in. Delivery receipts arrive at POST /api/webhooks/whatsapp (verify token and app secret in the environment).</div>
+          <div className="mt-2"><SendTestWhatsAppButton /></div>
+        </div>
       </div>
+      <p className="mt-2 text-xs text-zinc-500">Deliveries run from the worker process (`npm run notifications:worker`) or a scheduler calling POST /api/jobs/notifications with the job secret.</p>
       <dl className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-5">
-        {[["Due now", due], ["Queued", email.QUEUED ?? 0], ["Sent", email.SENT ?? 0], ["Failed", email.FAILED ?? 0], ["In-app unread", await prisma.notification.count({ where: { channel: "IN_APP", readAt: null } })]].map(([label, value]) => (
+        {(channel === "EMAIL"
+          ? [["Due now", due], ["Queued", email.QUEUED ?? 0], ["Sent", email.SENT ?? 0], ["Failed", email.FAILED ?? 0], ["In-app unread", unread]]
+          : [["Due now", dueWhatsApp], ["Queued", wa.QUEUED ?? 0], ["Sent", wa.SENT ?? 0], ["Delivered", wa.DELIVERED ?? 0], ["Failed", wa.FAILED ?? 0]]).map(([label, value]) => (
           <div key={String(label)} className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800"><dt className="text-xs uppercase tracking-wide text-zinc-500">{label}</dt><dd data-stat={label} className="mt-1 text-2xl font-semibold tabular-nums">{value}</dd></div>
         ))}
       </dl>
-      {oldestQueuedAt && <p className="mt-2 text-xs text-zinc-500">Oldest queued email: {oldestQueuedAt.toISOString().replace("T", " ").slice(0, 16)} UTC.</p>}
-      <nav className="mt-4 flex flex-wrap gap-2 text-sm">
-        {[["", "All"], ...STATUSES.map((s) => [s, s.toLowerCase()])].map(([s, label]) => <Link key={s} href={`/admin/notifications${s ? `?status=${s}` : ""}`} className={`rounded-full px-3 py-1 ${(status ?? "") === s ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900" : "border border-zinc-300 dark:border-zinc-700"}`}>{label}</Link>)}
+      {channel === "EMAIL" && oldestQueuedAt && <p className="mt-2 text-xs text-zinc-500">Oldest queued email: {oldestQueuedAt.toISOString().replace("T", " ").slice(0, 16)} UTC.</p>}
+      {channel === "WHATSAPP" && oldestWhatsAppQueuedAt && <p className="mt-2 text-xs text-zinc-500">Oldest queued WhatsApp message: {oldestWhatsAppQueuedAt.toISOString().replace("T", " ").slice(0, 16)} UTC.</p>}
+      <nav className="mt-4 flex flex-wrap items-center gap-2 text-sm">
+        {(["EMAIL", "WHATSAPP"] as NotificationChannel[]).map((c) => <Link key={c} href={query(c, "")} data-channel-tab={c} className={`rounded-md px-3 py-1 font-medium ${c === channel ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900" : "border border-zinc-300 dark:border-zinc-700"}`}>{c === "EMAIL" ? "Email" : "WhatsApp"}</Link>)}
+        <span className="mx-1 text-zinc-400">|</span>
+        {[["", "All"], ...STATUSES.map((s) => [s, s.toLowerCase()])].map(([s, label]) => <Link key={s} href={query(channel, s)} className={`rounded-full px-3 py-1 ${(status ?? "") === s ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900" : "border border-zinc-300 dark:border-zinc-700"}`}>{label}</Link>)}
       </nav>
       <div className="mt-4 overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-800">
         <table className="w-full text-sm">
@@ -61,6 +81,20 @@ async function Content({ searchParams }: { searchParams: Promise<{ status?: stri
           </tbody>
         </table>
       </div>
+      {channel === "WHATSAPP" && (
+        <section className="mt-6">
+          <h2 className="text-lg font-semibold">Templates to approve with the provider</h2>
+          <p className="mt-1 text-xs text-zinc-500">Business-initiated WhatsApp messages must use pre-approved templates. Create these in WhatsApp Manager (language {process.env.WHATSAPP_LANGUAGE ?? "en"}); override names with WHATSAPP_TEMPLATE_MAP.</p>
+          <div className="mt-2 overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-800">
+            <table className="w-full text-sm">
+              <thead className="bg-zinc-50 text-left text-xs uppercase tracking-wide text-zinc-500 dark:bg-zinc-900"><tr><th className="px-3 py-2">Template</th><th className="px-3 py-2">Body</th><th className="px-3 py-2">Events</th></tr></thead>
+              <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
+                {requiredTemplates().map((t) => <tr key={t.name} data-template={t.name}><td className="px-3 py-2 font-mono text-xs">{t.name}</td><td className="px-3 py-2 text-xs">{t.body}</td><td className="px-3 py-2 text-xs text-zinc-500">{t.events.join(", ")}</td></tr>)}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
     </>
   );
 }
@@ -69,9 +103,9 @@ export default function NotificationsAdminPage({ searchParams }: PageProps<"/adm
   return (
     <main>
       <h1 className="text-2xl font-semibold">Notifications</h1>
-      <p className="mt-1 mb-6 text-sm text-zinc-600 dark:text-zinc-400">Email delivery queue, failures and transport health.</p>
+      <p className="mt-1 mb-6 text-sm text-zinc-600 dark:text-zinc-400">Email and WhatsApp delivery queues, failures and transport health.</p>
       <Suspense fallback={<p className="text-sm text-zinc-500">Loading…</p>}>
-        <Content searchParams={searchParams as Promise<{ status?: string }>} />
+        <Content searchParams={searchParams as Promise<{ status?: string; channel?: string }>} />
       </Suspense>
     </main>
   );

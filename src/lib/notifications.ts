@@ -30,14 +30,22 @@ export async function enqueueNotification(tx: Prisma.TransactionClient, input: E
   });
   // An in-app notification also goes out by email when the person has an
   // address and has not switched email off (COM-01). Same transaction, own key.
-  if (channel === "IN_APP" && process.env.EMAIL_FANOUT !== "false") {
-    const recipient = await tx.user.findUnique({ where: { id: input.recipientId }, select: { email: true, emailNotifications: true, status: true } });
-    if (recipient?.email && recipient.emailNotifications && recipient.status !== "DEACTIVATED") {
-      await tx.notification.upsert({
-        where: { idempotencyKey: `${input.idempotencyKey}:email` },
-        update: {},
-        create: { recipientId: input.recipientId, channel: "EMAIL", event: input.event, template: input.template ?? input.event, payload: input.payload, idempotencyKey: `${input.idempotencyKey}:email` },
-      });
-    }
+  if (channel !== "IN_APP") return;
+  const recipient = await tx.user.findUnique({ where: { id: input.recipientId }, select: { email: true, emailNotifications: true, status: true, whatsappNumber: true, whatsappNotifications: true, whatsappConsentAt: true } });
+  if (!recipient || recipient.status === "DEACTIVATED") return;
+  if (process.env.EMAIL_FANOUT !== "false" && recipient.email && recipient.emailNotifications) {
+    await tx.notification.upsert({
+      where: { idempotencyKey: `${input.idempotencyKey}:email` },
+      update: {},
+      create: { recipientId: input.recipientId, channel: "EMAIL", event: input.event, template: input.template ?? input.event, payload: input.payload, idempotencyKey: `${input.idempotencyKey}:email` },
+    });
+  }
+  // WhatsApp copy only with a number, the switch on and recorded consent (COM-02).
+  if (process.env.WHATSAPP_FANOUT !== "false" && recipient.whatsappNumber && recipient.whatsappNotifications && recipient.whatsappConsentAt) {
+    await tx.notification.upsert({
+      where: { idempotencyKey: `${input.idempotencyKey}:whatsapp` },
+      update: {},
+      create: { recipientId: input.recipientId, channel: "WHATSAPP", event: input.event, template: input.template ?? input.event, payload: input.payload, idempotencyKey: `${input.idempotencyKey}:whatsapp` },
+    });
   }
 }

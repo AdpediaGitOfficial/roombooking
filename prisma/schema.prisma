@@ -162,24 +162,29 @@ enum UserStatus {
 }
 
 model User {
-  id                  String     @id @default(cuid())
-  organizationId      String
-  email               String     @unique
-  name                String
-  passwordHash        String?
-  passwordChangedAt   DateTime?
-  failedLoginAttempts Int        @default(0)
-  lockedUntil         DateTime?
+  id                    String     @id @default(cuid())
+  organizationId        String
+  email                 String     @unique
+  name                  String
+  passwordHash          String?
+  passwordChangedAt     DateTime?
+  failedLoginAttempts   Int        @default(0)
+  lockedUntil           DateTime?
   // One-time invite / password-reset token (hash only) with expiry (ADM-01, SS-08).
-  tokenHash           String?    @unique
-  tokenPurpose        String?
-  tokenExpiresAt      DateTime?
+  tokenHash             String?    @unique
+  tokenPurpose          String?
+  tokenExpiresAt        DateTime?
   // Resident preference: receive email copies of in-app notifications (COM-01).
-  emailNotifications  Boolean    @default(true)
-  status              UserStatus @default(INVITED)
-  lastLoginAt         DateTime?
-  createdAt           DateTime   @default(now())
-  updatedAt           DateTime   @updatedAt
+  emailNotifications    Boolean    @default(true)
+  // WhatsApp (COM-02): number in E.164, explicit consent timestamp, and the
+  // switch; nothing is sent unless all three are present.
+  whatsappNumber        String?
+  whatsappConsentAt     DateTime?
+  whatsappNotifications Boolean    @default(false)
+  status                UserStatus @default(INVITED)
+  lastLoginAt           DateTime?
+  createdAt             DateTime   @default(now())
+  updatedAt             DateTime   @updatedAt
 
   organization    Organization     @relation(fields: [organizationId], references: [id])
   roleAssignments RoleAssignment[]
@@ -985,6 +990,7 @@ model Notification {
   deliveredTo       String?
   providerMessageId String?
   sentAt            DateTime?
+  deliveredAt       DateTime?
   readAt            DateTime?
   createdAt         DateTime            @default(now())
   updatedAt         DateTime            @updatedAt
@@ -993,6 +999,7 @@ model Notification {
 
   @@index([status, channel, nextAttemptAt])
   @@index([recipientId, readAt])
+  @@index([providerMessageId])
 }
 
 // Append-only (trigger in migration SQL blocks UPDATE/DELETE).

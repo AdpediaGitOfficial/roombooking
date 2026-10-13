@@ -272,8 +272,38 @@ email off in their profile (COM-01).
 - `/admin/notifications` shows transport health, queue counts, recent
   emails with failure reasons, retry, run-now and a test email.
 
-WhatsApp is not implemented yet; it will be another transport on the same
-outbox.
+### WhatsApp
+
+WhatsApp is a second transport on the same outbox (COM-02, COM-04, COM-05):
+
+- residents opt in on `/my/profile`: a number in international format, the
+  switch, and an explicit consent tick that is timestamped and audited.
+  Nothing is queued or sent without all three, and consent can be withdrawn
+  there at any time;
+- in-app notifications fan out to a WhatsApp copy (`WHATSAPP_FANOUT`) with
+  its own idempotency key, so a retried business action never queues twice;
+- messages are provider-approved **templates** (business-initiated messages
+  must be). `src/modules/notifications/whatsapp-templates.ts` maps each
+  event to a template name (`WHATSAPP_TEMPLATE_PREFIX` + name, overridable
+  per event with `WHATSAPP_TEMPLATE_MAP`) and body parameters in
+  `WHATSAPP_LANGUAGE`. Parameters carry no room or bed codes, reasons or
+  links with tokens: the message says what happened and points to the
+  portal. `/admin/notifications?channel=WHATSAPP` lists the templates to
+  create in WhatsApp Manager with their bodies;
+- transports: Meta WhatsApp Business Platform Cloud API
+  (`WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`), a log transport
+  for development, or disabled. Provider errors that cannot succeed on
+  retry (unknown template, invalid or non-WhatsApp number, policy blocks)
+  fail immediately with the provider code; the rest retry with the same
+  backoff as email;
+- delivery receipts: Meta posts status updates to
+  `POST /api/webhooks/whatsapp`, authenticated with `X-Hub-Signature-256`
+  and `WHATSAPP_APP_SECRET` (the GET handshake uses
+  `WHATSAPP_VERIFY_TOKEN`). *Delivered* and *read* mark the row delivered;
+  *failed* records the provider reason and an audit event;
+- the worker, the jobs endpoint and the admin page handle both channels;
+  the admin page shows WhatsApp transport health, opted-in count, per-status
+  counts and a test message to yourself.
 
 ## Authentication
 
