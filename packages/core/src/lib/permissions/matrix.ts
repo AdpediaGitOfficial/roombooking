@@ -160,6 +160,8 @@ export const CAPABILITIES: Capability[] = [
   row("Security", "sec.patrol_points", "Patrol checkpoints", "D|D|-|-|-|-|-|V|-|-"),
 
   // 5.8 Communication, reports and audit
+  row("Privacy", "priv.decide", "Decide data-subject requests (Compliance)", "-|G|-|-|-|-|-|-|-|V"),
+  row("Privacy", "priv.execute", "Execute approved erasure / correction", "D|-|-|-|-|-|-|-|-|V"),
   row("Communication", "comm.templates", "Notification templates & channels", "D|-|-|-|-|-|-|-|-|-"),
   row("Communication", "comm.broadcast", "Broadcasts (site / building / role)", "D|D|G|Read|G|Read|-|Read|-|-"),
   row("Lost & found", "lf.operate", "Lost & found: log, handover", "D|D|D|Report / claim|-|-|-|D|-|-"),

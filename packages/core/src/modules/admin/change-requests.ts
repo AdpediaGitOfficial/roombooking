@@ -19,7 +19,8 @@ export type ChangePayload =
   | { op: "grant.create"; grant: Omit<Parameters<typeof createGrant>[0], "actorId" | "organizationId"> & { expiresAt?: string | null } }
   | { op: "grant.revoke"; grantId: string; reason: string }
   | { op: "workflow.publish"; versionId: string; changeNote: string }
-  | { op: "bulk"; description: string; ids: string[]; action: string };
+  | { op: "bulk"; description: string; ids: string[]; action: string }
+  | { op: "retention.set"; recordType: string; retainDays: number; action: "ARCHIVE" | "ANONYMISE" | "DELETE"; active: boolean };
 
 /** Hooks other modules register to apply the changes they own (avoids import cycles). */
 type Applier = (payload: ChangePayload, ctx: { organizationId: string; requestedById: string; approvedById: string | null }) => Promise<void>;
@@ -35,6 +36,7 @@ const KIND_OF: Record<ChangePayload["op"], ChangeRequestKind> = {
   "grant.revoke": "GRANT",
   "workflow.publish": "WORKFLOW_PUBLISH",
   bulk: "BULK_CHANGE",
+  "retention.set": "RETENTION",
 };
 
 export async function activeSuperAdmins(organizationId: string, db: Db | typeof prisma = prisma) {

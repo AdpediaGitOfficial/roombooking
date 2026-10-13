@@ -8,6 +8,10 @@ import { sweepBookings } from "../facilities/service";
 import { sweepRequests } from "../requests/service";
 import { sweepVisitors } from "../security/service";
 import { runInspectionSchedules } from "../housekeeping/service";
+import { evaluateAlerts, runSubscriptions } from "../reports/schedule";
+import { runRetention } from "../privacy/service";
+import { deliverWebhooks, markSweepRun } from "../integrations/service";
+import { prisma } from "../../lib/db";
 
 export type SweepResult = Record<string, unknown>;
 const SWEEPS: Array<[string, (now: Date) => Promise<unknown>]> = [
@@ -20,6 +24,10 @@ const SWEEPS: Array<[string, (now: Date) => Promise<unknown>]> = [
   ["vendors", (now) => sweepVendors(now)],
   ["visitors", (now) => sweepVisitors(now)],
   ["inspectionsScheduled", (now) => runInspectionSchedules(now)],
+  ["scheduledReports", (now) => runSubscriptions(now)],
+  ["alerts", (now) => evaluateAlerts(now)],
+  ["retention", (now) => runRetention(now)],
+  ["webhooks", (now) => deliverWebhooks({ now })],
   ["bookings", () => sweepBookings()],
   ["requests", () => sweepRequests()],
 ];
@@ -33,5 +41,7 @@ export async function runDailySweeps(now: Date = new Date()): Promise<SweepResul
   for (const [name, fn] of [...SWEEPS, ...extra]) {
     try { out[name] = await fn(now); } catch (error) { out[name] = { error: error instanceof Error ? error.message : String(error) }; }
   }
+  const org = await prisma.organization.findFirst({ select: { id: true } });
+  if (org) await markSweepRun(org.id, now).catch(() => undefined);
   return out;
 }

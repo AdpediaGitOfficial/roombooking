@@ -1,4 +1,5 @@
 import "server-only";
+import "./audit-context";
 import { redirect } from "next/navigation";
 import type { Role } from "@prisma/client";
 import { getCurrentUser } from "@/lib/auth/session";

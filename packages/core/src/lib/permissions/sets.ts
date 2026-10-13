@@ -89,6 +89,13 @@ export const CAPABILITY_SETS: CapabilitySet[] = [
     capabilities: ["comm.broadcast"],
   },
   {
+    id: "COMPLIANCE",
+    label: "Compliance",
+    typicallyGivenTo: "Accommodation Admin (data protection lead)",
+    adds: "Approve or reject data access, correction and erasure requests",
+    capabilities: ["priv.decide"],
+  },
+  {
     id: "ADMIN_OVERRIDES",
     label: "Admin overrides",
     typicallyGivenTo: "Accommodation Admin (second approver)",

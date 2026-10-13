@@ -387,6 +387,7 @@ enum ChangeRequestKind {
   GRANT
   WORKFLOW_PUBLISH
   BULK_CHANGE
+  RETENTION
 }
 
 enum ChangeRequestStatus {
@@ -1430,12 +1431,18 @@ model AuditEvent {
   before     Json?
   after      Json?
   source     String?
+  // Document section 12: who, when, what changed, reason, device / IP, scope.
+  reason     String?
+  ip         String?
+  userAgent  String?
+  siteId     String?
   createdAt  DateTime @default(now())
 
   actor User? @relation(fields: [actorId], references: [id])
 
   @@index([entityType, entityId])
   @@index([actorId, createdAt])
+  @@index([action, createdAt])
 }
 
 // ===========================================================================
