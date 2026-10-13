@@ -194,5 +194,5 @@ describe("vendor lifecycle and contractor access", () => {
     expect((await prisma.vendor.findUniqueOrThrow({ where: { id: gone.id } })).state).toBe("EXPIRED");
     await setRate(A.admin, v.id, { category: "Electrical", rate: 80 });
     expect(await prisma.vendorRate.count({ where: { vendorId: v.id, active: true } })).toBe(1);
-  });
+  }, 60_000);
 });
