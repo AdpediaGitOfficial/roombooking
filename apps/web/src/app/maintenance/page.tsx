@@ -9,7 +9,7 @@ import { MaintenanceTabs } from "@/modules/maintenance/components/tabs";
 import { PageHeader } from "@/components/shell/page-header";
 
 const FILTERS: Array<[QueueFilter, string]> = [
-  ["open", "Open"], ["unassigned", "Unassigned"], ["mine", "Assigned to me"], ["waiting", "Waiting"], ["resolved", "Resolved · to close"], ["closed", "Closed"], ["all", "All"],
+  ["open", "Open"], ["unassigned", "Unassigned"], ["mine", "Assigned to me"], ["waiting", "Waiting"], ["resolved", "Resolved · to close"], ["overdue", "Overdue"], ["cost", "Cost approval"], ["closed", "Closed"], ["all", "All"],
 ];
 
 async function Queue({ searchParams }: { searchParams: Promise<{ filter?: string }> }) {

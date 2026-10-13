@@ -2,7 +2,8 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { canSeeSite } from "@/lib/auth/scope";
-import { hasRole, requireRole } from "@/lib/auth/authorize";
+import { hasRole, requireRole, userCan } from "@/lib/auth/authorize";
+import { FacilityAdminPanels } from "@/modules/facilities/components/admin-panels";
 import { addDaysIso, zonedDateTime } from "@sam/core/lib/time";
 import { FACILITY_MANAGE_ROLES, FACILITY_OPERATE_ROLES, FACILITY_VIEW_ROLES } from "@sam/core/modules/facilities/access";
 import { availabilityForDay, bookingsForDay, facilityConfig, getFacility } from "@sam/core/modules/facilities/service";
@@ -17,8 +18,8 @@ async function Content({ params, searchParams }: { params: Params; searchParams:
   const { facilityId } = await params;
   const { date: rawDate } = await searchParams;
   const user = await requireRole(FACILITY_VIEW_ROLES, `/facilities/${facilityId}`);
-  const canManage = hasRole(user, ...FACILITY_MANAGE_ROLES);
-  const canOperate = hasRole(user, ...FACILITY_OPERATE_ROLES);
+  const canManage = hasRole(user, ...FACILITY_MANAGE_ROLES) || userCan(user, "fac.approve");
+  const canOperate = hasRole(user, ...FACILITY_OPERATE_ROLES) || userCan(user, "fac.book_behalf");
   const facility = await getFacility(facilityId);
   if (!facility) notFound();
   if (!(await canSeeSite(user, "fac.view", facility.siteId))) notFound();
@@ -88,6 +89,8 @@ async function Content({ params, searchParams }: { params: Params; searchParams:
           </div>
         </section>
       )}
+
+      <FacilityAdminPanels facility={facility} user={user} />
 
       {canManage && (
         <section className="mt-6">

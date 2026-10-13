@@ -370,7 +370,7 @@ export async function listAttachments(workOrderId: string, db: Db = prisma) {
   return db.attachment.findMany({ where: { entityType: "WorkOrder", entityId: workOrderId }, orderBy: { createdAt: "asc" } });
 }
 
-export type QueueFilter = "open" | "unassigned" | "mine" | "waiting" | "resolved" | "closed" | "all";
+export type QueueFilter = "open" | "unassigned" | "mine" | "waiting" | "resolved" | "closed" | "cost" | "overdue" | "all";
 
 /** Operations queue, scoped by what the actor may see. */
 export async function listWorkOrders(actor: Actor, filter: QueueFilter) {
@@ -390,6 +390,8 @@ export async function listWorkOrders(actor: Actor, filter: QueueFilter) {
     : filter === "waiting" ? { status: { in: WAITING_STATUSES } }
     : filter === "resolved" ? { status: "RESOLVED" }
     : filter === "closed" ? { status: { in: TERMINAL } }
+    : filter === "cost" ? { costApprovalStatus: "PENDING", status: { in: OPEN_STATUSES } }
+    : filter === "overdue" ? { status: { in: OPEN_STATUSES }, slaDueAt: { lt: new Date() } }
     : {};
   return prisma.workOrder.findMany({
     where: { AND: [scope, byFilter] },

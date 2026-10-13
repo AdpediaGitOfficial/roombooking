@@ -54,6 +54,11 @@ export async function getCurrentWorkflow(organizationId: string, typeCode: strin
 /** Resolves optionsSource fields (e.g. active buildings) for rendering and validation. */
 export async function resolveFieldOptions(schema: FormSchema, db: Db = prisma): Promise<Record<string, string[]>> {
   const out: Record<string, string[]> = {};
+  const needsSites = schema.fields.filter((f) => f.optionsSource === "sites");
+  if (needsSites.length > 0) {
+    const sites = await db.site.findMany({ where: { status: "ACTIVE" }, orderBy: { name: "asc" }, select: { name: true } });
+    for (const f of needsSites) out[f.name] = sites.map((x) => x.name);
+  }
   const needsBuildings = schema.fields.filter((f) => f.optionsSource === "buildings");
   if (needsBuildings.length > 0) {
     const buildings = await db.building.findMany({ where: { status: "ACTIVE" }, include: { site: true }, orderBy: [{ site: { name: "asc" } }, { code: "asc" }] });
@@ -196,10 +201,59 @@ export function canDecide(request: Pick<RequestRecord, "status" | "requesterId" 
   if (request.requesterId === actor.id) return { ok: false, reason: "You cannot approve your own request." };
   const role = request.stepRoleOverride ?? step.approverRole;
   if (actor.roles.includes(role)) return { ok: true, onBehalfOf: null };
+  // "Second AA / SA": a Super Admin can always stand in for an Accommodation Admin step.
+  if (role === "ACCOMMODATION_ADMIN" && actor.roles.includes("SYSTEM_ADMIN")) return { ok: true, onBehalfOf: null };
   // Delegated authority never covers the delegator's own request (WF-06).
   const cover = (actor.delegated ?? []).find((d) => d.role === role && d.delegatorId !== request.requesterId);
   if (cover) return { ok: true, onBehalfOf: cover };
   return { ok: false, reason: `This step needs a ${role.toLowerCase().replace(/_/g, " ")}.` };
+}
+
+
+// ---------------------------------------------------------------------------
+// Routing rules (document 6.4): a different person approves each step, steps can be tied to a site, and
+// where nobody else could approve (a one-admin organisation) the rule is waived and the audit trail says so.
+// ---------------------------------------------------------------------------
+
+/** The sites a request concerns: where the requester lives, and the target site chosen on the form (inter-site transfer). */
+export async function requestSites(db: Db, request: { requesterId: string; data: unknown; requester?: { staffProfile?: { id: string } | null } }): Promise<{ requester: string | null; target: string | null }> {
+  const staff = request.requester?.staffProfile ?? (await db.staffProfile.findUnique({ where: { userId: request.requesterId }, select: { id: true } }));
+  const stay = staff ? await db.allocation.findFirst({ where: { staffId: staff.id, status: { in: ["CONFIRMED", "CHECKED_IN"] } }, orderBy: { startDate: "desc" }, select: { bed: { select: { room: { select: { building: { select: { siteId: true } } } } } } } }) : null;
+  // The target site is whichever form answer names an active site (a "sites" list) or a building ("Site · Building").
+  const data = (request.data ?? {}) as Record<string, unknown>;
+  const answers = Object.values(data).filter((v): v is string => typeof v === "string" && v.length > 0 && v.length < 120).flatMap((v) => [v, v.split(" · ")[0]]);
+  const own = stay?.bed.room.building.siteId ?? null;
+  const hits = answers.length ? await db.site.findMany({ where: { name: { in: answers } }, select: { id: true } }) : [];
+  const target = hits.map((h) => h.id).find((id) => id !== own) ?? hits[0]?.id ?? null;
+  return { requester: stay?.bed.room.building.siteId ?? null, target };
+}
+
+/** Whether the actor's role assignment for this step covers the site (null site = organisation-wide assignment). */
+function assignmentCovers(actor: Actor, role: Role, siteId: string | null): boolean {
+  if (!actor.roleAssignments) return true; // service callers that pass only role names act organisation-wide
+  const mine = actor.roleAssignments.filter((a) => a.role === role || (role === "ACCOMMODATION_ADMIN" && a.role === "SYSTEM_ADMIN"));
+  if (mine.length === 0) return true; // covered through delegation; delegations carry their own scope
+  if (mine.some((a) => !a.siteId && !a.buildingId)) return true;
+  return !!siteId && mine.some((a) => a.siteId === siteId);
+}
+
+async function routingGuards(tx: Tx, request: RequestRecord, step: { order: number; approverRole: Role; siteScope?: string | null }, actor: Actor): Promise<{ error?: string; waived?: string }> {
+  if (step.siteScope === "REQUESTER" || step.siteScope === "TARGET") {
+    const sites = await requestSites(tx, request);
+    const siteId = step.siteScope === "REQUESTER" ? sites.requester : sites.target;
+    if (siteId && !assignmentCovers(actor, request.stepRoleOverride ?? step.approverRole, siteId)) {
+      return { error: step.siteScope === "REQUESTER" ? "Only an approver for the requester's site can decide this step." : "Only an approver for the receiving site can decide this step." };
+    }
+  }
+  const earlier = request.decisions.filter((d) => d.approverId === actor.id && d.submissionVersion === request.submissionVersion && d.step.order < step.order);
+  if (earlier.length > 0) {
+    // Is there anyone else who could take this step? If not, the same person may, and it is recorded.
+    const role = request.stepRoleOverride ?? step.approverRole;
+    const others = await tx.user.count({ where: { status: "ACTIVE", id: { notIn: [actor.id, request.requesterId] }, roleAssignments: { some: { role: { in: role === "ACCOMMODATION_ADMIN" ? ["ACCOMMODATION_ADMIN", "SYSTEM_ADMIN"] : [role] } } } } });
+    if (others > 0) return { error: "A different person must approve this step: you decided an earlier step of this request." };
+    return { waived: "no other approver available" };
+  }
+  return {};
 }
 
 export type DecideInput = { requestId: string; actor: Actor; action: DecisionAction; comment?: string | null };
@@ -215,6 +269,8 @@ export async function decideRequest(input: DecideInput) {
       throw new RequestError(request.status === "PENDING_APPROVAL" ? "FORBIDDEN" : "INVALID_STATE", permission.reason);
     }
     const step = currentStep(request)!;
+    const guard = await routingGuards(tx, request, step, input.actor);
+    if (guard.error) throw new RequestError("FORBIDDEN", guard.error);
     if ((step.requireComment || input.action !== "APPROVE") && !comment) {
       throw new RequestError("COMMENT_REQUIRED", input.action === "APPROVE" ? "This step requires a comment." : "Give the requester a reason.");
     }
@@ -235,7 +291,7 @@ export async function decideRequest(input: DecideInput) {
       data: { requestId: request.id, stepId: step.id, approverId: input.actor.id, onBehalfOfId: cover?.delegatorId ?? null, delegationId: cover?.delegationId ?? null, action: input.action, comment, submissionVersion: request.submissionVersion },
     });
     await recordAudit(
-      { actorId: input.actor.id, action: "REQUEST_DECIDED", entityType: "Request", entityId: request.id, before: { status: request.status, step: step.order }, after: { action: input.action, status: nextStatus, nextStep: nextStep?.order ?? null, comment, onBehalfOf: cover?.delegatorId ?? null, delegationId: cover?.delegationId ?? null } },
+      { actorId: input.actor.id, action: "REQUEST_DECIDED", entityType: "Request", entityId: request.id, before: { status: request.status, step: step.order }, after: { action: input.action, status: nextStatus, nextStep: nextStep?.order ?? null, comment, onBehalfOf: cover?.delegatorId ?? null, delegationId: cover?.delegationId ?? null, ...(guard.waived ? { distinctApproverWaived: guard.waived } : {}) } },
       tx,
     );
 
@@ -272,6 +328,33 @@ async function fulfilTx(tx: Tx, requestId: string, actorId: string) {
       complete = false;
       note = "Approved. The accommodation office will complete the move.";
       break;
+    case "INTER_SITE_TRANSFER":
+      complete = false;
+      note = "Approved by both sites. The front desk at both sites completes the move: keys back at the old room, issued at the new one.";
+      break;
+    case "EXTENSION_WITHIN_POLICY":
+    case "EXTENSION_BEYOND_POLICY": {
+      const staff = request.requester.staffProfile;
+      const newEnd = typeof data.newEndDate === "string" ? data.newEndDate : null;
+      const current = staff ? await tx.allocation.findFirst({ where: { staffId: staff.id, status: { in: ["CONFIRMED", "CHECKED_IN"] } }, orderBy: { startDate: "desc" } }) : null;
+      if (current && newEnd && (!current.endDate || newEnd > isoDate(current.endDate))) {
+        await tx.allocation.update({ where: { id: current.id }, data: { endDate: new Date(`${newEnd}T00:00:00.000Z`), requestId: request.id } });
+        await recordAudit({ actorId, action: "STAY_EXTENDED", entityType: "Allocation", entityId: current.id, before: { endDate: current.endDate ? isoDate(current.endDate) : null }, after: { endDate: newEnd, requestId: request.id, beyondPolicy: request.requestType.code === "EXTENSION_BEYOND_POLICY" } }, tx);
+        note = `Stay extended to ${newEnd}.`;
+      } else note = current ? "Approved; the stay already runs to that date or later." : "Approved; there is no current stay to extend.";
+      break;
+    }
+    case "ELIGIBILITY_EXCEPTION": {
+      const employeeId = typeof data.employeeId === "string" ? data.employeeId.trim() : "";
+      const person = employeeId ? await tx.staffProfile.findFirst({ where: { organizationId: request.requestType.organizationId, employeeId } }) : null;
+      if (person) {
+        const ent = { ...((person.entitlement as Record<string, unknown> | null) ?? {}), exceptionUntil: new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10), exceptionRequestId: request.id };
+        await tx.staffProfile.update({ where: { id: person.id }, data: { entitlement: ent as Prisma.InputJsonValue } });
+        await recordAudit({ actorId, action: "ELIGIBILITY_EXCEPTION_GRANTED", entityType: "StaffProfile", entityId: person.id, after: { until: ent.exceptionUntil, requestId: request.id } }, tx);
+        note = `Eligibility exception granted for ${employeeId} until ${ent.exceptionUntil}. The front desk can now allocate.`;
+      } else note = "Approved, but no staff member matches that employee ID: nothing was changed.";
+      break;
+    }
     case "EXIT_CLEARANCE": {
       const staff = request.requester.staffProfile;
       const lastDay = typeof data.lastWorkingDay === "string" ? data.lastWorkingDay : null;

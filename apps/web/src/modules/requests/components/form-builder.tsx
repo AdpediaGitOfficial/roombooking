@@ -133,7 +133,7 @@ export function FormBuilder({ typeId, draft, initialFields, initialSteps, roles 
                     {f.type === "select" && (
                       <>
                         <label className="block text-sm sm:col-span-2">Options <span className="text-zinc-500">(one per line)</span><textarea rows={3} value={f.optionsSource ? "" : (f.options ?? []).join("\n")} disabled={!!f.optionsSource} onChange={(ev) => setField(i, { options: ev.target.value.split("\n") })} className={input} />{err(e[`fields.${i}.options`])}</label>
-                        <label className="block text-sm">Or from data<select value={f.optionsSource ?? ""} onChange={(ev) => setField(i, { optionsSource: ev.target.value === "buildings" ? "buildings" : undefined })} className={input}><option value="">Fixed options</option><option value="buildings">Active buildings</option></select></label>
+                        <label className="block text-sm">Or from data<select value={f.optionsSource ?? ""} onChange={(ev) => setField(i, { optionsSource: ev.target.value === "buildings" || ev.target.value === "sites" ? ev.target.value : undefined })} className={input}><option value="">Fixed options</option><option value="buildings">Active buildings</option><option value="sites">Active sites</option></select></label>
                       </>
                     )}
                     {f.type === "number" && (
@@ -182,6 +182,7 @@ export function FormBuilder({ typeId, draft, initialFields, initialSteps, roles 
                 <span className="pb-2 text-xs text-zinc-500">Step {i + 1}</span>
                 <label className="block text-sm">Name<input value={s.name} onChange={(ev) => setStep(i, { name: ev.target.value })} className={input} />{err(e[`steps.${i}.name`])}</label>
                 <label className="block text-sm">Approver role<select value={s.approverRole} onChange={(ev) => setStep(i, { approverRole: ev.target.value as Role })} className={input}>{roles.map((r) => <option key={r} value={r}>{r.toLowerCase().replaceAll("_", " ")}</option>)}</select>{err(e[`steps.${i}.approverRole`])}</label>
+                <label className="block text-sm">Approver's site<select value={s.siteScope ?? ""} onChange={(ev) => setStep(i, { siteScope: ev.target.value || null })} className={input}><option value="">Any site</option><option value="REQUESTER">Requester's site</option><option value="TARGET">Site chosen on the form (field "targetSite" or a sites list)</option></select></label>
                 <label className="flex items-center gap-2 pb-2 text-sm"><input type="checkbox" checked={s.requireComment} onChange={(ev) => setStep(i, { requireComment: ev.target.checked })} /> Comment required</label>
                 <span className="flex gap-1 pb-2">
                   <button type="button" onClick={() => moveStep(i, -1)} disabled={i === 0} className={tiny} aria-label="Move up">↑</button>

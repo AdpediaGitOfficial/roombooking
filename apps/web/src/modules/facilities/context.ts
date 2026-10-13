@@ -1,11 +1,11 @@
 import "server-only";
 import { prisma } from "@sam/core/lib/db";
-import { hasRole, type CurrentUser } from "@/lib/auth/authorize";
-import { FACILITY_MANAGE_ROLES, FACILITY_OPERATE_ROLES } from "@sam/core/modules/facilities/access";
+import { userCan, type CurrentUser } from "@/lib/auth/authorize";
 import type { Actor } from "@sam/core/modules/facilities/service";
 
 export function actorFor(user: CurrentUser): Actor {
-  return { id: user.id, isManager: hasRole(user, ...FACILITY_MANAGE_ROLES), isOperator: hasRole(user, ...FACILITY_OPERATE_ROLES) };
+  // Managers approve and cancel any booking (Admins, or Officers holding the Facility manager grant); operators book on behalf and record attendance.
+  return { id: user.id, isManager: userCan(user, "fac.approve") || userCan(user, "fac.cancel_any"), isOperator: userCan(user, "fac.book_behalf") };
 }
 
 /** Users who can be booked on behalf of: active staff with an account. */

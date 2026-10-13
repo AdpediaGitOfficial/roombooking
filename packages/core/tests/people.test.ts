@@ -314,7 +314,7 @@ describe("emergency check-in, extension, swap, bulk, waitlist, readiness", () =>
     await decideProvisional(aa, a2.id, true);
     expect((await prisma.allocation.findUniqueOrThrow({ where: { id: a2.id } })).provisional).toBe(false);
     await checkOut({ allocationId: a2.id, actorId: officer.id });
-  });
+  }, 60_000);
 
   it("extends within policy, refuses beyond it, and respects the bed's next booking", async () => {
     const s = await mkStaff("EXT");

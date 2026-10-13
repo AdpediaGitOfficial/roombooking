@@ -193,7 +193,58 @@ async function main() {
         { name: "itemsReturned", label: "I will return all keys and issued items before leaving", type: "checkbox", required: true },
       ],
     },
+    {
+      code: "INTER_SITE_TRANSFER",
+      name: "Inter-site transfer",
+      description: "Move a resident to a bed at another site. Both sites' Accommodation Admins must agree.",
+      fields: [
+        { name: "targetSite", label: "Receiving site", type: "select", required: true, optionsSource: "sites" },
+        { name: "effectiveDate", label: "Move date", type: "date", required: true },
+        { name: "reason", label: "Reason", type: "textarea", required: true },
+      ],
+    },
+    {
+      code: "EXTENSION_WITHIN_POLICY",
+      name: "Stay extension (within policy)",
+      description: "Extend your stay by up to the policy limit.",
+      fields: [
+        { name: "newEndDate", label: "New end date", type: "date", required: true },
+        { name: "reason", label: "Reason", type: "textarea", required: true },
+      ],
+    },
+    {
+      code: "EXTENSION_BEYOND_POLICY",
+      name: "Stay extension (beyond policy)",
+      description: "Extend your stay beyond the policy limit. A second administrator must agree.",
+      fields: [
+        { name: "newEndDate", label: "New end date", type: "date", required: true },
+        { name: "reason", label: "Why more time is needed", type: "textarea", required: true },
+      ],
+    },
+    {
+      code: "ELIGIBILITY_EXCEPTION",
+      name: "Eligibility exception",
+      description: "Allow an allocation that the room or entitlement rules would block. A different administrator decides.",
+      fields: [
+        { name: "employeeId", label: "Employee ID of the person", type: "text", required: true },
+        { name: "reason", label: "Why an exception is justified", type: "textarea", required: true },
+      ],
+    },
   ];
+
+  const routes: Record<string, Array<{ order: number; name: string; approverRole: Role; requireComment: boolean; siteScope?: string }>> = {
+    INTER_SITE_TRANSFER: [
+      { order: 1, name: "Sending site Accommodation Admin", approverRole: Role.ACCOMMODATION_ADMIN, requireComment: false, siteScope: "REQUESTER" },
+      { order: 2, name: "Receiving site Accommodation Admin (must accept)", approverRole: Role.ACCOMMODATION_ADMIN, requireComment: true, siteScope: "TARGET" },
+    ],
+    EXTENSION_WITHIN_POLICY: [{ order: 1, name: "Accommodation administrator approval", approverRole: Role.ACCOMMODATION_ADMIN, requireComment: false }],
+    EXTENSION_BEYOND_POLICY: [
+      { order: 1, name: "Line manager approval", approverRole: Role.LINE_MANAGER, requireComment: false },
+      { order: 2, name: "Accommodation administrator approval", approverRole: Role.ACCOMMODATION_ADMIN, requireComment: true },
+      { order: 3, name: "Second Accommodation Admin or Super Admin", approverRole: Role.ACCOMMODATION_ADMIN, requireComment: true },
+    ],
+    ELIGIBILITY_EXCEPTION: [{ order: 1, name: "Second Accommodation Admin or Super Admin", approverRole: Role.ACCOMMODATION_ADMIN, requireComment: true }],
+  };
 
   for (const rt of requestTypes) {
     const type = await prisma.requestType.upsert({
@@ -206,7 +257,7 @@ async function main() {
       update: { formSchema: { fields: rt.fields } },
       create: { requestTypeId: type.id, version: 1, isCurrent: true, publishedAt: new Date(), publishedById: adminUser.id, formSchema: { fields: rt.fields } },
     });
-    const steps = [
+    const steps = routes[rt.code] ?? [
       { order: 1, name: "Line manager approval", approverRole: Role.LINE_MANAGER, requireComment: false },
       { order: 2, name: "Accommodation administrator approval", approverRole: Role.ACCOMMODATION_ADMIN, requireComment: true },
     ];

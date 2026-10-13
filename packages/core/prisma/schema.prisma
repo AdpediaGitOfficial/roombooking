@@ -652,6 +652,9 @@ model ApprovalStep {
   name              String
   approverRole      Role
   requireComment    Boolean @default(false)
+  // When set, only an approver whose role assignment covers that site may decide the step:
+  // REQUESTER = the site where the requester lives, TARGET = the site chosen on the form (inter-site transfer).
+  siteScope         String?
 
   workflowVersion WorkflowVersion    @relation(fields: [workflowVersionId], references: [id])
   decisions       ApprovalDecision[]

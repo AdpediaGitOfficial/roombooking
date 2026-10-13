@@ -17,7 +17,7 @@ export const APPROVER_ROLES: Role[] = ALL_ROLES.filter((r) => r !== "STAFF" && r
 export const NAME_PATTERN = /^[a-z][A-Za-z0-9]{0,39}$/;
 export const CODE_PATTERN = /^[A-Z][A-Z0-9_]{1,39}$/;
 
-export type StepInput = { name: string; approverRole: Role; requireComment: boolean };
+export type StepInput = { name: string; approverRole: Role; requireComment: boolean; siteScope?: string | null };
 
 /** Field name from a label: "Visitor full name" → "visitorFullName". */
 export function slugify(label: string): string {
@@ -74,7 +74,7 @@ export function normaliseSchema(raw: unknown): FormSchema {
     if (f.help?.trim()) out.help = f.help.trim();
     if (f.placeholder?.trim()) out.placeholder = f.placeholder.trim();
     if (f.type === "select") {
-      if (f.optionsSource === "buildings") out.optionsSource = "buildings";
+      if (f.optionsSource === "buildings" || f.optionsSource === "sites") out.optionsSource = f.optionsSource;
       else out.options = (f.options ?? []).map((o) => String(o).trim()).filter(Boolean);
     }
     if (f.type === "number") {
@@ -90,7 +90,7 @@ export function normaliseSchema(raw: unknown): FormSchema {
 
 export function normaliseSteps(raw: unknown): StepInput[] {
   if (!Array.isArray(raw)) return [];
-  return raw.map((s) => ({ name: String((s as StepInput)?.name ?? "").trim(), approverRole: (s as StepInput)?.approverRole, requireComment: !!(s as StepInput)?.requireComment }));
+  return raw.map((s) => ({ name: String((s as StepInput)?.name ?? "").trim(), approverRole: (s as StepInput)?.approverRole, requireComment: !!(s as StepInput)?.requireComment, siteScope: ((s as StepInput)?.siteScope === "REQUESTER" || (s as StepInput)?.siteScope === "TARGET") ? (s as StepInput).siteScope! : null }));
 }
 
 // ---------------------------------------------------------------------------
@@ -167,7 +167,7 @@ export async function createDraft(input: { typeId: string; actorId: string }) {
     if (!type) throw new RequestError("NOT_FOUND", "Request type not found.");
     if (type.versions.some((v) => !v.publishedAt)) throw new RequestError("INVALID_STATE", "There is already a draft; edit or discard it first.");
     const base = type.versions.find((v) => v.isCurrent) ?? type.versions[0];
-    const draft = await tx.workflowVersion.create({ data: { requestTypeId: type.id, version: (type.versions[0]?.version ?? 0) + 1, formSchema: (base?.formSchema ?? { fields: [] }) as Prisma.InputJsonValue, createdById: input.actorId, steps: { create: (base?.steps ?? []).map((s) => ({ order: s.order, name: s.name, approverRole: s.approverRole, requireComment: s.requireComment })) } } });
+    const draft = await tx.workflowVersion.create({ data: { requestTypeId: type.id, version: (type.versions[0]?.version ?? 0) + 1, formSchema: (base?.formSchema ?? { fields: [] }) as Prisma.InputJsonValue, createdById: input.actorId, steps: { create: (base?.steps ?? []).map((s) => ({ order: s.order, name: s.name, approverRole: s.approverRole, requireComment: s.requireComment, siteScope: s.siteScope })) } } });
     await recordAudit({ actorId: input.actorId, action: "WORKFLOW_DRAFT_CREATED", entityType: "WorkflowVersion", entityId: draft.id, after: { requestTypeId: type.id, version: draft.version, basedOn: base?.version ?? null } }, tx);
     return draft;
   });
@@ -183,7 +183,7 @@ export async function saveDraft(input: { versionId: string; actorId: string; sch
     if (!v) throw new RequestError("NOT_FOUND", "Version not found.");
     if (v.publishedAt) throw new RequestError("INVALID_STATE", "Published versions cannot be changed; start a new draft.");
     await tx.approvalStep.deleteMany({ where: { workflowVersionId: v.id } });
-    const updated = await tx.workflowVersion.update({ where: { id: v.id }, data: { formSchema: schema as unknown as Prisma.InputJsonObject, changeNote: input.changeNote?.trim() || null, steps: { create: steps.map((s, i) => ({ order: i + 1, name: s.name.trim(), approverRole: s.approverRole, requireComment: s.requireComment })) } } });
+    const updated = await tx.workflowVersion.update({ where: { id: v.id }, data: { formSchema: schema as unknown as Prisma.InputJsonObject, changeNote: input.changeNote?.trim() || null, steps: { create: steps.map((s, i) => ({ order: i + 1, name: s.name.trim(), approverRole: s.approverRole, requireComment: s.requireComment, siteScope: s.siteScope ?? null })) } } });
     await recordAudit({ actorId: input.actorId, action: "WORKFLOW_DRAFT_SAVED", entityType: "WorkflowVersion", entityId: v.id, after: { fields: schema.fields.length, steps: steps.length, changeNote: input.changeNote ?? null } }, tx);
     return updated;
   });

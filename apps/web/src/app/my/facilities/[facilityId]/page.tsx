@@ -7,6 +7,9 @@ import { availabilityForDay, facilityConfig, getBooking, getFacility } from "@sa
 import { describeHours } from "@sam/core/modules/facilities/rules";
 import { DayNav, SlotGrid, bookingWhen } from "@/modules/facilities/components/views";
 import { BookingForm } from "@/modules/facilities/components/forms";
+import { ActionForm } from "@/components/forms/action-form";
+import { acceptOfferAction, joinWaitlistAction, leaveWaitlistAction } from "@/modules/facilities/extras-actions";
+import { myWaitlist } from "@sam/core/modules/facilities/extras";
 
 type Params = Promise<{ facilityId: string }>;
 type Search = Promise<{ date?: string; amend?: string }>;
@@ -23,6 +26,8 @@ async function Content({ params, searchParams }: { params: Params; searchParams:
   const date = rawDate && /^\d{4}-\d{2}-\d{2}$/.test(rawDate) && rawDate >= today ? rawDate : today;
   const { hours, rules } = facilityConfig(facility);
   const slots = await availabilityForDay(facility, date, now);
+  const waiting = (await myWaitlist(user.id)).filter((w) => w.facilityId === facility.id);
+  const full = slots.filter((x) => !x.past && x.open && x.remaining === 0);
   const amending = amend ? await getBooking(amend) : null;
   const amendProps = amending && amending.userId === user.id && ["CONFIRMED", "PENDING_APPROVAL"].includes(amending.status) && amending.facilityId === facility.id
     ? { bookingId: amending.id, startTime: bookingWhen(amending).start, durationMinutes: (amending.endsAt.getTime() - amending.startsAt.getTime()) / 60000, headcount: amending.headcount }
@@ -46,6 +51,12 @@ async function Content({ params, searchParams }: { params: Params; searchParams:
         {slots.length > 0 && date <= lastDay && (
           <BookingForm facilityId={facility.id} facilityName={facility.name} date={date} capacity={facility.capacity} rules={rules} returnPath={`${base}?date=${date}`} amend={amendProps}
             slots={slots.map((s) => ({ label: s.label, remaining: s.remaining, past: s.past }))} />
+        )}
+        {waiting.length > 0 && (
+          <ul className="mt-4 divide-y divide-zinc-200 card">{waiting.map((w) => <li key={w.id} className="flex flex-wrap items-center justify-between gap-2 p-3 text-sm"><span><b>{w.status === "OFFERED" ? "A place is free" : "On the waitlist"}</b> · {w.startsAt.toISOString().slice(0, 16).replace("T", " ")}</span><span className="flex gap-2">{w.status === "OFFERED" && <ActionForm compact action={acceptOfferAction} hidden={{ id: w.id }} submit="Book it" />}<ActionForm compact tone="secondary" action={leaveWaitlistAction} hidden={{ id: w.id }} submit="Leave" /></span></li>)}</ul>
+        )}
+        {full.length > 0 && date <= lastDay && (
+          <div className="mt-4"><ActionForm action={joinWaitlistAction} hidden={{ facilityId: facility.id, date, headcount: "1", durationMinutes: String(rules.slotMinutes) }} title="Fully booked? Join the waitlist" submit="Join waitlist" fields={[{ name: "startTime", label: "Time", type: "select", options: full.map((x) => ({ value: x.label, label: x.label })) }]} /></div>
         )}
         {amend && !amendProps && <p className="text-sm text-zinc-500">That booking can no longer be changed.</p>}
       </section>

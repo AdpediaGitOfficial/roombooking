@@ -5,7 +5,7 @@
 import type { StaffProfileType } from "@prisma/client";
 
 export type RoomEligibility = { grades?: string[]; departments?: string[]; categories?: string[]; profileTypes?: StaffProfileType[] } | null | undefined;
-export type Entitlement = { roomTypes?: string[]; maxDays?: number; maxSharing?: number } | null | undefined;
+export type Entitlement = { roomTypes?: string[]; maxDays?: number; maxSharing?: number; exceptionUntil?: string } | null | undefined;
 
 export type EligibilityCheck = { ok: boolean; reasons: string[] };
 
@@ -23,7 +23,7 @@ export function parseRoomEligibility(raw: unknown): RoomEligibility {
 export function parseEntitlement(raw: unknown): Entitlement {
   if (!raw || typeof raw !== "object") return null;
   const o = raw as Record<string, unknown>;
-  return { roomTypes: asList(o.roomTypes), maxDays: typeof o.maxDays === "number" ? o.maxDays : undefined, maxSharing: typeof o.maxSharing === "number" ? o.maxSharing : undefined };
+  return { roomTypes: asList(o.roomTypes), maxDays: typeof o.maxDays === "number" ? o.maxDays : undefined, maxSharing: typeof o.maxSharing === "number" ? o.maxSharing : undefined, exceptionUntil: typeof o.exceptionUntil === "string" ? o.exceptionUntil : undefined };
 }
 
 const daysBetween = (start: string, end: string) => Math.round((Date.parse(end) - Date.parse(start)) / 86400000);
@@ -31,14 +31,17 @@ const daysBetween = (start: string, end: string) => Math.round((Date.parse(end) 
 /** Checks a person against a room's eligibility and their own entitlement for a stay. */
 export function checkEligibility(staff: StaffLike, room: RoomLike, roomRule: unknown, stay: { startDate: string; endDate: string | null }): EligibilityCheck {
   const reasons: string[] = [];
-  const rule = parseRoomEligibility(roomRule);
+  // An approved eligibility exception (second Admin / Super Admin) lifts the room and entitlement checks for a short window.
+  const granted = parseEntitlement(staff.entitlement)?.exceptionUntil;
+  const exempt = !!granted && granted >= new Date().toISOString().slice(0, 10);
+  const rule = exempt ? null : parseRoomEligibility(roomRule);
   if (rule) {
     if (rule.grades?.length && !(staff.grade && rule.grades.includes(staff.grade))) reasons.push(`This room is for grade ${rule.grades.join(", ")}${staff.grade ? ` (they are ${staff.grade})` : " (no grade on record)"}.`);
     if (rule.departments?.length && !(staff.department && rule.departments.includes(staff.department))) reasons.push(`This room is for ${rule.departments.join(", ")}${staff.department ? ` (they are in ${staff.department})` : ""}.`);
     if (rule.categories?.length && !(staff.eligibilityCategory && rule.categories.includes(staff.eligibilityCategory))) reasons.push(`This room needs eligibility category ${rule.categories.join(" or ")}.`);
     if (rule.profileTypes?.length && staff.profileType && !rule.profileTypes.includes(staff.profileType)) reasons.push(`This room is not open to ${staff.profileType.toLowerCase().replace(/_/g, " ")} profiles.`);
   }
-  const ent = parseEntitlement(staff.entitlement);
+  const ent = exempt ? null : parseEntitlement(staff.entitlement);
   if (ent?.roomTypes?.length && room.type && !ent.roomTypes.includes(room.type)) reasons.push(`Their entitlement covers ${ent.roomTypes.join(", ")} rooms, not ${room.type}.`);
   if (ent?.maxDays && stay.endDate && daysBetween(stay.startDate, stay.endDate) > ent.maxDays) reasons.push(`Their entitlement allows stays of up to ${ent.maxDays} days.`);
   if (ent?.maxDays && !stay.endDate && (staff.profileType === "GUEST" || staff.profileType === "TRAINEE")) reasons.push("Guests and trainees need an end date.");

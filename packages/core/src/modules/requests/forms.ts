@@ -18,7 +18,7 @@ export type FormField = {
   placeholder?: string;
   options?: string[];
   /** Options resolved at render/validation time from application data. */
-  optionsSource?: "buildings";
+  optionsSource?: "buildings" | "sites";
   min?: number;
   max?: number;
   maxLength?: number;

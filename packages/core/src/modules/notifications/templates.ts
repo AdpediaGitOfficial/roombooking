@@ -86,6 +86,9 @@ const TEMPLATES: Record<string, Template> = {
   "report.alert": { subject: (p) => `Alert: ${str(p, "kpi")}`, lines: (p) => [`${str(p, "kpi")} is ${str(p, "value")}, ${str(p, "comparison")} your threshold of ${str(p, "threshold")}.`], path: () => "/dashboard", cta: "Open the dashboard" },
   "data_request.decided": { subject: (p) => `Your data request was ${str(p, "decision")}`, lines: (p) => [`Your ${str(p, "kind").toLowerCase()} request was ${str(p, "decision")}.`, str(p, "note") ? `Note: ${str(p, "note")}` : ""], path: () => "/my/profile", cta: "View" },
   "data_request.pending": { subject: () => "A data request needs a decision", lines: (p) => [`A ${str(p, "kind").toLowerCase()} request is waiting.`], path: () => "/admin/privacy", cta: "Review" },
+  "booking.no_show": { subject: (p) => `No-show recorded: ${str(p, "facility")}`, lines: (p) => [`You did not use your booking at ${str(p, "facility")}. That is no-show ${str(p, "strikes")} of ${str(p, "limit")}.`], path: () => "/my/facilities", cta: "My bookings" },
+  "booking.blocked": { subject: (p) => `Booking paused: ${str(p, "facility")}`, lines: (p) => [`After ${str(p, "strikes")} no-shows you cannot book ${str(p, "facility")} until the facility manager lifts the block.`], path: () => "/my/facilities", cta: "My bookings" },
+  "booking.waitlist_offer": { subject: (p) => `A place is free: ${str(p, "facility")}`, lines: (p) => [`${str(p, "facility")} is now free on ${str(p, "date")} at ${str(p, "startTime")}. Confirm within two hours or the offer passes to the next person.`], path: () => "/my/facilities", cta: "Confirm the booking" },
   "user.password_reset": { subject: () => "Reset your password", lines: () => ["A password reset was requested for your account. Use the link below to choose a new password. If you did not ask for this, ignore this email.", "The link works once and expires."], path: (p) => str(p, "path"), cta: "Set a new password" },
 };
 

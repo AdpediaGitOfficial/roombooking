@@ -5,6 +5,7 @@ import { sweepExpiredProfiles } from "../people/service";
 import { sweepExits, sweepJoiners } from "../people/lifecycle";
 import { runPreventive, sweepVendors, sweepWorkOrders } from "../maintenance/extras";
 import { sweepBookings } from "../facilities/service";
+import { sweepWaitlist } from "../facilities/extras";
 import { sweepRequests } from "../requests/service";
 import { sweepVisitors } from "../security/service";
 import { runInspectionSchedules } from "../housekeeping/service";
@@ -30,6 +31,7 @@ const SWEEPS: Array<[string, (now: Date) => Promise<unknown>]> = [
   ["webhooks", (now) => deliverWebhooks({ now })],
   ["bookings", () => sweepBookings()],
   ["requests", () => sweepRequests()],
+  ["waitlist", (now) => sweepWaitlist(now)],
 ];
 
 /** Extra sweeps registered by later modules (security, housekeeping, charges, reports). */

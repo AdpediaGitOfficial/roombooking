@@ -8,6 +8,7 @@ import { enqueueNotification } from "../../lib/notifications";
 import { addDaysIso, addMinutes, minutesOfDay, zonedDateTime, zonedToUtc, type DayKey } from "../../lib/time";
 import { FacilityError } from "./errors";
 import { parseOpeningHours, parseRules, type BookingRules, type OpeningHours } from "./rules";
+import { assertEligible, assertNotBlocked, assertNotStruckOut, createFeeCharge, offerNextOnWaitlist, recordStrike, unavailableWindows } from "./constraints";
 
 type Tx = Prisma.TransactionClient;
 type Db = Tx | PrismaClient;
@@ -58,6 +59,7 @@ export async function availabilityForDay(facility: FacilityRecord, date: string,
     where: { facilityId: facility.id, status: { in: HOLDING_STATUSES }, startsAt: { lt: addMinutes(dayEnd, rules.bufferMinutes) }, endsAt: { gt: addMinutes(dayStart, -rules.bufferMinutes) } },
     select: { id: true, startsAt: true, endsAt: true, headcount: true, status: true },
   });
+  const closed = await unavailableWindows(db, facility, dayStart, dayEnd);
   const slots: Slot[] = [];
   if (!dayHours) return slots;
   for (let m = minutesOfDay(dayHours.open); m + rules.slotMinutes <= minutesOfDay(dayHours.close); m += rules.slotMinutes) {
@@ -65,7 +67,8 @@ export async function availabilityForDay(facility: FacilityRecord, date: string,
     const start = zonedToUtc(date, time, tz);
     const end = addMinutes(start, rules.slotMinutes);
     const booked = heldDuring(bookings, start, end, rules.bufferMinutes);
-    slots.push({ start, end, label: time, open: true, booked, remaining: Math.max(0, facility.capacity - booked), past: end <= now });
+    const shut = closed.some((u) => u.startsAt < end && start < u.endsAt);
+    slots.push({ start, end, label: time, open: !shut, booked, remaining: shut ? 0 : Math.max(0, facility.capacity - booked), past: end <= now });
   }
   return slots;
 }
@@ -112,11 +115,11 @@ async function assertUserLimits(tx: Tx, facility: FacilityRecord, userId: string
 }
 
 /** Locks the facility row for the rest of the transaction (FAC-04 atomic capacity check). */
-async function lockFacility(tx: Tx, facilityId: string) {
+export async function lockFacility(tx: Tx, facilityId: string) {
   await tx.$queryRaw`SELECT id FROM "Facility" WHERE id = ${facilityId} FOR UPDATE`;
 }
 
-async function assertCapacity(tx: Tx, facility: FacilityRecord, w: Window, headcount: number, excludeId?: string | null) {
+export async function assertCapacity(tx: Tx, facility: FacilityRecord, w: Window, headcount: number, excludeId?: string | null) {
   const { rules } = facilityConfig(facility);
   const existing = await tx.facilityBooking.findMany({
     where: { facilityId: facility.id, status: { in: HOLDING_STATUSES }, startsAt: { lt: addMinutes(w.endsAt, rules.bufferMinutes) }, endsAt: { gt: addMinutes(w.startsAt, -rules.bufferMinutes) } },
@@ -151,6 +154,9 @@ export async function createBooking(input: CreateInput) {
 
   const booking = await prisma.$transaction(async (tx) => {
     await lockFacility(tx, facility.id);
+    await assertNotBlocked(tx, facility, { startsAt, endsAt });
+    await assertEligible(tx, facility, input.userId);
+    await assertNotStruckOut(tx, facility, input.userId, now);
     await assertUserLimits(tx, facility, input.userId, { startsAt, endsAt }, now);
     await assertCapacity(tx, facility, { startsAt, endsAt }, input.headcount);
     const created = await tx.facilityBooking.create({
@@ -175,6 +181,7 @@ export async function amendBooking(input: { bookingId: string; actor: Actor; dat
     const endsAt = addMinutes(startsAt, input.durationMinutes);
     assertWithinRules(b.facility, { startsAt, endsAt }, input.headcount, now);
     await lockFacility(tx, b.facilityId);
+    await assertNotBlocked(tx, b.facility, { startsAt, endsAt });
     await assertUserLimits(tx, b.facility, b.userId, { startsAt, endsAt }, now, b.id);
     await assertCapacity(tx, b.facility, { startsAt, endsAt }, input.headcount, b.id);
     const updated = await tx.facilityBooking.update({ where: { id: b.id }, data: { startsAt, endsAt, headcount: input.headcount, status: b.facility.requiresApproval ? "PENDING_APPROVAL" : b.status } });
@@ -201,6 +208,7 @@ export async function cancelBooking(input: { bookingId: string; actor: Actor; re
     const updated = await tx.facilityBooking.update({ where: { id: b.id }, data: { status: "CANCELLED", cancelledAt: now, cancelReason: input.reason?.trim() || (own ? "Cancelled by booker" : null), decidedById: own ? null : input.actor.id } });
     await recordAudit({ actorId: input.actor.id, action: "BOOKING_CANCELLED", entityType: "FacilityBooking", entityId: b.id, before: { status: b.status }, after: { status: "CANCELLED", reason: updated.cancelReason, byManager: !own } }, tx);
     if (!own) await enqueueNotification(tx, { recipientId: b.userId, event: "booking.cancelled", idempotencyKey: `booking.cancelled:${b.id}`, payload: { bookingId: b.id, facility: b.facility.name, date: zonedDateTime(b.startsAt, b.facility.site.timezone).date, startTime: zonedDateTime(b.startsAt, b.facility.site.timezone).time, reason: updated.cancelReason } });
+    await offerNextOnWaitlist(tx, b.facility, { startsAt: b.startsAt, endsAt: b.endsAt });
     return updated;
   });
 }
@@ -232,13 +240,17 @@ export async function recordAttendance(input: { bookingId: string; actor: Actor;
   const now = input.now ?? new Date();
   if (!input.actor.isOperator) throw new FacilityError("FORBIDDEN", "Only facility staff can record attendance.");
   return prisma.$transaction(async (tx) => {
-    const b = await tx.facilityBooking.findUnique({ where: { id: input.bookingId } });
+    const b = await tx.facilityBooking.findUnique({ where: { id: input.bookingId }, include: { facility: { include: facilityInclude } } });
     if (!b) throw new FacilityError("NOT_FOUND", "Booking not found.");
     if (b.status !== "CONFIRMED") throw new FacilityError("INVALID_STATE", `Attendance can only be recorded for confirmed bookings (this one is ${b.status.toLowerCase().replace("_", " ")}).`);
     if (b.startsAt > now) throw new FacilityError("INVALID_STATE", "The booking has not started yet.");
     const status: BookingStatus = input.attended ? "CHECKED_IN" : "NO_SHOW";
     const updated = await tx.facilityBooking.update({ where: { id: b.id }, data: { status, checkedInAt: input.attended ? now : null, decidedById: input.actor.id } });
     await recordAudit({ actorId: input.actor.id, action: "BOOKING_ATTENDANCE", entityType: "FacilityBooking", entityId: b.id, after: { status } }, tx);
+    if (input.attended) await createFeeCharge(tx, b, { ...b.facility, siteId: b.facility.siteId }, input.actor.id);
+    else {
+      await recordStrike(tx, b, b.facility);
+    }
     return updated;
   });
 }
