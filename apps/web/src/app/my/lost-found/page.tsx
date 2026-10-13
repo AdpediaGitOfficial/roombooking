@@ -1,15 +1,15 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { requireUser } from "@/lib/auth/authorize";
-import { myClaims, publicItems } from "@sam/core/modules/lost-found/service";
+import { api } from "@/lib/api";
 import { OutcomeBadge, StatusBadge, when } from "@/modules/lost-found/components/views";
 
 type Search = Promise<{ q?: string }>;
 
 async function Content({ searchParams }: { searchParams: Search }) {
-  const user = await requireUser("/my/lost-found");
+  await requireUser("/my/lost-found");
   const { q } = await searchParams;
-  const [items, claims] = await Promise.all([publicItems({ q: q || null }), myClaims(user.id)]);
+  const { items, claims } = await api.lostFound.mine({ q: q || undefined });
   const claimedIds = new Set(claims.filter((c) => c.outcome === "PENDING").map((c) => c.item.id));
   return (
     <>

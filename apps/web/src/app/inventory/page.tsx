@@ -2,8 +2,8 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { hasRole, requireRole } from "@/lib/auth/authorize";
 import { INVENTORY_MANAGE_ROLES, INVENTORY_VIEW_ROLES } from "@sam/core/modules/inventory/access";
-import { ITEM_FILTERS, categories, describeLocation, inventorySummary, listItems, type ItemFilter } from "@sam/core/modules/inventory/service";
-import { targetOptions } from "@/modules/inventory/context";
+import { ITEM_FILTERS, describeLocation, type ItemFilter } from "@sam/core/modules/inventory/rules";
+import { api } from "@/lib/api";
 import { ConditionBadge, ItemStateBadge } from "@/modules/inventory/components/views";
 import { CreateItemForm } from "@/modules/inventory/components/forms";
 import { PageHeader } from "@/components/shell/page-header";
@@ -15,7 +15,7 @@ async function Register({ searchParams }: { searchParams: Search }) {
   const canManage = hasRole(user, ...INVENTORY_MANAGE_ROLES);
   const { filter: raw, q, category } = await searchParams;
   const filter = (ITEM_FILTERS.some(([f]) => f === raw) ? raw : "all") as ItemFilter;
-  const [items, summary, cats, options] = await Promise.all([listItems({ filter, q: q || null, category: category || null }), inventorySummary(), categories(), canManage ? targetOptions() : null]);
+  const [{ items, summary, categories: cats }, options] = await Promise.all([api.inventory.register({ filter, q: q || undefined, category: category || undefined }), canManage ? api.inventory.targetOptions() : null]);
   const query = (f: ItemFilter) => `/inventory?filter=${f}${q ? `&q=${encodeURIComponent(q)}` : ""}${category ? `&category=${encodeURIComponent(category)}` : ""}`;
   return (
     <>

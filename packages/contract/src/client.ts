@@ -68,6 +68,7 @@ export function createClient<C extends Contract>(contract: C, options: ClientOpt
           for (const [k, v] of Object.entries(params)) {
             if (v === undefined || v === null) continue;
             if (isFile(v)) form.append(k, new Blob([v.bytes as BlobPart]), v.fileName);
+            else if (Array.isArray(v) && v.length > 0 && v.every(isFile)) for (const f of v) form.append(k, new Blob([f.bytes as BlobPart]), f.fileName);
             else if (Array.isArray(v) || (typeof v === "object" && !(v instanceof Date))) form.append(k, JSON.stringify(v));
             else form.append(k, scalar(v));
           }

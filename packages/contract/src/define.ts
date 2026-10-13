@@ -82,6 +82,8 @@ export type FileInput = { bytes: Uint8Array; fileName: string };
 
 // Input helpers: query strings arrive as text, so numbers, booleans and dates coerce.
 export const fileInput = z.custom<FileInput>((v) => !!v && typeof v === "object" && "bytes" in v && "fileName" in v, "Expected a file");
+/** Zero to `max` files sent under one field name (a single file is accepted as a one-item list). */
+export const fileList = (max = 5) => z.preprocess((v) => (v === undefined || v === null ? [] : Array.isArray(v) ? v : [v]), z.array(fileInput).max(max)) as unknown as z.ZodType<FileInput[], FileInput[] | undefined>;
 export const int = (opts: { min?: number; max?: number; default?: number } = {}) => {
   let s = z.coerce.number().int();
   if (opts.min !== undefined) s = s.min(opts.min);

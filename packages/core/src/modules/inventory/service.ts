@@ -6,51 +6,18 @@ import type { AssetCondition, InventoryTransactionType, Prisma, PrismaClient } f
 import { prisma } from "../../lib/db";
 import { recordAudit } from "../../lib/audit";
 import { InventoryError } from "./errors";
+import { itemInclude, transactionInclude, isLowStock, targetLabel, type ItemFilter, type MovementFilter, type Outstanding, type OutstandingRow, type StockBalanceRow, type AllocatedRow, type ConditionRow, type HeldItem, type Target, type ItemRecord } from "./rules";
+
+export * from "./rules";
 
 type Tx = Prisma.TransactionClient;
 type Db = Tx | PrismaClient;
-
-export const CONDITIONS: AssetCondition[] = ["NEW", "GOOD", "FAIR", "DAMAGED"];
-
-export const itemInclude = {
-  site: { select: { id: true, name: true } },
-  room: { include: { building: { select: { id: true, name: true, code: true } } } },
-  assignments: {
-    where: { endedAt: null },
-    include: {
-      room: { include: { building: { select: { name: true } } } },
-      staff: { select: { id: true, employeeId: true, firstName: true, lastName: true, userId: true } },
-      facility: { select: { id: true, name: true } },
-      assignedBy: { select: { name: true } },
-    },
-  },
-} satisfies Prisma.InventoryItemInclude;
-export type ItemRecord = Prisma.InventoryItemGetPayload<{ include: typeof itemInclude }>;
-
-export const transactionInclude = {
-  actor: { select: { id: true, name: true } },
-  room: { include: { building: { select: { name: true } } } },
-  staff: { select: { id: true, employeeId: true, firstName: true, lastName: true } },
-  facility: { select: { id: true, name: true } },
-  counterpart: { select: { id: true, name: true, site: { select: { name: true } } } },
-} satisfies Prisma.InventoryTransactionInclude;
-export type TransactionRecord = Prisma.InventoryTransactionGetPayload<{ include: typeof transactionInclude }>;
-
-/** Where an item or quantity goes: exactly one of room, resident (staff) or facility. */
-export type Target = { roomId?: string | null; staffId?: string | null; facilityId?: string | null };
 
 function normaliseTarget(t: Target): { roomId: string | null; staffId: string | null; facilityId: string | null } {
   const out = { roomId: t.roomId || null, staffId: t.staffId || null, facilityId: t.facilityId || null };
   const n = [out.roomId, out.staffId, out.facilityId].filter(Boolean).length;
   if (n !== 1) throw new InventoryError("VALIDATION", "Choose one destination: a room, a resident or a facility.", { target: "Required." });
   return out;
-}
-
-export function targetLabel(t: { room?: { code: string; building: { name: string } } | null; staff?: { firstName: string; lastName: string; employeeId: string } | null; facility?: { name: string } | null }): string {
-  if (t.room) return `${t.room.building.name} room ${t.room.code}`;
-  if (t.staff) return `${t.staff.firstName} ${t.staff.lastName} (${t.staff.employeeId})`;
-  if (t.facility) return t.facility.name;
-  return "—";
 }
 
 function translateDbError(error: unknown): never {
@@ -341,8 +308,6 @@ export async function retireItem(input: RetireInput) {
 // Stock issued to targets (derived from the movement log)
 // ---------------------------------------------------------------------------
 
-type Outstanding = { roomId: string | null; staffId: string | null; facilityId: string | null; quantity: number };
-
 /** Units of a stock line currently out at each room, resident or facility. */
 export async function outstandingByTarget(itemId: string, db: Db = prisma): Promise<Outstanding[]> {
   const rows = await db.inventoryTransaction.groupBy({
@@ -361,8 +326,6 @@ async function outstandingAt(db: Db, itemId: string, target: { roomId: string | 
 async function outstandingAll(db: Db, itemId: string): Promise<number> {
   return (await outstandingByTarget(itemId, db)).reduce((s, r) => s + r.quantity, 0);
 }
-
-export type HeldItem = { itemId: string; sku: string; name: string; serialNumber: string | null; unit: string; quantity: number; since: Date | null };
 
 /** Assets and stock units currently with a target (resident, room or facility). */
 export async function itemsHeldBy(target: Target, db: Db = prisma): Promise<HeldItem[]> {
@@ -387,19 +350,6 @@ export async function itemsHeldBy(target: Target, db: Db = prisma): Promise<Held
 // ---------------------------------------------------------------------------
 // Queries, warnings and reports (INV-05, INV-06)
 // ---------------------------------------------------------------------------
-
-export function isLowStock(item: Pick<ItemRecord, "trackingType" | "status" | "quantity" | "reorderThreshold">): boolean {
-  return item.trackingType === "STOCK" && item.status === "ACTIVE" && item.reorderThreshold != null && item.quantity <= item.reorderThreshold;
-}
-
-export function describeLocation(item: ItemRecord): string {
-  if (item.assignments[0]) return `with ${targetLabel(item.assignments[0])}`;
-  if (item.status !== "ACTIVE") return "retired";
-  return item.storageLocation ?? (item.room ? `${item.room.building.name} room ${item.room.code}` : "in store");
-}
-
-export type ItemFilter = "all" | "stock" | "assets" | "low" | "issued" | "damaged" | "retired";
-export const ITEM_FILTERS: Array<[ItemFilter, string]> = [["all", "All"], ["stock", "Stock"], ["assets", "Assets"], ["low", "Low stock"], ["issued", "Issued"], ["damaged", "Damaged"], ["retired", "Retired"]];
 
 export async function listItems(opts: { filter?: ItemFilter; q?: string | null; siteId?: string | null; category?: string | null } = {}) {
   const filter = opts.filter ?? "all";
@@ -427,8 +377,6 @@ export async function getItem(id: string) {
   const targets = await resolveTargets(outstanding);
   return { item, transactions, outstanding: targets };
 }
-
-export type OutstandingRow = Outstanding & { label: string };
 
 async function resolveTargets(rows: Outstanding[]): Promise<OutstandingRow[]> {
   const roomIds = rows.map((r) => r.roomId).filter((x): x is string => !!x);
@@ -459,8 +407,6 @@ export async function inventorySummary(siteId?: string | null) {
   return { stockLines, assets, issued, damaged, lowStock: lowCandidates.filter(isLowStock).length };
 }
 
-export type MovementFilter = { siteId?: string | null; from?: string | null; to?: string | null; type?: InventoryTransactionType | null; itemId?: string | null };
-
 export async function movementReport(filter: MovementFilter, limit = 500) {
   const where: Prisma.InventoryTransactionWhereInput = {
     ...(filter.itemId ? { itemId: filter.itemId } : {}),
@@ -470,8 +416,6 @@ export async function movementReport(filter: MovementFilter, limit = 500) {
   };
   return prisma.inventoryTransaction.findMany({ where, include: { ...transactionInclude, item: { select: { id: true, sku: true, name: true, unit: true, serialNumber: true, site: { select: { name: true } } } } }, orderBy: { createdAt: "desc" }, take: limit });
 }
-
-export type StockBalanceRow = { category: string; lines: number; units: number; low: number; assets: number; assetsIssued: number };
 
 export async function stockBalanceReport(siteId?: string | null): Promise<StockBalanceRow[]> {
   const items = await prisma.inventoryItem.findMany({ where: { ...(siteId ? { siteId } : {}), status: "ACTIVE" }, include: { assignments: { where: { endedAt: null }, select: { id: true } } }, orderBy: { category: "asc" } });
@@ -484,8 +428,6 @@ export async function stockBalanceReport(siteId?: string | null): Promise<StockB
   }
   return [...map.values()];
 }
-
-export type AllocatedRow = { label: string; kind: "room" | "resident" | "facility"; items: Array<{ itemId: string; name: string; sku: string; serialNumber: string | null; quantity: number; unit: string; since: Date | null }> };
 
 /** Everything currently out, grouped by where it is (INV-06 allocated asset report). */
 export async function allocatedReport(siteId?: string | null): Promise<AllocatedRow[]> {
@@ -516,8 +458,6 @@ export async function allocatedReport(siteId?: string | null): Promise<Allocated
   return [...groups.values()].sort((a, b) => a.label.localeCompare(b.label));
 }
 
-export type ConditionRow = { condition: AssetCondition; count: number; issued: number };
-
 export async function conditionReport(siteId?: string | null): Promise<ConditionRow[]> {
   const assets = await prisma.inventoryItem.findMany({ where: { ...(siteId ? { siteId } : {}), trackingType: "SERIALIZED" }, include: { assignments: { where: { endedAt: null }, select: { id: true } } } });
   const order: AssetCondition[] = ["NEW", "GOOD", "FAIR", "DAMAGED", "RETIRED"];
@@ -540,10 +480,100 @@ export async function movementCsv(filter: MovementFilter, actorId: string): Prom
   return [header.join(","), ...lines].join("\n") + "\n";
 }
 
-export function describeTransaction(type: InventoryTransactionType): string {
-  return { RECEIPT: "Receipt", ISSUE: "Issued", RETURN: "Returned", TRANSFER: "Transfer", ADJUSTMENT: "Adjustment", DAMAGE: "Damage", RETIREMENT: "Retired" }[type];
+
+// ---------------------------------------------------------------------------
+// Views and actions for the API
+// ---------------------------------------------------------------------------
+
+export const MOVEMENT_KINDS = ["RECEIVE", "ISSUE", "RETURN", "DAMAGE", "ADJUST", "TRANSFER", "RETIRE"] as const;
+export type MovementKind = (typeof MOVEMENT_KINDS)[number];
+/** Movements only managers may record. */
+export const MANAGER_MOVEMENTS: MovementKind[] = ["ADJUST", "TRANSFER", "RETIRE"];
+
+export type MovementInput = {
+  kind: MovementKind;
+  itemId: string;
+  actorId: string;
+  quantity?: number;
+  target?: Target;
+  condition?: AssetCondition | null;
+  reference?: string | null;
+  notes?: string | null;
+  countedQuantity?: number;
+  reason?: string | null;
+  toSiteId?: string | null;
+};
+
+/** Receive, issue, return, damage, adjust, transfer or retire; returns the confirmation to show. */
+export async function applyMovement(input: MovementInput): Promise<{ message: string }> {
+  const { itemId, actorId, quantity, notes } = input;
+  switch (input.kind) {
+    case "RECEIVE": {
+      const t = await receiveStock({ itemId, actorId, quantity: quantity ?? NaN, reference: input.reference, notes });
+      return { message: `Received ${t.quantity}; ${t.balanceAfter} on hand.` };
+    }
+    case "ISSUE": {
+      const t = await issueItem({ itemId, actorId, quantity, target: input.target ?? {}, notes });
+      return { message: t.balanceAfter == null ? "Issued." : `Issued; ${t.balanceAfter} on hand.` };
+    }
+    case "RETURN":
+      await returnItem({ itemId, actorId, quantity, target: input.target ?? {}, condition: input.condition ?? null, notes });
+      return { message: input.condition === "DAMAGED" ? "Returned and recorded as damaged." : "Returned." };
+    case "DAMAGE":
+      await recordDamage({ itemId, actorId, quantity, notes: notes ?? "" });
+      return { message: "Damage recorded." };
+    case "ADJUST": {
+      const t = await adjustStock({ itemId, actorId, countedQuantity: input.countedQuantity ?? NaN, reason: input.reason ?? "" });
+      return { message: `Adjusted by ${t.quantity > 0 ? "+" : ""}${t.quantity}; ${t.balanceAfter} on hand.` };
+    }
+    case "TRANSFER":
+      await transferItem({ itemId, actorId, toSiteId: input.toSiteId ?? "", quantity, notes });
+      return { message: "Transferred." };
+    case "RETIRE":
+      await retireItem({ itemId, actorId, notes: notes ?? "" });
+      return { message: "Retired." };
+  }
 }
 
-export function describeCondition(c: AssetCondition): string {
-  return { NEW: "New", GOOD: "Good", FAIR: "Fair", DAMAGED: "Damaged", RETIRED: "Retired" }[c];
+/** The register for a filter with its tiles and the categories to filter by. */
+export async function getRegister(opts: { filter?: ItemFilter; q?: string | null; category?: string | null }) {
+  const [items, summary, cats] = await Promise.all([listItems(opts), inventorySummary(), categories()]);
+  return { items, summary, categories: cats };
+}
+
+/** Destinations an item can be issued to, and sites it can move to. */
+export async function targetOptions() {
+  const [rooms, staff, facilities, sites] = await Promise.all([
+    prisma.room.findMany({ where: { status: { not: "INACTIVE" } }, include: { building: { include: { site: { select: { name: true } } } } }, orderBy: [{ building: { code: "asc" } }, { code: "asc" }] }),
+    prisma.staffProfile.findMany({ where: { employmentStatus: "ACTIVE" }, orderBy: [{ lastName: "asc" }, { firstName: "asc" }] }),
+    prisma.facility.findMany({ where: { status: "ACTIVE" }, orderBy: { name: "asc" } }),
+    prisma.site.findMany({ where: { status: "ACTIVE" }, orderBy: { name: "asc" } }),
+  ]);
+  return {
+    rooms: rooms.map((r) => ({ id: r.id, label: `${r.building.name} · Room ${r.code}` })),
+    staff: staff.map((s) => ({ id: s.id, label: `${s.lastName}, ${s.firstName} (${s.employeeId})` })),
+    facilities: facilities.map((f) => ({ id: f.id, label: f.name })),
+    sites: sites.map((s) => ({ id: s.id, label: s.name })),
+  };
+}
+
+/** What a resident holds now and what could be issued to them (for the handover panel). */
+export async function residentHandover(staffId: string) {
+  const [held, available] = await Promise.all([
+    itemsHeldBy({ staffId }),
+    prisma.inventoryItem.findMany({ where: { status: "ACTIVE", quantity: { gt: 0 }, condition: { not: "DAMAGED" } }, orderBy: [{ category: "asc" }, { name: "asc" }], take: 200 }),
+  ]);
+  return { held, available };
+}
+
+/** The four inventory reports for a site, date range and movement type. */
+export async function reportsView(filter: MovementFilter) {
+  const [sites, balance, movements, allocated, conditions] = await Promise.all([
+    prisma.site.findMany({ where: { status: "ACTIVE" }, orderBy: { name: "asc" } }),
+    stockBalanceReport(filter.siteId),
+    movementReport(filter, 200),
+    allocatedReport(filter.siteId),
+    conditionReport(filter.siteId),
+  ]);
+  return { sites: sites.map((s) => ({ id: s.id, name: s.name })), balance, movements, allocated, conditions };
 }

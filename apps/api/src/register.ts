@@ -42,7 +42,10 @@ async function collectInput(request: FastifyRequest, def: OpDef, maxUploadBytes:
           const bytes = await part.toBuffer();
           if (part.file.truncated) throw new HttpError(413, "TOO_LARGE", `Files must be ${Math.round(maxUploadBytes / 1024 / 1024)} MB or smaller.`);
           if (bytes.length === 0 || !part.filename) continue;
-          out[part.fieldname] = { bytes: new Uint8Array(bytes), fileName: part.filename } satisfies FileInput;
+          const file = { bytes: new Uint8Array(bytes), fileName: part.filename } satisfies FileInput;
+          const prior = out[part.fieldname];
+          // The same field repeated (several photos) becomes a list.
+          out[part.fieldname] = prior === undefined ? file : Array.isArray(prior) ? [...prior, file] : [prior, file];
         } else {
           const existing = out[part.fieldname];
           const value = String(part.value ?? "");

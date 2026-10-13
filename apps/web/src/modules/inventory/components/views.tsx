@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { AssetCondition, InventoryTransactionType } from "@prisma/client";
-import { describeCondition, describeLocation, describeTransaction, isLowStock, targetLabel, type ItemRecord, type TransactionRecord } from "@sam/core/modules/inventory/service";
+import { describeCondition, describeLocation, describeTransaction, isLowStock, targetLabel, type ItemRecord, type TransactionRecord } from "@sam/core/modules/inventory/rules";
 
 export function ConditionBadge({ condition }: { condition: AssetCondition }) {
   const tone = condition === "DAMAGED" ? "bg-red-100 text-red-900" : condition === "RETIRED" ? "bg-zinc-100 text-zinc-700" : condition === "FAIR" ? "bg-amber-100 text-amber-900" : "bg-green-100 text-green-900";
