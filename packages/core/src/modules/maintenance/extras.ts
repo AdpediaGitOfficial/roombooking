@@ -453,13 +453,15 @@ export async function sweepVendors(now: Date = new Date()) {
   const expired = await prisma.vendor.updateMany({ where: { state: "ACTIVE", contractEnd: { lt: new Date(now.toISOString().slice(0, 10)) } }, data: { state: "EXPIRED", stateReason: "Contract expired" } });
   const items = await vendorCompliance(now, 30);
   const admins = await prisma.user.findMany({ where: { status: "ACTIVE", roleAssignments: { some: { role: { in: ["ACCOMMODATION_ADMIN", "MAINTENANCE_COORDINATOR"] } } } }, select: { id: true } });
+  const due = items.filter((it) => [30, 7, 1].includes(it.daysLeft));
   let alerts = 0;
-  for (const it of items) {
-    if (![30, 7, 1].includes(it.daysLeft)) continue;
-    for (const a of admins) {
-      await prisma.$transaction((tx) => enqueueNotification(tx, { recipientId: a.id, event: "vendor.expiring", idempotencyKey: `vendor.expiring:${it.vendorId}:${it.what}:${it.expiresOn}:${it.daysLeft}:${a.id}`, payload: { vendor: it.vendor, what: it.what, expiresOn: it.expiresOn, daysLeft: it.daysLeft } }));
-      alerts++;
-    }
+  if (due.length && admins.length) {
+    await prisma.$transaction(async (tx) => {
+      for (const it of due) for (const a of admins) {
+        await enqueueNotification(tx, { recipientId: a.id, event: "vendor.expiring", idempotencyKey: `vendor.expiring:${it.vendorId}:${it.what}:${it.expiresOn}:${it.daysLeft}:${a.id}`, payload: { vendor: it.vendor, what: it.what, expiresOn: it.expiresOn, daysLeft: it.daysLeft }, fanout: { whatsapp: false } });
+        alerts++;
+      }
+    }, { timeout: 60_000 });
   }
   return { expired: expired.count, alerts };
 }
