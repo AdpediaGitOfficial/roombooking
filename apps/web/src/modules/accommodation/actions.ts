@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import type { BedStatus, RoomStatus } from "@prisma/client";
 import { prisma } from "@sam/core/lib/db";
 import { requireRole } from "@/lib/auth/authorize";
+import { guardScope } from "@/lib/auth/guards";
 import { recordAudit } from "@sam/core/lib/audit";
 import { ACCOMMODATION_MANAGE_ROLES } from "@sam/core/modules/accommodation/access";
 import { OCCUPYING_STATUSES } from "@sam/core/modules/accommodation/occupancy";
@@ -28,6 +29,7 @@ function nextBedNumber(roomCode: string, existingCodes: string[]): number {
 /** Adds N numbered beds to a room (ACM-01/02). */
 export async function addBeds(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const user = await requireRole(ACCOMMODATION_MANAGE_ROLES);
+  await guardScope(user, "accom.view", formData, [["roomId", "room"], ["bedId", "bed"], ["buildingId", "building"]]);
   const roomId = String(formData.get("roomId") ?? "");
   const count = Number(formData.get("count") ?? 1);
   if (!roomId) return { error: "Room is required." };
@@ -62,6 +64,7 @@ export async function addBeds(_prev: ActionState, formData: FormData): Promise<A
 /** Sets a bed to ACTIVE, BLOCKED (with reason) or RETIRED (ACM-09). */
 export async function setBedStatus(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const user = await requireRole(ACCOMMODATION_MANAGE_ROLES);
+  await guardScope(user, "accom.view", formData, [["roomId", "room"], ["bedId", "bed"], ["buildingId", "building"]]);
   const bedId = String(formData.get("bedId") ?? "");
   const status = String(formData.get("status") ?? "") as BedStatus;
   const reason = String(formData.get("reason") ?? "").trim();
@@ -109,6 +112,7 @@ export async function setBedStatus(_prev: ActionState, formData: FormData): Prom
 /** Sets a whole room to ACTIVE, BLOCKED (with reason) or INACTIVE (ACM-09). */
 export async function setRoomStatus(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const user = await requireRole(ACCOMMODATION_MANAGE_ROLES);
+  await guardScope(user, "accom.view", formData, [["roomId", "room"], ["bedId", "bed"], ["buildingId", "building"]]);
   const roomId = String(formData.get("roomId") ?? "");
   const status = String(formData.get("status") ?? "") as RoomStatus;
   const reason = String(formData.get("reason") ?? "").trim();

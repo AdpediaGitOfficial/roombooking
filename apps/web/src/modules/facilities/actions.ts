@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireRole, requireUser } from "@/lib/auth/authorize";
+import { guardScope } from "@/lib/auth/guards";
 import { FACILITY_MANAGE_ROLES, FACILITY_OPERATE_ROLES } from "@sam/core/modules/facilities/access";
 import { actorFor } from "./context";
 import { FacilityError } from "@sam/core/modules/facilities/errors";
@@ -72,6 +73,7 @@ export async function cancelBookingAction(_prev: ActionState, formData: FormData
 
 export async function decideBookingAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const user = await requireRole(FACILITY_MANAGE_ROLES, "/facilities");
+  await guardScope(user, "fac.view", formData, [["facilityId", "facility"], ["bookingId", "booking"]]);
   const approve = str(formData, "decision") === "approve";
   try {
     await decideBooking({ bookingId: str(formData, "bookingId"), actor: actorFor(user), approve, note: str(formData, "note") || null });
@@ -85,6 +87,7 @@ export async function decideBookingAction(_prev: ActionState, formData: FormData
 
 export async function attendanceAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const user = await requireRole(FACILITY_OPERATE_ROLES, "/facilities");
+  await guardScope(user, "fac.view", formData, [["facilityId", "facility"], ["bookingId", "booking"]]);
   const attended = str(formData, "attended") === "yes";
   try {
     await recordAttendance({ bookingId: str(formData, "bookingId"), actor: actorFor(user), attended });
@@ -98,6 +101,7 @@ export async function attendanceAction(_prev: ActionState, formData: FormData): 
 
 export async function updateFacilityAction(_prev: FormState, formData: FormData): Promise<FormState> {
   const user = await requireRole(FACILITY_MANAGE_ROLES, "/facilities");
+  await guardScope(user, "fac.view", formData, [["facilityId", "facility"], ["bookingId", "booking"]]);
   const values: Record<string, string> = {};
   for (const [k, v] of formData.entries()) if (typeof v === "string") values[k] = v.trim();
   const { hours, errors: hourErrors } = validateHoursInput(values);

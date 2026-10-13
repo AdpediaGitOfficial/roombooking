@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { canSeeSite } from "@/lib/auth/scope";
 import { hasRole, requireRole } from "@/lib/auth/authorize";
 import { LOST_FOUND_MANAGE_ROLES, LOST_FOUND_OPERATE_ROLES, LOST_FOUND_VIEW_ROLES } from "@sam/core/modules/lost-found/access";
 import { CATEGORIES, DISPOSAL_METHODS, claimantLabel, getItem, isDueForDisposal, similarItems } from "@sam/core/modules/lost-found/service";
@@ -21,6 +22,7 @@ async function Content({ params }: { params: Params }) {
   const canManage = hasRole(user, ...LOST_FOUND_MANAGE_ROLES);
   const detail = await getItem(itemId);
   if (!detail) notFound();
+  if (!(await canSeeSite(user, "lf.operate", detail.item.siteId))) notFound();
   const { item, photos } = detail;
   const now = new Date();
   const open = ["REPORTED", "STORED", "CLAIM_PENDING"].includes(item.status);

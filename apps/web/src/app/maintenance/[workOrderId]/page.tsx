@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { requireRole } from "@/lib/auth/authorize";
+import { requireRole, userAccess } from "@/lib/auth/authorize";
 import { MAINTENANCE_AREA_ROLES } from "@sam/core/modules/maintenance/access";
 import { CATEGORIES, accessFor, allowedTransitions, getWorkOrder, listAssignees, listAttachments, locationLabel, reopenWindowOpen, visibleNotes } from "@sam/core/modules/maintenance/service";
 import { actorOf } from "@/modules/maintenance/context";
@@ -22,10 +22,15 @@ async function Content({ params }: { params: Promise<{ workOrderId: string }> })
   const options = allowedTransitions(wo.status, access, { reopenWindowOpen: reopenWindowOpen(wo, now) });
   const isTerminal = wo.status === "CLOSED" || wo.status === "CANCELLED";
   const staff = wo.requester.staffProfile;
-  const limited = access === "vendor"; // contractors get location and contact only (MNT-07)
+  // Resident name and contact on a ticket follow the permission matrix: full for admins, officers and coordinators,
+  // first name only for technicians, nothing for contractors (document sections 5.4 and 9).
+  const contact = userAccess(user, "maint.requester_contact", { siteId: wo.siteId, buildingId: wo.buildingId });
+  const detail = access === "requester" || contact?.level === "full" ? "full" : contact ? "first" : "none";
+  const limited = detail === "none";
 
   const stamp = (d: Date) => d.toISOString().replace("T", " ").slice(0, 16);
-  const reporter = limited ? "Resident" : staff ? `${staff.firstName} ${staff.lastName}` : wo.requester.name;
+  const fullName = staff ? `${staff.firstName} ${staff.lastName}` : wo.requester.name;
+  const reporter = detail === "none" ? "Resident" : detail === "first" ? fullName.split(" ")[0] : fullName;
   return (
     <>
       <PageHeader
@@ -70,7 +75,7 @@ async function Content({ params }: { params: Promise<{ workOrderId: string }> })
           <section className="panel">
             <div className="panel-head"><div><h2>Reported by</h2></div></div>
             <div className="panel-body">
-              <div className="who"><span className="av">{reporter.split(" ").map((x) => x[0]).join("").slice(0, 2)}</span><div><b>{reporter}</b><small>{limited ? "Contact via the accommodation office" : staff ? `${staff.employeeId} · ${staff.phone ?? wo.requester.email}` : wo.requester.email}</small></div></div>
+              <div className="who"><span className="av">{reporter.split(" ").map((x) => x[0]).join("").slice(0, 2)}</span><div><b>{reporter}</b><small>{detail !== "full" ? "Contact via the accommodation office" : staff ? `${staff.employeeId} · ${staff.phone ?? wo.requester.email ?? ""}` : wo.requester.email}</small></div></div>
               {wo.preferredContact && <p className="mt-2 text-xs text-zinc-500">Preferred contact: {wo.preferredContact}</p>}
             </div>
           </section>

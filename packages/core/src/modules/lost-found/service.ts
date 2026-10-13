@@ -4,6 +4,7 @@
 // are permanent; claimant details are only shown to authorised users.
 import type { ClaimOutcome, LostFoundStatus, Prisma, PrismaClient } from "@prisma/client";
 import { prisma } from "../../lib/db";
+import { siteWhere, type SiteScope } from "../../lib/permissions/scope";
 import { recordAudit } from "../../lib/audit";
 import { enqueueNotification } from "../../lib/notifications";
 import { storeImage, UploadError } from "../../lib/uploads";
@@ -276,11 +277,11 @@ export type ItemFilter = "open" | "reported" | "stored" | "claims" | "due" | "re
 export const ITEM_FILTERS: Array<[ItemFilter, string]> = [["open", "Open"], ["reported", "Reported"], ["stored", "Stored"], ["claims", "Claims to verify"], ["due", "Due for disposal"], ["returned", "Returned"], ["disposed", "Disposed"], ["all", "All"]];
 const OPEN: LostFoundStatus[] = ["REPORTED", "STORED", "CLAIM_PENDING"];
 
-export async function listItems(opts: { filter?: ItemFilter; q?: string | null; siteId?: string | null; now?: Date } = {}) {
+export async function listItems(opts: { filter?: ItemFilter; q?: string | null; siteId?: SiteScope; now?: Date } = {}) {
   const now = opts.now ?? new Date();
   const filter = opts.filter ?? "open";
   const where: Prisma.LostFoundItemWhereInput = {
-    ...(opts.siteId ? { siteId: opts.siteId } : {}),
+    ...siteWhere(opts.siteId),
     ...(opts.q ? { OR: [{ reference: { contains: opts.q, mode: "insensitive" } }, { description: { contains: opts.q, mode: "insensitive" } }, { category: { contains: opts.q, mode: "insensitive" } }, { foundLocation: { contains: opts.q, mode: "insensitive" } }] } : {}),
     ...(filter === "open" ? { status: { in: OPEN } } : filter === "reported" ? { status: "REPORTED" } : filter === "stored" ? { status: "STORED" } : filter === "claims" ? { status: "CLAIM_PENDING" } : filter === "returned" ? { status: "RETURNED" } : filter === "disposed" ? { status: "DISPOSED" } : filter === "due" ? { status: { in: ["REPORTED", "STORED"] }, retainUntil: { lte: now } } : {}),
   };
@@ -323,9 +324,9 @@ export async function similarItems(input: { description: string; category?: stri
 }
 
 /** What a resident may see of found items: no claimant details, no storage location. */
-export async function publicItems(opts: { siteId?: string | null; q?: string | null } = {}) {
+export async function publicItems(opts: { siteId?: SiteScope; q?: string | null } = {}) {
   const rows = await prisma.lostFoundItem.findMany({
-    where: { status: { in: OPEN }, ...(opts.siteId ? { siteId: opts.siteId } : {}), ...(opts.q ? { OR: [{ description: { contains: opts.q, mode: "insensitive" } }, { category: { contains: opts.q, mode: "insensitive" } }, { foundLocation: { contains: opts.q, mode: "insensitive" } }] } : {}) },
+    where: { status: { in: OPEN }, ...siteWhere(opts.siteId), ...(opts.q ? { OR: [{ description: { contains: opts.q, mode: "insensitive" } }, { category: { contains: opts.q, mode: "insensitive" } }, { foundLocation: { contains: opts.q, mode: "insensitive" } }] } : {}) },
     select: { id: true, reference: true, description: true, category: true, foundLocation: true, foundAt: true, status: true, site: { select: { name: true } } },
     orderBy: { foundAt: "desc" }, take: 200,
   });
@@ -336,8 +337,8 @@ export async function myClaims(userId: string) {
   return prisma.lostFoundClaim.findMany({ where: { claimantUserId: userId }, include: { item: { select: { id: true, reference: true, description: true, category: true, status: true, foundAt: true, handedOverAt: true } } }, orderBy: { createdAt: "desc" } });
 }
 
-export async function lostFoundSummary(siteId?: string | null, now: Date = new Date()) {
-  const where = siteId ? { siteId } : {};
+export async function lostFoundSummary(siteId?: SiteScope, now: Date = new Date()) {
+  const where = siteWhere(siteId);
   const [open, claims, due, returned30, disposed30] = await Promise.all([
     prisma.lostFoundItem.count({ where: { ...where, status: { in: OPEN } } }),
     prisma.lostFoundItem.count({ where: { ...where, status: "CLAIM_PENDING" } }),

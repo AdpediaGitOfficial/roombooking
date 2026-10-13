@@ -2,6 +2,8 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { prisma } from "@sam/core/lib/db";
 import { hasRole, requireRole } from "@/lib/auth/authorize";
+import { sitesFor } from "@/lib/auth/scope";
+import { siteWhere } from "@sam/core/lib/permissions/scope";
 import { zonedDateTime } from "@sam/core/lib/time";
 import { FACILITY_MANAGE_ROLES, FACILITY_VIEW_ROLES } from "@sam/core/modules/facilities/access";
 import { facilityConfig, facilityReports, listFacilities } from "@sam/core/modules/facilities/service";
@@ -14,10 +16,11 @@ async function Overview() {
   const user = await requireRole(FACILITY_VIEW_ROLES, "/facilities");
   const canManage = hasRole(user, ...FACILITY_MANAGE_ROLES);
   const now = new Date();
+  const scope = await sitesFor(user, "fac.view");
   const [facilities, reports, pending, sites] = await Promise.all([
-    listFacilities({ includeInactive: true }),
-    facilityReports(30, now),
-    prisma.facilityBooking.findMany({ where: { status: "PENDING_APPROVAL", startsAt: { gt: now } }, include: { facility: { include: { site: true } }, user: { select: { name: true } } }, orderBy: { startsAt: "asc" } }),
+    listFacilities({ includeInactive: true, siteId: scope }),
+    facilityReports(30, now, scope),
+    prisma.facilityBooking.findMany({ where: { status: "PENDING_APPROVAL", startsAt: { gt: now }, facility: siteWhere(scope) }, include: { facility: { include: { site: true } }, user: { select: { name: true } } }, orderBy: { startsAt: "asc" } }),
     canManage ? siteOptions() : null,
   ]);
   const todayCounts = await Promise.all(facilities.map(async (f) => {

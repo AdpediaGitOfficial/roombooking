@@ -9,61 +9,112 @@ import { INVENTORY_VIEW_ROLES } from "@sam/core/modules/inventory/access";
 import { LOST_FOUND_VIEW_ROLES } from "@sam/core/modules/lost-found/access";
 import { REPORT_VIEW_ROLES } from "@sam/core/modules/reports/access";
 import { ADMIN_VIEW_ROLES, USER_ADMIN_ROLES } from "@sam/core/modules/admin/access";
-import { FORM_BUILDER_ROLES } from "@sam/core/modules/requests/builder";
 import { BROADCAST_ROLES } from "@sam/core/modules/broadcasts/access";
+import { FORM_BUILDER_ROLES } from "@sam/core/modules/requests/builder";
 
 export type NavItem = { href: string; label: string; icon: string; description: string; roles: Role[] | "ALL" };
 export type NavGroup = { label: string; items: NavItem[] };
 
 const CONFIG_ROLES: Role[] = ["SYSTEM_ADMIN", "ACCOMMODATION_ADMIN"];
-const WORKFLOW_ROLES: Role[] = FORM_BUILDER_ROLES;
+const ROLES = (...r: Role[]): Role[] => r;
 
-/** Sidebar and home-page entries, gated by the same role lists the pages enforce. */
-export const NAV_GROUPS: NavGroup[] = [
-  {
-    label: "Workspace",
-    items: [
-      { href: "/dashboard", label: "Dashboard", icon: "▦", description: "Occupancy, arrivals, departures and pending actions", roles: REPORT_VIEW_ROLES },
-      { href: "/accommodation", label: "Accommodation", icon: "⌂", description: "Sites, buildings, rooms and beds", roles: ACCOMMODATION_VIEW_ROLES },
-      { href: "/accommodation/allocations", label: "Allocations", icon: "⇄", description: "Assign beds, check in and out, transfers", roles: ALLOCATION_VIEW_ROLES },
-      { href: "/approvals", label: "Approvals", icon: "✓", description: "Room change, visitor, family and exit requests", roles: APPROVALS_AREA_ROLES },
-      { href: "/maintenance", label: "Maintenance", icon: "⚒", description: "Work orders, assignment and contractor access", roles: MAINTENANCE_AREA_ROLES },
-      { href: "/facilities", label: "Facilities", icon: "◷", description: "Shared facilities, calendars and bookings", roles: FACILITY_VIEW_ROLES },
-      { href: "/keys", label: "Keys", icon: "⚿", description: "Issue, return, lost and damaged keys", roles: KEY_VIEW_ROLES },
-      { href: "/inventory", label: "Inventory", icon: "▤", description: "Stock, serialised assets, issues and returns", roles: INVENTORY_VIEW_ROLES },
-      { href: "/lost-found", label: "Lost & found", icon: "◎", description: "Found items, claims, handover and disposal", roles: LOST_FOUND_VIEW_ROLES },
-    ],
-  },
-  {
-    label: "Reports",
-    items: [
-      { href: "/reports", label: "Report suite", icon: "▥", description: "Movements, maintenance, facilities, keys; filters and CSV", roles: REPORT_VIEW_ROLES },
-    ],
-  },
-  {
-    label: "Administration",
-    items: [
-      { href: "/admin/users", label: "Users", icon: "◉", description: "Accounts, sign-in, roles and status", roles: ADMIN_VIEW_ROLES },
-      { href: "/admin/access", label: "Roles & access", icon: "⚿", description: "Permission matrix, grants and access review", roles: ADMIN_VIEW_ROLES },
-      { href: "/admin/changes", label: "Pending changes", icon: "⇋", description: "Second-admin approval of high-risk changes", roles: USER_ADMIN_ROLES },
-      { href: "/admin/audit", label: "Audit log", icon: "≡", description: "Who changed what, and when", roles: ADMIN_VIEW_ROLES },
-      { href: "/admin/notifications", label: "Notifications", icon: "✉", description: "In-app, email and WhatsApp delivery", roles: ADMIN_VIEW_ROLES },
-      { href: "/admin/broadcasts", label: "Broadcasts", icon: "▣", description: "Announcements to sites, buildings or roles", roles: BROADCAST_ROLES },
-      { href: "/admin/forms", label: "Forms & routes", icon: "✎", description: "Request forms and approval routes", roles: WORKFLOW_ROLES },
-      { href: "/admin/import", label: "Import & export", icon: "⇅", description: "Staff and accommodation from CSV", roles: CONFIG_ROLES },
-      { href: "/approvals/delegations", label: "Delegations", icon: "⇉", description: "Approval cover while away", roles: APPROVALS_AREA_ROLES },
-    ],
-  },
-  {
-    label: "Me",
-    items: [
-      { href: "/my", label: "My stay", icon: "☺", description: "Your own bed, requests and tickets", roles: "ALL" },
-    ],
-  },
-];
+/** Every entry the sidebar can show. A role's layout below picks and orders them; the matrix still gates each one. */
+export const NAV_CATALOG = {
+  home: { href: "/", label: "Home", icon: "⌂", description: "What needs your attention today", roles: "ALL" },
+  dashboard: { href: "/dashboard", label: "Executive 360", icon: "▦", description: "Occupancy, arrivals, departures and pending actions", roles: REPORT_VIEW_ROLES },
+  accommodation: { href: "/accommodation", label: "Site tree", icon: "⌂", description: "Sites, buildings, rooms and beds", roles: ACCOMMODATION_VIEW_ROLES },
+  allocations: { href: "/accommodation/allocations", label: "Allocations", icon: "⇄", description: "Assign beds, check in and out, transfers", roles: ALLOCATION_VIEW_ROLES },
+  approvals: { href: "/approvals", label: "Approvals", icon: "✓", description: "Room change, visitor, family and exit requests", roles: APPROVALS_AREA_ROLES },
+  delegations: { href: "/approvals/delegations", label: "Delegations", icon: "⇉", description: "Approval cover while away", roles: APPROVALS_AREA_ROLES },
+  maintenance: { href: "/maintenance", label: "Work orders", icon: "⚒", description: "Work orders, assignment and contractor access", roles: MAINTENANCE_AREA_ROLES },
+  facilities: { href: "/facilities", label: "Facilities", icon: "◷", description: "Shared facilities, calendars and bookings", roles: FACILITY_VIEW_ROLES },
+  keys: { href: "/keys", label: "Keys", icon: "⚿", description: "Issue, return, lost and damaged keys", roles: KEY_VIEW_ROLES },
+  inventory: { href: "/inventory", label: "Inventory", icon: "▤", description: "Stock, serialised assets, issues and returns", roles: INVENTORY_VIEW_ROLES },
+  lostFound: { href: "/lost-found", label: "Lost & found", icon: "◎", description: "Found items, claims, handover and disposal", roles: LOST_FOUND_VIEW_ROLES },
+  reports: { href: "/reports", label: "Report suite", icon: "▥", description: "Movements, maintenance, facilities, keys; filters and CSV", roles: REPORT_VIEW_ROLES },
+  users: { href: "/admin/users", label: "Users", icon: "◉", description: "Accounts, sign-in, roles and status", roles: ADMIN_VIEW_ROLES },
+  access: { href: "/admin/access", label: "Roles & access", icon: "⚿", description: "Permission matrix, grants and access review", roles: ADMIN_VIEW_ROLES },
+  changes: { href: "/admin/changes", label: "Pending changes", icon: "⇋", description: "Second-admin approval of high-risk changes", roles: USER_ADMIN_ROLES },
+  audit: { href: "/admin/audit", label: "Audit log", icon: "≡", description: "Who changed what, and when", roles: ROLES("SYSTEM_ADMIN", "ACCOMMODATION_ADMIN", "AUDITOR", "READONLY_MANAGER") },
+  notifications: { href: "/admin/notifications", label: "Notifications", icon: "✉", description: "In-app, email and WhatsApp delivery", roles: ADMIN_VIEW_ROLES },
+  broadcasts: { href: "/admin/broadcasts", label: "Broadcasts", icon: "▣", description: "Announcements to sites, buildings or roles", roles: BROADCAST_ROLES },
+  forms: { href: "/admin/forms", label: "Forms & routes", icon: "✎", description: "Request forms and approval routes", roles: FORM_BUILDER_ROLES },
+  imports: { href: "/admin/import", label: "Import & export", icon: "⇅", description: "Staff and accommodation from CSV", roles: CONFIG_ROLES },
+  myStay: { href: "/my", label: "My stay", icon: "☺", description: "Your own bed, requests and tickets", roles: "ALL" },
+} satisfies Record<string, NavItem>;
+
+export type NavId = keyof typeof NAV_CATALOG;
+type Layout = Array<[label: string, ids: NavId[]]>;
+
+/** Sidebar groups per role (document section 10); users with several roles see the union. */
+export const ROLE_NAV: Partial<Record<Role, Layout>> = {
+  SYSTEM_ADMIN: [
+    ["Overview", ["home", "dashboard"]],
+    ["Setup", ["accommodation", "imports"]],
+    ["Access", ["users", "access", "changes"]],
+    ["Workflows", ["forms", "approvals", "delegations"]],
+    ["Integrations", ["notifications", "broadcasts"]],
+    ["Operations", ["allocations", "maintenance", "keys", "inventory", "facilities", "lostFound"]],
+    ["Reports", ["reports"]],
+    ["Audit", ["audit"]],
+  ],
+  ACCOMMODATION_ADMIN: [
+    ["Overview", ["home", "dashboard"]],
+    ["Accommodation", ["accommodation", "allocations"]],
+    ["Requests", ["approvals", "delegations"]],
+    ["Operations", ["maintenance", "keys", "inventory", "facilities", "lostFound"]],
+    ["Communication", ["broadcasts", "notifications"]],
+    ["Setup", ["imports", "audit"]],
+    ["Reports", ["reports"]],
+  ],
+  ACCOMMODATION_OFFICER: [
+    ["Front desk", ["home", "allocations", "keys", "facilities", "lostFound"]],
+    ["Operations", ["maintenance", "inventory", "approvals"]],
+    ["Reports", ["reports"]],
+  ],
+  MAINTENANCE_COORDINATOR: [
+    ["Overview", ["home"]],
+    ["Maintenance", ["maintenance"]],
+    ["Resources", ["inventory", "keys", "facilities"]],
+    ["Reports", ["reports"]],
+  ],
+  TECHNICIAN: [["My work", ["home", "maintenance"]]],
+  VENDOR: [["My work", ["home", "maintenance"]]],
+  SECURITY: [["Gate", ["home", "lostFound"]]],
+  READONLY_MANAGER: [
+    ["Overview", ["home", "dashboard"]],
+    ["Reports", ["reports"]],
+  ],
+  AUDITOR: [
+    ["Overview", ["home"]],
+    ["Audit", ["audit", "reports"]],
+  ],
+  LINE_MANAGER: [["Approvals", ["home", "approvals", "delegations"]]],
+};
+
+const ORDER: Role[] = ["SYSTEM_ADMIN", "ACCOMMODATION_ADMIN", "ACCOMMODATION_OFFICER", "MAINTENANCE_COORDINATOR", "SECURITY", "TECHNICIAN", "VENDOR", "READONLY_MANAGER", "AUDITOR", "LINE_MANAGER"];
+
+/** Sidebar and home entries for a user: their roles' layouts, merged by group name, filtered by what the matrix allows. */
+export function visibleGroups(roles: Role[]): NavGroup[] {
+  const groups: NavGroup[] = [];
+  const seen = new Set<string>();
+  for (const role of ORDER.filter((r) => roles.includes(r))) {
+    for (const [label, ids] of ROLE_NAV[role] ?? []) {
+      const items: NavItem[] = [];
+      for (const id of ids) {
+        const item: NavItem = NAV_CATALOG[id];
+        const allowed = item.roles === "ALL" || item.roles.some((r) => roles.includes(r));
+        if (!allowed || seen.has(item.href)) continue;
+        seen.add(item.href);
+        items.push(item);
+      }
+      if (!items.length) continue;
+      const existing = groups.find((g) => g.label === label);
+      if (existing) existing.items.push(...items);
+      else groups.push({ label, items });
+    }
+  }
+  return groups;
+}
 
 export const USER_ADMIN = USER_ADMIN_ROLES;
-
-export function visibleGroups(roles: Role[]): NavGroup[] {
-  return NAV_GROUPS.map((g) => ({ ...g, items: g.items.filter((i) => i.roles === "ALL" || i.roles.some((r) => roles.includes(r))) })).filter((g) => g.items.length > 0);
-}

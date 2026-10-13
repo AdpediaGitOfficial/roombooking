@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { hasRole, requireRole } from "@/lib/auth/authorize";
+import { sitesFor } from "@/lib/auth/scope";
 import { INVENTORY_MANAGE_ROLES, INVENTORY_VIEW_ROLES } from "@sam/core/modules/inventory/access";
 import { ITEM_FILTERS, categories, describeLocation, inventorySummary, listItems, type ItemFilter } from "@sam/core/modules/inventory/service";
 import { targetOptions } from "@/modules/inventory/context";
@@ -15,7 +16,8 @@ async function Register({ searchParams }: { searchParams: Search }) {
   const canManage = hasRole(user, ...INVENTORY_MANAGE_ROLES);
   const { filter: raw, q, category } = await searchParams;
   const filter = (ITEM_FILTERS.some(([f]) => f === raw) ? raw : "all") as ItemFilter;
-  const [items, summary, cats, options] = await Promise.all([listItems({ filter, q: q || null, category: category || null }), inventorySummary(), categories(), canManage ? targetOptions() : null]);
+  const scope = await sitesFor(user, "inv.room_assets");
+  const [items, summary, cats, options] = await Promise.all([listItems({ filter, q: q || null, category: category || null, siteId: scope }), inventorySummary(scope), categories(scope), canManage ? targetOptions() : null]);
   const query = (f: ItemFilter) => `/inventory?filter=${f}${q ? `&q=${encodeURIComponent(q)}` : ""}${category ? `&category=${encodeURIComponent(category)}` : ""}`;
   return (
     <>

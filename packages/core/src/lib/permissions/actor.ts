@@ -32,3 +32,9 @@ export function actorCanAccess(actor: ActorLike, key: string, ctx: ScopeContext 
 export function actorAccess(actor: ActorLike, key: string, ctx: ScopeContext = {}) {
   return accessTo(principalOf(actor), key, ctx);
 }
+
+/** Access at one of the given levels (for example view-only managers as well as full-access admins). */
+export function actorCanAccessLevel(actor: ActorLike, key: string, ctx: ScopeContext, levels: Array<"full" | "view" | "own" | "limited">): boolean {
+  const level = accessTo(principalOf(actor), key, ctx)?.level;
+  return !!level && levels.includes(level);
+}

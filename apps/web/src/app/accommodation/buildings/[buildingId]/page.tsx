@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { canSeeSite } from "@/lib/auth/scope";
 import { requireRole } from "@/lib/auth/authorize";
 import { ACCOMMODATION_VIEW_ROLES } from "@sam/core/modules/accommodation/access";
 import { getBuildingOccupancy } from "@sam/core/modules/accommodation/occupancy";
@@ -9,9 +10,10 @@ import { PageHeader } from "@/components/shell/page-header";
 
 async function BuildingView({ params }: { params: Promise<{ buildingId: string }> }) {
   const { buildingId } = await params;
-  await requireRole(ACCOMMODATION_VIEW_ROLES, `/accommodation/buildings/${buildingId}`);
+  const user = await requireRole(ACCOMMODATION_VIEW_ROLES, `/accommodation/buildings/${buildingId}`);
   const data = await getBuildingOccupancy(buildingId);
   if (!data) notFound();
+  if (!(await canSeeSite(user, "accom.view", data.building.siteId))) notFound();
   const { building, today, rooms, summary } = data;
   return (
     <>

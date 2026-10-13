@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { AssetCondition } from "@prisma/client";
 import { requireRole } from "@/lib/auth/authorize";
+import { guardScope } from "@/lib/auth/guards";
 import { INVENTORY_MANAGE_ROLES, INVENTORY_OPERATE_ROLES } from "@sam/core/modules/inventory/access";
 import { InventoryError } from "@sam/core/modules/inventory/errors";
 import { CONDITIONS, adjustStock, createItem, issueItem, receiveStock, recordDamage, retireItem, returnItem, transferItem, updateItem, type Target } from "@sam/core/modules/inventory/service";
@@ -56,6 +57,7 @@ export async function createItemAction(_prev: FormState, formData: FormData): Pr
 
 export async function updateItemAction(_prev: FormState, formData: FormData): Promise<FormState> {
   const user = await requireRole(INVENTORY_MANAGE_ROLES, "/inventory");
+  await guardScope(user, "inv.room_assets", formData, [["itemId", "inventoryItem"]]);
   const values: Record<string, string> = {};
   for (const k of ["itemId", "name", "category", "description", "unit", "condition", "reorderThreshold", "storageLocation", "notes"]) values[k] = str(formData, k);
   try {
@@ -72,6 +74,7 @@ export async function movementAction(_prev: FormState, formData: FormData): Prom
   const kind = str(formData, "kind");
   const manageOnly = ["ADJUST", "TRANSFER", "RETIRE"].includes(kind);
   const user = await requireRole(manageOnly ? INVENTORY_MANAGE_ROLES : INVENTORY_OPERATE_ROLES, "/inventory");
+  await guardScope(user, "inv.room_assets", formData, [["itemId", "inventoryItem"]]);
   const itemId = str(formData, "itemId");
   const values: Record<string, string> = {};
   for (const k of ["kind", "quantity", "target", "condition", "reference", "notes", "countedQuantity", "reason", "toSiteId"]) values[k] = str(formData, k);

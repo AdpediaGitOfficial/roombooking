@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { requireRole } from "@/lib/auth/authorize";
+import { visibleSites } from "@/lib/auth/scope";
 import { ALLOCATION_VIEW_ROLES } from "@sam/core/modules/allocations/access";
 import { listAllocations, type AllocationListFilter } from "@sam/core/modules/allocations/service";
 import { AllocationStatusBadge } from "@/modules/allocations/components/status-badge";
@@ -15,10 +16,10 @@ const FILTERS: Array<[AllocationListFilter, string]> = [
 ];
 
 async function AllocationList({ searchParams }: { searchParams: Promise<{ filter?: string; staffId?: string; requestId?: string }> }) {
-  await requireRole(ALLOCATION_VIEW_ROLES, "/accommodation/allocations");
+  const user = await requireRole(ALLOCATION_VIEW_ROLES, "/accommodation/allocations");
   const { filter: raw, staffId, requestId } = await searchParams;
   const filter = (FILTERS.some(([f]) => f === raw) ? raw : "active") as AllocationListFilter;
-  const allocations = await listAllocations(filter, staffId || null);
+  const allocations = await listAllocations(filter, staffId || null, await visibleSites(user, "accom.view"));
 
   const counts = { active: allocations.filter((a) => a.status === "CHECKED_IN").length };
   return (

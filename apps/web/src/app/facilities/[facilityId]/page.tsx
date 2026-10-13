@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { canSeeSite } from "@/lib/auth/scope";
 import { hasRole, requireRole } from "@/lib/auth/authorize";
 import { addDaysIso, zonedDateTime } from "@sam/core/lib/time";
 import { FACILITY_MANAGE_ROLES, FACILITY_OPERATE_ROLES, FACILITY_VIEW_ROLES } from "@sam/core/modules/facilities/access";
@@ -20,6 +21,7 @@ async function Content({ params, searchParams }: { params: Params; searchParams:
   const canOperate = hasRole(user, ...FACILITY_OPERATE_ROLES);
   const facility = await getFacility(facilityId);
   if (!facility) notFound();
+  if (!(await canSeeSite(user, "fac.view", facility.siteId))) notFound();
   const now = new Date();
   const tz = facility.site.timezone;
   const today = zonedDateTime(now, tz).date;

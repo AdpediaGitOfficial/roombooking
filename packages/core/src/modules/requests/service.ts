@@ -13,7 +13,7 @@ type Tx = Prisma.TransactionClient;
 type Db = Tx | PrismaClient;
 
 /** Who is acting: their own roles plus any roles held through live delegations (WF-06). */
-export type Actor = { id: string; roles: Role[]; delegated?: DelegatedRole[] };
+export type Actor = { id: string; roles: Role[]; delegated?: DelegatedRole[]; roleAssignments?: Array<{ role: Role; siteId?: string | null; buildingId?: string | null }>; grants?: Array<Record<string, unknown>> };
 
 export async function withDelegations(actor: Actor, now: Date = new Date()): Promise<Actor> {
   return { ...actor, delegated: await delegatedRolesFor(actor.id, now) };

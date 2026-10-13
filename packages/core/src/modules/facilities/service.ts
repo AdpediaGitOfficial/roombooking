@@ -2,6 +2,7 @@
 // on the facility so concurrent requests for the last place cannot both win.
 import type { BookingStatus, Prisma, PrismaClient } from "@prisma/client";
 import { prisma } from "../../lib/db";
+import { siteWhere, type SiteScope } from "../../lib/permissions/scope";
 import { recordAudit } from "../../lib/audit";
 import { enqueueNotification } from "../../lib/notifications";
 import { addDaysIso, addMinutes, minutesOfDay, zonedDateTime, zonedToUtc, type DayKey } from "../../lib/time";
@@ -284,8 +285,8 @@ export async function createFacility(input: { siteId: string; actorId: string; c
 // Queries and reports (FAC-07)
 // ---------------------------------------------------------------------------
 
-export async function listFacilities(opts: { siteId?: string | null; includeInactive?: boolean } = {}) {
-  return prisma.facility.findMany({ where: { ...(opts.siteId ? { siteId: opts.siteId } : {}), ...(opts.includeInactive ? {} : { status: "ACTIVE" }) }, include: facilityInclude, orderBy: [{ site: { name: "asc" } }, { name: "asc" }] });
+export async function listFacilities(opts: { siteId?: SiteScope; includeInactive?: boolean } = {}) {
+  return prisma.facility.findMany({ where: { ...siteWhere(opts.siteId), ...(opts.includeInactive ? {} : { status: "ACTIVE" }) }, include: facilityInclude, orderBy: [{ site: { name: "asc" } }, { name: "asc" }] });
 }
 
 export async function getFacility(id: string) {
@@ -312,7 +313,7 @@ export async function getBooking(id: string) {
 export type FacilityReport = { facilityId: string; name: string; bookings: number; cancelled: number; noShows: number; attended: number; pending: number; bookedHours: number; openHours: number; utilisation: number };
 
 /** Last `days` days per facility: counts and utilisation = booked hours (held or used) / open hours (FAC-07). */
-export async function facilityReports(days = 30, now: Date = new Date(), siteId?: string | null): Promise<FacilityReport[]> {
+export async function facilityReports(days = 30, now: Date = new Date(), siteId?: SiteScope): Promise<FacilityReport[]> {
   const from = addMinutes(now, -days * 24 * 60);
   const facilities = await listFacilities({ siteId, includeInactive: true });
   const out: FacilityReport[] = [];

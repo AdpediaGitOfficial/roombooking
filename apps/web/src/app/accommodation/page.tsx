@@ -1,14 +1,15 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { requireRole } from "@/lib/auth/authorize";
+import { visibleSites } from "@/lib/auth/scope";
 import { ACCOMMODATION_VIEW_ROLES } from "@sam/core/modules/accommodation/access";
 import { getSitesOverview } from "@sam/core/modules/accommodation/occupancy";
 import { SummaryTiles } from "@/modules/accommodation/components/summary-tiles";
 import { PageHeader } from "@/components/shell/page-header";
 
 async function Overview() {
-  await requireRole(ACCOMMODATION_VIEW_ROLES, "/accommodation");
-  const sites = await getSitesOverview();
+  const user = await requireRole(ACCOMMODATION_VIEW_ROLES, "/accommodation");
+  const sites = await getSitesOverview(await visibleSites(user, "accom.view"));
   if (sites.length === 0) return <p className="text-sm text-zinc-500">No sites configured yet.</p>;
   return (
     <div className="space-y-10">

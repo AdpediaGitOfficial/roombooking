@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { canSeeSite } from "@/lib/auth/scope";
 import { hasRole, requireRole } from "@/lib/auth/authorize";
 import { ALLOCATION_ADMIN_ROLES, ALLOCATION_OPERATE_ROLES, ALLOCATION_VIEW_ROLES } from "@sam/core/modules/allocations/access";
 import { clearanceBlockers, getAllocation } from "@sam/core/modules/allocations/service";
@@ -26,6 +27,7 @@ async function AllocationView({ params }: { params: Promise<{ allocationId: stri
   const user = await requireRole(ALLOCATION_VIEW_ROLES, `/accommodation/allocations/${allocationId}`);
   const allocation = await getAllocation(allocationId);
   if (!allocation) notFound();
+  if (!(await canSeeSite(user, "accom.view", allocation.bed.room.building.siteId))) notFound();
   const canOperate = hasRole(user, ...ALLOCATION_OPERATE_ROLES);
   const canAdmin = hasRole(user, ...ALLOCATION_ADMIN_ROLES);
   const blockers = allocation.status === "CHECKED_IN" ? await clearanceBlockers(allocation.staffId) : [];

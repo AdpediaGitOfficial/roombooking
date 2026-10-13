@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireRole } from "@/lib/auth/authorize";
+import { guardScope } from "@/lib/auth/guards";
 import { KEY_MANAGE_ROLES, KEY_OPERATE_ROLES } from "@sam/core/modules/keys/access";
 import { KeyError } from "@sam/core/modules/keys/errors";
 import { issueKey, markFound, registerKey, replaceKey, reportDamaged, reportLost, retireKey, returnKey, setRepairState } from "@sam/core/modules/keys/service";
@@ -44,6 +45,7 @@ export async function registerKeyAction(_prev: FormState, formData: FormData): P
 
 export async function issueKeyAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const user = await requireRole(KEY_OPERATE_ROLES, "/keys");
+  await guardScope(user, ["keys.standard", "keys.register"], formData, [["keyId", "key"]]);
   const keyId = str(formData, "keyId");
   const error = await run(() => issueKey({ keyId, actorId: user.id, holderStaffId: str(formData, "holderStaffId") || null, holderName: str(formData, "holderName") || null, condition: str(formData, "condition") || null, expectedReturnAt: str(formData, "expectedReturnAt") || null, notes: str(formData, "notes") || null }));
   if (error) return { error };
@@ -53,6 +55,7 @@ export async function issueKeyAction(_prev: ActionState, formData: FormData): Pr
 
 export async function returnKeyAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const user = await requireRole(KEY_OPERATE_ROLES, "/keys");
+  await guardScope(user, ["keys.standard", "keys.register"], formData, [["keyId", "key"]]);
   const keyId = str(formData, "keyId");
   const error = await run(() => returnKey({ keyId, actorId: user.id, condition: str(formData, "condition") || null, notes: str(formData, "notes") || null }));
   if (error) return { error };
@@ -62,6 +65,7 @@ export async function returnKeyAction(_prev: ActionState, formData: FormData): P
 
 export async function keyExceptionAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const user = await requireRole(KEY_MANAGE_ROLES, "/keys");
+  await guardScope(user, ["keys.standard", "keys.register"], formData, [["keyId", "key"]]);
   const keyId = str(formData, "keyId");
   const kind = str(formData, "kind");
   const notes = str(formData, "notes");
@@ -84,6 +88,7 @@ export async function keyExceptionAction(_prev: ActionState, formData: FormData)
 
 export async function replaceKeyAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const user = await requireRole(KEY_MANAGE_ROLES, "/keys");
+  await guardScope(user, ["keys.standard", "keys.register"], formData, [["keyId", "key"]]);
   const keyId = str(formData, "keyId");
   let newId: string | null = null;
   const error = await run(async () => { newId = (await replaceKey({ keyId, actorId: user.id, newCode: str(formData, "newCode"), notes: str(formData, "notes") || null })).id; });

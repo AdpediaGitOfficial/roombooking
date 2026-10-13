@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import Link from "next/link";
-import { requireRole } from "@/lib/auth/authorize";
+import { requireRole, userCan } from "@/lib/auth/authorize";
+import { sitesFor } from "@/lib/auth/scope";
 import { REPORT_VIEW_ROLES } from "@sam/core/modules/reports/access";
 import { ARRIVAL_WINDOW_DAYS, getDashboard, getOccupancyTrend, type MovementRow } from "@sam/core/modules/reports/service";
 import { OccupancyStackChart, OccupancyTrendChart } from "@/modules/reports/components/charts";
@@ -46,10 +47,11 @@ function MovementTable({ rows }: { rows: Array<MovementRow & { direction: "arriv
 }
 
 async function Dashboard({ searchParams }: { searchParams: Promise<{ siteId?: string }> }) {
-  await requireRole(REPORT_VIEW_ROLES, "/dashboard");
+  const user = await requireRole(REPORT_VIEW_ROLES, "/dashboard");
   const { siteId: raw } = await searchParams;
   const siteId = raw || null;
-  const [d, trend] = await Promise.all([getDashboard(siteId), getOccupancyTrend(siteId, 30)]);
+  const scope = await sitesFor(user, ["rep.l1", "rep.l2", "rep.l3", "rep.l4"], siteId);
+  const [d, trend] = await Promise.all([getDashboard(scope), getOccupancyTrend(scope, 30)]);
   const s = d.summary;
   const p = d.pending;
   const pendingItems: Array<[string, string, number, string, Severity]> = [
@@ -78,7 +80,7 @@ async function Dashboard({ searchParams }: { searchParams: Promise<{ siteId?: st
             <select id="siteId" name="siteId" defaultValue={siteId ?? ""} className="rounded-md border border-zinc-300 px-3 py-2 text-sm"><option value="">All sites</option>{d.sites.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select>
             <button type="submit" className="btn">Apply</button>
           </form>
-          <a href={`/api/reports/occupancy.csv${siteId ? `?siteId=${siteId}` : ""}`} className="btn">Export bed list</a>
+          {userCan(user, "rep.export") && <a href={`/api/reports/occupancy.csv${siteId ? `?siteId=${siteId}` : ""}`} className="btn">Export bed list</a>}
           <Link href="/accommodation/allocations/new" className="btn btn-primary">＋ New allocation</Link>
         </>}
       />

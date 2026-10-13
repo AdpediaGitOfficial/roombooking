@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { canSeeSite } from "@/lib/auth/scope";
 import { hasRole, requireRole } from "@/lib/auth/authorize";
 import { KEY_MANAGE_ROLES, KEY_OPERATE_ROLES, KEY_VIEW_ROLES } from "@sam/core/modules/keys/access";
 import { getKey, holderLabel, isOverdue, keyLocation, openIssue } from "@sam/core/modules/keys/service";
@@ -13,6 +14,7 @@ async function Content({ params }: { params: Promise<{ keyId: string }> }) {
   const user = await requireRole(KEY_VIEW_ROLES, `/keys/${keyId}`);
   const key = await getKey(keyId);
   if (!key) notFound();
+  if (!(await canSeeSite(user, ["keys.standard", "keys.register"], key.siteId))) notFound();
   const canOperate = hasRole(user, ...KEY_OPERATE_ROLES);
   const canManage = hasRole(user, ...KEY_MANAGE_ROLES);
   const issue = openIssue(key);

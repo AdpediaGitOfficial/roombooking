@@ -7,7 +7,7 @@ const sel = "mt-1 block rounded-md border border-zinc-300 px-2 py-1.5 text-sm";
 
 /** GET filter bar shared by the report pages (RPT-06): date range, site, building, plus report-specific selects. */
 export function ReportFilters(props: {
-  action: string; range: Range; sites: Site[]; values: FilterValues; csvHref: string;
+  action: string; range: Range; sites: Site[]; values: FilterValues; csvHref: string | null;
   statuses?: Array<[string, string]>; categories?: string[]; facilities?: Array<{ id: string; name: string; siteId: string }>; search?: string;
 }) {
   const { values: v } = props;
@@ -23,7 +23,7 @@ export function ReportFilters(props: {
       {props.facilities && <label className="block">Facility<select name="facilityId" defaultValue={v.facilityId ?? ""} className={sel}><option value="">All</option>{props.facilities.filter((f) => !v.siteId || f.siteId === v.siteId).map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}</select></label>}
       {props.search && <label className="block">{props.search}<input name="q" defaultValue={v.q ?? ""} className={sel} /></label>}
       <button type="submit" className="rounded-md border border-zinc-300 px-3 py-1.5">Apply</button>
-      <a href={props.csvHref} data-csv className="rounded-md bg-primary px-3 py-1.5 text-primary-ink">Download CSV</a>
+      {props.csvHref && <a href={props.csvHref} data-csv className="rounded-md bg-primary px-3 py-1.5 text-primary-ink">Download CSV</a>}
     </form>
   );
 }

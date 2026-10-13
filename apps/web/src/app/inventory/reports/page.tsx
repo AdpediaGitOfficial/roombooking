@@ -1,7 +1,8 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import type { InventoryTransactionType } from "@prisma/client";
-import { requireRole } from "@/lib/auth/authorize";
+import { requireRole, userCan } from "@/lib/auth/authorize";
+import { sitesFor, visibleSites } from "@/lib/auth/scope";
 import { prisma } from "@sam/core/lib/db";
 import { INVENTORY_VIEW_ROLES } from "@sam/core/modules/inventory/access";
 import { allocatedReport, conditionReport, describeCondition, describeTransaction, movementReport, stockBalanceReport } from "@sam/core/modules/inventory/service";
@@ -13,19 +14,21 @@ const TYPES: InventoryTransactionType[] = ["RECEIPT", "ISSUE", "RETURN", "TRANSF
 const isDate = (s?: string) => !!s && /^\d{4}-\d{2}-\d{2}$/.test(s);
 
 async function Reports({ searchParams }: { searchParams: Search }) {
-  await requireRole(INVENTORY_VIEW_ROLES, "/inventory/reports");
+  const user = await requireRole(INVENTORY_VIEW_ROLES, "/inventory/reports");
   const sp = await searchParams;
-  const siteId = sp.siteId || null;
+  const visible = await visibleSites(user, "inv.room_assets");
+  const siteId = sp.siteId && (visible === null || visible.includes(sp.siteId)) ? sp.siteId : null;
+  const scope = await sitesFor(user, "inv.room_assets", sp.siteId || null);
   const type = TYPES.includes(sp.type as InventoryTransactionType) ? (sp.type as InventoryTransactionType) : null;
   const now = new Date();
   const to = isDate(sp.to) ? sp.to! : now.toISOString().slice(0, 10);
   const from = isDate(sp.from) ? sp.from! : new Date(now.getTime() - 30 * 86400000).toISOString().slice(0, 10);
   const [sites, balance, movements, allocated, conditions] = await Promise.all([
-    prisma.site.findMany({ where: { status: "ACTIVE" }, orderBy: { name: "asc" } }),
-    stockBalanceReport(siteId),
-    movementReport({ siteId, from, to, type }, 200),
-    allocatedReport(siteId),
-    conditionReport(siteId),
+    prisma.site.findMany({ where: { status: "ACTIVE", ...(visible ? { id: { in: visible } } : {}) }, orderBy: { name: "asc" } }),
+    stockBalanceReport(scope),
+    movementReport({ siteId: scope, from, to, type }, 200),
+    allocatedReport(scope),
+    conditionReport(scope),
   ]);
   const qs = new URLSearchParams({ ...(siteId ? { siteId } : {}), from, to, ...(type ? { type } : {}) }).toString();
   const sel = "rounded-md border border-zinc-300 px-2 py-1.5 text-sm";
@@ -37,7 +40,7 @@ async function Reports({ searchParams }: { searchParams: Search }) {
         <label className="block">To<input type="date" name="to" defaultValue={to} className={`${sel} mt-1 block`} /></label>
         <label className="block">Movement<select name="type" defaultValue={type ?? ""} className={`${sel} mt-1 block`}><option value="">All</option>{TYPES.map((t) => <option key={t} value={t}>{describeTransaction(t)}</option>)}</select></label>
         <button type="submit" className="rounded-md border border-zinc-300 px-3 py-1.5">Apply</button>
-        <a href={`/api/reports/inventory-movements.csv?${qs}`} className="rounded-md bg-primary px-3 py-1.5 text-primary-ink">Download movements CSV</a>
+        {userCan(user, "rep.export") && <a href={`/api/reports/inventory-movements.csv?${qs}`} className="rounded-md bg-primary px-3 py-1.5 text-primary-ink">Download movements CSV</a>}
       </form>
 
       <section className="mt-6">

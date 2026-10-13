@@ -4,3 +4,4 @@ export * from "./sets";
 export * from "./engine";
 export * from "./actor";
 export * from "./loader";
+export * from "./scope";

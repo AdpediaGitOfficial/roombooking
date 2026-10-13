@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { hasRole, requireRole } from "@/lib/auth/authorize";
+import { sitesFor } from "@/lib/auth/scope";
 import { KEY_MANAGE_ROLES, KEY_VIEW_ROLES } from "@sam/core/modules/keys/access";
 import { keyLocation, keySummary, listKeys, type KeyFilter } from "@sam/core/modules/keys/service";
 import { registerOptions } from "@/modules/keys/context";
@@ -16,7 +17,8 @@ async function Register({ searchParams }: { searchParams: Promise<{ filter?: str
   const { filter: raw } = await searchParams;
   const filter = (FILTERS.some(([f]) => f === raw) ? raw : "all") as KeyFilter;
   const now = new Date();
-  const [rows, summary, options] = await Promise.all([listKeys(filter, null, now), keySummary(null, now), canManage ? registerOptions() : null]);
+  const scope = await sitesFor(user, ["keys.standard", "keys.register"]);
+  const [rows, summary, options] = await Promise.all([listKeys(filter, scope, now), keySummary(scope, now), canManage ? registerOptions() : null]);
   return (
     <>
       <dl className="grid grid-cols-2 gap-3 sm:grid-cols-5">

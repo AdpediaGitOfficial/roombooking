@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
+import { canSeeSite } from "@/lib/auth/scope";
 import { hasRole, requireRole } from "@/lib/auth/authorize";
 import { INVENTORY_MANAGE_ROLES, INVENTORY_OPERATE_ROLES, INVENTORY_VIEW_ROLES } from "@sam/core/modules/inventory/access";
 import { describeLocation, getItem, isLowStock, targetLabel } from "@sam/core/modules/inventory/service";
@@ -20,6 +21,7 @@ async function Content({ params }: { params: Params }) {
   const canManage = hasRole(user, ...INVENTORY_MANAGE_ROLES);
   const detail = await getItem(itemId);
   if (!detail) notFound();
+  if (!(await canSeeSite(user, "inv.room_assets", detail.item.siteId))) notFound();
   const { item, transactions, outstanding } = detail;
   const serialised = item.trackingType === "SERIALIZED";
   const active = item.status === "ACTIVE";

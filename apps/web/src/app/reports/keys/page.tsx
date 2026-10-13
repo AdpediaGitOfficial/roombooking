@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import type { KeyStatus } from "@prisma/client";
-import { requireRole } from "@/lib/auth/authorize";
+import { requireRole, userCan } from "@/lib/auth/authorize";
 import { REPORT_VIEW_ROLES } from "@sam/core/modules/reports/access";
 import { DEFINITIONS, filterOptions, keyReport, parseRange, scopeFor } from "@sam/core/modules/reports/suite";
 import { Definitions, ReportFilters, Stat, qs, table, tbody, td, th, thead, wrap } from "@/modules/reports/components/report-filters";
@@ -23,7 +23,7 @@ async function Content({ searchParams }: { searchParams: Search }) {
   const total = (k: keyof (typeof r.register)[number]) => r.register.reduce((s, x) => s + (typeof x[k] === "number" ? (x[k] as number) : 0), 0);
   return (
     <>
-      <ReportFilters action="/reports/keys" range={range} sites={options.sites} values={f} csvHref={`/api/reports/keys.csv?${query}`} statuses={STATUSES.map((s) => [s, s.toLowerCase().replace("_", " ")])} />
+      <ReportFilters action="/reports/keys" range={range} sites={options.sites} values={f} csvHref={userCan(user, "rep.export") ? `/api/reports/keys.csv?${query}` : null} statuses={STATUSES.map((s) => [s, s.toLowerCase().replace("_", " ")])} />
       <dl className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-6">
         <Stat label="Keys" value={total("total")} /><Stat label="Issued" value={total("issued")} /><Stat label="Overdue" value={total("overdue")} /><Stat label="Lost" value={total("lost")} /><Stat label="Damaged / repair" value={total("damaged") + total("underRepair")} /><Stat label="Issued in range" value={r.transactions.ISSUE ?? 0} note={`${r.transactions.RETURN ?? 0} returned`} />
       </dl>

@@ -1,5 +1,6 @@
 // Occupancy dashboard and reports (SRS RPT-01, ACM-03, ACM-11, RPT-02, RPT-07).
 import { prisma } from "../../lib/db";
+import { siteWhere, type SiteScope } from "../../lib/permissions/scope";
 import { recordAudit } from "../../lib/audit";
 import { OCCUPYING_STATUSES, classifyBed, isoDate, mergeSummaries, summarize, todayInTimezone, type OccupancySummary } from "../accommodation/occupancy";
 
@@ -19,13 +20,13 @@ function addDays(iso: string, n: number): string {
 export type BuildingRow = { id: string; name: string; siteName: string; summary: OccupancySummary };
 export type MovementRow = { allocationId: string; staff: string; employeeId: string; bed: string; building: string; status: string; date: string; kind: "ARRIVAL" | "DEPARTURE" | "OVERDUE_ARRIVAL" | "OVERSTAY" };
 
-export async function getDashboard(siteId: string | null, now: Date = new Date()) {
+export async function getDashboard(siteId: SiteScope, now: Date = new Date()) {
   const sites = await prisma.site.findMany({
-    where: { status: "ACTIVE", ...(siteId ? { id: siteId } : {}) },
+    where: { status: "ACTIVE", ...siteWhere(siteId, "id") },
     orderBy: { name: "asc" },
     include: { buildings: { where: { status: "ACTIVE" }, orderBy: { code: "asc" }, include: { rooms: { include: { beds: { include: bedInclude } } } } } },
   });
-  const allSites = await prisma.site.findMany({ where: { status: "ACTIVE" }, orderBy: { name: "asc" }, select: { id: true, name: true, timezone: true } });
+  const allSites = await prisma.site.findMany({ where: { status: "ACTIVE", ...siteWhere(siteId && !Array.isArray(siteId) ? null : siteId, "id") }, orderBy: { name: "asc" }, select: { id: true, name: true, timezone: true } });
   const timezone = sites[0]?.timezone ?? "UTC";
   const today = todayInTimezone(timezone, now);
   const horizon = addDays(today, ARRIVAL_WINDOW_DAYS);
@@ -60,8 +61,8 @@ export async function getDashboard(siteId: string | null, now: Date = new Date()
   const [pendingRequests, approvedRoomChanges, overdueKeys, unassignedTickets] = await Promise.all([
     prisma.request.count({ where: { status: "PENDING_APPROVAL" } }),
     prisma.request.count({ where: { status: "APPROVED", requestType: { code: "ROOM_CHANGE" } } }),
-    prisma.keyTransaction.count({ where: { type: "ISSUE", returnedAt: null, expectedReturnAt: { lt: now }, ...(siteId ? { key: { siteId } } : {}) } }),
-    prisma.workOrder.count({ where: { status: { in: ["NEW", "TRIAGED", "REOPENED"] }, assigneeId: null, vendorId: null, ...(siteId ? { siteId } : {}) } }),
+    prisma.keyTransaction.count({ where: { type: "ISSUE", returnedAt: null, expectedReturnAt: { lt: now }, ...(siteId ? { key: siteWhere(siteId) } : {}) } }),
+    prisma.workOrder.count({ where: { status: { in: ["NEW", "TRIAGED", "REOPENED"] }, assigneeId: null, vendorId: null, ...siteWhere(siteId) } }),
   ]);
 
   const summary = mergeSummaries(buildings.map((b) => b.summary));
@@ -99,16 +100,16 @@ export function occupiedAtEndOfDay(stays: Stay[], dayIso: string): number {
   return stays.filter((s) => s.checkedInAt && s.checkedInAt <= endOfDay && (!s.checkedOutAt || s.checkedOutAt > endOfDay)).length;
 }
 
-export async function getOccupancyTrend(siteId: string | null, days = 30, now: Date = new Date()): Promise<TrendPoint[]> {
+export async function getOccupancyTrend(siteId: SiteScope, days = 30, now: Date = new Date()): Promise<TrendPoint[]> {
   const today = now.toISOString().slice(0, 10);
   const from = new Date(Date.parse(`${addDays(today, -(days - 1))}T00:00:00.000Z`));
   const [stays, capacity] = await Promise.all([
     prisma.allocation.findMany({
-      where: { checkedInAt: { not: null }, OR: [{ checkedOutAt: null }, { checkedOutAt: { gte: from } }], ...(siteId ? { bed: { room: { building: { siteId } } } } : {}) },
+      where: { checkedInAt: { not: null }, OR: [{ checkedOutAt: null }, { checkedOutAt: { gte: from } }], ...(siteId !== null && siteId !== undefined && siteId !== "" ? { bed: { room: { building: siteWhere(siteId) } } } : {}) },
       select: { checkedInAt: true, checkedOutAt: true, status: true },
     }),
     // Same definition as the dashboard tiles: every non-retired bed in an active building (blocked rooms still count as capacity).
-    prisma.bed.count({ where: { status: { not: "RETIRED" }, room: { building: { status: "ACTIVE", ...(siteId ? { siteId } : {}) } } } }),
+    prisma.bed.count({ where: { status: { not: "RETIRED" }, room: { building: { status: "ACTIVE", ...siteWhere(siteId) } } } }),
   ]);
   const points: TrendPoint[] = [];
   for (let i = days - 1; i >= 0; i--) {
@@ -127,13 +128,22 @@ export function csvEscape(value: unknown): string {
   return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
+/**
+ * Exports are watermarked with the user and time (document section 9). The marks are trailing rows so the
+ * header line stays machine-readable.
+ */
+export function watermarkCsv(csv: string, who: { name: string; username: string }, at: Date = new Date()): string {
+  const body = csv.endsWith("\r\n") ? csv : `${csv}\r\n`;
+  return `${body}${csvEscape(`Exported by ${who.name} (${who.username}) on ${at.toISOString()}`)}\r\n${csvEscape("Confidential: personal data. Do not share or store outside approved systems.")}\r\n`;
+}
+
 export function toCsv(headers: string[], rows: unknown[][]): string {
   return [headers, ...rows].map((r) => r.map(csvEscape).join(",")).join("\r\n") + "\r\n";
 }
 
-export async function occupancyCsv(siteId: string | null, actorId: string, now: Date = new Date()): Promise<string> {
+export async function occupancyCsv(siteId: SiteScope, actorId: string, now: Date = new Date()): Promise<string> {
   const sites = await prisma.site.findMany({
-    where: { status: "ACTIVE", ...(siteId ? { id: siteId } : {}) },
+    where: { status: "ACTIVE", ...siteWhere(siteId, "id") },
     orderBy: { name: "asc" },
     include: { buildings: { orderBy: { code: "asc" }, include: { rooms: { orderBy: { code: "asc" }, include: { beds: { orderBy: { code: "asc" }, include: bedInclude } } } } } },
   });

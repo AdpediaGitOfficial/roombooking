@@ -209,8 +209,9 @@ export async function getBuildingOccupancy(buildingId: string) {
   return { building, today, rooms, summary: mergeSummaries(rooms.map((r) => r.summary)) };
 }
 
-export async function getSitesOverview() {
+export async function getSitesOverview(siteIds?: string[] | null) {
   const sites = await prisma.site.findMany({
+    where: siteIds ? { id: { in: siteIds } } : {},
     orderBy: { name: "asc" },
     include: {
       buildings: {

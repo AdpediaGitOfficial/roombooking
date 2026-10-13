@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireRole, requireUser } from "@/lib/auth/authorize";
+import { guardScope } from "@/lib/auth/guards";
 import { prisma } from "@sam/core/lib/db";
 import { LOST_FOUND_MANAGE_ROLES, LOST_FOUND_OPERATE_ROLES } from "@sam/core/modules/lost-found/access";
 import { actorFor } from "./context";
@@ -47,6 +48,7 @@ export async function registerItemAction(_prev: FormState, formData: FormData): 
 
 export async function updateItemAction(_prev: FormState, formData: FormData): Promise<FormState> {
   const user = await requireRole(LOST_FOUND_OPERATE_ROLES, "/lost-found");
+  await guardScope(user, "lf.operate", formData, [["itemId", "lostFoundItem"], ["claimId", "lostFoundClaim"]]);
   const values: Record<string, string> = {};
   for (const k of ["itemId", "description", "category", "foundLocation", "foundByName", "notes", "retainUntil"]) values[k] = str(formData, k);
   try {
@@ -62,6 +64,7 @@ export async function updateItemAction(_prev: FormState, formData: FormData): Pr
 export async function itemAction(_prev: FormState, formData: FormData): Promise<FormState> {
   const kind = str(formData, "kind");
   const user = kind === "DISPOSE" ? await requireRole(LOST_FOUND_MANAGE_ROLES, "/lost-found") : kind === "WITHDRAW" ? await requireUser("/my/lost-found") : await requireRole(LOST_FOUND_OPERATE_ROLES, "/lost-found");
+  if (kind !== "WITHDRAW") await guardScope(user, "lf.operate", formData, [["itemId", "lostFoundItem"], ["claimId", "lostFoundClaim"]]);
   const actor = actorFor(user);
   const itemId = str(formData, "itemId");
   const values: Record<string, string> = {};

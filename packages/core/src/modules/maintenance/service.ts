@@ -5,7 +5,7 @@ import { recordAudit } from "../../lib/audit";
 import { enqueueNotification } from "../../lib/notifications";
 import { storeImage, UploadError } from "../../lib/uploads";
 import { MaintenanceError } from "./errors";
-import { actorCan, principalOf, type ActorLike } from "../../lib/permissions/actor";
+import { actorCan, actorCanAccessLevel, principalOf, type ActorLike } from "../../lib/permissions/actor";
 import { dataScope, scopeWhere } from "../../lib/permissions/engine";
 
 type Tx = Prisma.TransactionClient;
@@ -56,7 +56,8 @@ export function accessFor(wo: Pick<WorkOrderRecord, "requesterId" | "assigneeId"
   if (wo.assigneeId === actor.id) return "assignee";
   if (actor.vendorId && wo.vendorId === actor.vendorId && actor.roles.includes("VENDOR")) return "vendor";
   if (wo.requesterId === actor.id) return "requester";
-  if (actor.roles.includes("READONLY_MANAGER") || actor.roles.includes("AUDITOR")) return "auditor";
+  // Admins (and read-only managers) may view tickets in their scope without being able to change them.
+  if (actorCanAccessLevel(actor, "maint.view", { siteId: wo.siteId, buildingId: wo.buildingId }, ["full", "view"])) return "auditor";
   return null;
 }
 
@@ -363,7 +364,7 @@ export async function listWorkOrders(actor: Actor, filter: QueueFilter) {
   const isCoordinator = view.all || view.siteIds.length > 0 || view.buildingIds.length > 0;
   const scope: Prisma.WorkOrderWhereInput = isCoordinator
     ? (scopeWhere(view, { site: "siteId", building: "buildingId" }) as Prisma.WorkOrderWhereInput)
-    : actor.roles.includes("READONLY_MANAGER") || actor.roles.includes("AUDITOR")
+    : actorCanAccessLevel(actor, "maint.view", {}, ["full", "view"])
       ? (scopeWhere(dataScope(principalOf(actor), "maint.view"), { site: "siteId", building: "buildingId" }) as Prisma.WorkOrderWhereInput)
     : actor.vendorId && actor.roles.includes("VENDOR")
         ? { vendorId: actor.vendorId }
@@ -409,7 +410,7 @@ export async function listAssignees(db: Db = prisma) {
 
 export function describeStatus(status: WorkOrderStatus): string {
   const map: Record<WorkOrderStatus, string> = {
-    NEW: "New", TRIAGED: "Triaged", ASSIGNED: "Assigned", IN_PROGRESS: "In progress",
+    NEW: "New", TRIAGED: "Triaged", ASSIGNED: "Assigned", ACCEPTED: "Accepted", ON_HOLD: "On hold", VERIFIED: "Verified", IN_PROGRESS: "In progress",
     WAITING_STAFF: "Waiting for you", WAITING_PARTS: "Waiting for parts", WAITING_ACCESS: "Waiting for access",
     RESOLVED: "Resolved · please confirm", CLOSED: "Closed", REOPENED: "Reopened", CANCELLED: "Cancelled",
   };

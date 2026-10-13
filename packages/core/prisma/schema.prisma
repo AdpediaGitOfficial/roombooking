@@ -17,9 +17,15 @@ datasource db {
 // Organisation and accommodation hierarchy
 // ---------------------------------------------------------------------------
 
+// Lifecycle at every level of the structure (document section 7): Draft, Active,
+// Under maintenance / Blocked, Archived. INACTIVE is the older name for "switched off".
 enum RecordStatus {
   ACTIVE
   INACTIVE
+  DRAFT
+  MAINTENANCE
+  BLOCKED
+  ARCHIVED
 }
 
 model Organization {
@@ -40,19 +46,29 @@ model Organization {
 }
 
 model Site {
-  id             String       @id @default(cuid())
-  organizationId String
-  code           String
-  name           String
-  address        String?
-  timezone       String       @default("UTC")
+  id                 String        @id @default(cuid())
+  organizationId     String
+  code               String
+  name               String
+  address            String?
+  timezone           String        @default("UTC")
   // Accommodation office details shown to residents (SS-02).
-  contactPhone   String?
-  contactEmail   String?
-  helpNotes      String?
-  status         RecordStatus @default(ACTIVE)
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  contactPhone       String?
+  contactEmail       String?
+  helpNotes          String?
+  // Setup (document 7): property type code, map pin, contact, gender policy and default eligibility.
+  propertyType       String?
+  latitude           Float?
+  longitude          Float?
+  contactName        String?
+  genderPolicy       GenderPolicy?
+  defaultEligibility Json?
+  status             RecordStatus  @default(ACTIVE)
+  archivedAt         DateTime?
+  archivedById       String?
+  archiveReason      String?
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
 
   organization    Organization     @relation(fields: [organizationId], references: [id])
   buildings       Building[]
@@ -73,17 +89,24 @@ enum BuildingType {
 }
 
 model Building {
-  id        String       @id @default(cuid())
-  siteId    String
-  code      String
-  name      String
-  type      BuildingType @default(BUILDING)
-  address   String?
-  status    RecordStatus @default(ACTIVE)
-  createdAt DateTime     @default(now())
-  updatedAt DateTime     @updatedAt
+  id            String        @id @default(cuid())
+  siteId        String
+  code          String
+  name          String
+  type          BuildingType  @default(BUILDING)
+  address       String?
+  genderPolicy  GenderPolicy?
+  eligibility   Json?
+  status        RecordStatus  @default(ACTIVE)
+  archivedAt    DateTime?
+  archivedById  String?
+  archiveReason String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
 
   site            Site             @relation(fields: [siteId], references: [id])
+  floors          Floor[]
+  units           Unit[]
   rooms           Room[]
   roleAssignments RoleAssignment[]
   workOrders      WorkOrder[]
@@ -95,6 +118,9 @@ enum RoomStatus {
   ACTIVE
   BLOCKED
   INACTIVE
+  DRAFT
+  MAINTENANCE
+  ARCHIVED
 }
 
 enum GenderPolicy {
@@ -107,18 +133,32 @@ enum GenderPolicy {
 // is the number of non-retired beds; occupancy is derived per bed from
 // allocations (see src/modules/accommodation/occupancy.ts).
 model Room {
-  id           String       @id @default(cuid())
-  buildingId   String
-  code         String
-  type         String?
-  floor        String?
-  genderPolicy GenderPolicy @default(ANY)
-  status       RoomStatus   @default(ACTIVE)
-  blockReason  String?
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
+  id             String       @id @default(cuid())
+  buildingId     String
+  code           String
+  type           String?
+  floor          String?
+  floorId        String?
+  unitId         String?
+  genderPolicy   GenderPolicy @default(ANY)
+  // Rooms inherit gender policy and eligibility from the building and site unless overridden (document 7).
+  inheritsPolicy Boolean      @default(false)
+  eligibility    Json?
+  amenities      String[]
+  attachedBath   Boolean      @default(false)
+  areaSqm        Decimal?     @db.Decimal(8, 2)
+  monthlyCharge  Decimal?     @db.Decimal(10, 2)
+  status         RoomStatus   @default(ACTIVE)
+  blockReason    String?
+  archivedAt     DateTime?
+  archivedById   String?
+  archiveReason  String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
 
   building              Building               @relation(fields: [buildingId], references: [id])
+  floorRef              Floor?                 @relation(fields: [floorId], references: [id])
+  unit                  Unit?                  @relation(fields: [unitId], references: [id])
   beds                  Bed[]
   keys                  Key[]
   inventoryItems        InventoryItem[]
@@ -135,16 +175,33 @@ enum BedStatus {
   ACTIVE
   BLOCKED
   RETIRED
+  DRAFT
+  MAINTENANCE
+  ARCHIVED
+}
+
+// Whether a vacant bed can be handed over now (document section 7: Needs cleaning).
+enum BedReadiness {
+  READY
+  NEEDS_CLEANING
+  INSPECTING
 }
 
 model Bed {
-  id          String    @id @default(cuid())
-  roomId      String
-  code        String
-  status      BedStatus @default(ACTIVE)
-  blockReason String?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id                 String       @id @default(cuid())
+  roomId             String
+  code               String
+  bedType            String?
+  status             BedStatus    @default(ACTIVE)
+  blockReason        String?
+  blockedUntil       DateTime?
+  readiness          BedReadiness @default(READY)
+  readinessUpdatedAt DateTime?
+  archivedAt         DateTime?
+  archivedById       String?
+  archiveReason      String?
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
 
   room        Room         @relation(fields: [roomId], references: [id])
   allocations Allocation[]
@@ -173,6 +230,10 @@ model User {
   passwordHash          String?
   // Temporary passwords must be changed at first sign-in.
   mustChangePassword    Boolean    @default(false)
+  // Privacy consent captured at first sign-in (document section 9, DPDP Act 2023).
+  consentAcceptedAt     DateTime?
+  consentVersion        String?
+  languagePreference    String?
   passwordChangedAt     DateTime?
   failedLoginAttempts   Int        @default(0)
   lockedUntil           DateTime?
@@ -357,6 +418,24 @@ model ChangeRequest {
   @@index([organizationId, status])
 }
 
+enum StaffProfileType {
+  EMPLOYEE
+  CONTRACT_WORKER
+  GUEST
+  TRAINEE
+}
+
+enum VerificationStatus {
+  UNVERIFIED
+  VERIFIED
+}
+
+enum StaffSource {
+  HRMS
+  CSV
+  MANUAL
+}
+
 enum EmploymentStatus {
   ACTIVE
   ON_LEAVE
@@ -364,9 +443,9 @@ enum EmploymentStatus {
 }
 
 model StaffProfile {
-  id                    String           @id @default(cuid())
+  id                    String             @id @default(cuid())
   organizationId        String
-  userId                String?          @unique
+  userId                String?            @unique
   employeeId            String
   firstName             String
   lastName              String
@@ -374,12 +453,35 @@ model StaffProfile {
   // Self-editable by the resident (SS-03); employment fields are not.
   emergencyContactName  String?
   emergencyContactPhone String?
-  gender                GenderPolicy     @default(ANY)
+  gender                GenderPolicy       @default(ANY)
   department            String?
   company               String?
-  employmentStatus      EmploymentStatus @default(ACTIVE)
-  createdAt             DateTime         @default(now())
-  updatedAt             DateTime         @updatedAt
+  employmentStatus      EmploymentStatus   @default(ACTIVE)
+  // People directory (document 4): profile type, verification, entitlement and records an HRMS may own.
+  profileType           StaffProfileType   @default(EMPLOYEE)
+  verificationStatus    VerificationStatus @default(VERIFIED)
+  verifiedAt            DateTime?
+  verifiedById          String?
+  grade                 String?
+  designation           String?
+  idType                String?
+  idNumber              String?
+  nationality           String?
+  photoAttachmentId     String?
+  email                 String?
+  joiningDate           DateTime?          @db.Date
+  // Guests and trainees carry a fixed end date; contract workers may too.
+  profileEndDate        DateTime?          @db.Date
+  eligibilityCategory   String?
+  entitlement           Json?
+  source                StaffSource        @default(MANUAL)
+  hrmsId                String?
+  mergedIntoId          String?
+  archivedAt            DateTime?
+  archivedById          String?
+  archiveReason         String?
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
 
   organization          Organization           @relation(fields: [organizationId], references: [id])
   user                  User?                  @relation(fields: [userId], references: [id])
@@ -388,20 +490,44 @@ model StaffProfile {
   assetAssignments      AssetAssignment[]
   inventoryTransactions InventoryTransaction[]
   lostFoundClaims       LostFoundClaim[]
+  dependents            Dependent[]
+  joiners               Joiner[]
+  exitCases             ExitCase[]
+  waitlistEntries       WaitlistEntry[]
 
   @@unique([organizationId, employeeId])
 }
 
+enum VendorState {
+  PENDING_APPROVAL
+  ACTIVE
+  EXPIRED
+  SUSPENDED
+  TERMINATED
+}
+
 model Vendor {
-  id             String       @id @default(cuid())
-  organizationId String
-  name           String
-  contactName    String?
-  contactPhone   String?
-  contactEmail   String?
-  status         RecordStatus @default(ACTIVE)
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  id              String       @id @default(cuid())
+  organizationId  String
+  name            String
+  contactName     String?
+  contactPhone    String?
+  contactEmail    String?
+  status          RecordStatus @default(ACTIVE)
+  // Vendor lifecycle (document 8): Pending approval, Active, Expired, Suspended, Terminated.
+  state           VendorState  @default(ACTIVE)
+  contractStart   DateTime?    @db.Date
+  contractEnd     DateTime?    @db.Date
+  approvedById    String?
+  approvedAt      DateTime?
+  stateReason     String?
+  tradeCategories String[]
+  rating          Decimal?     @db.Decimal(3, 2)
+  archivedAt      DateTime?
+  archivedById    String?
+  archiveReason   String?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id])
   users        User[]
@@ -423,25 +549,39 @@ enum AllocationStatus {
   EXPIRED
 }
 
+enum StayType {
+  PERMANENT
+  TEMPORARY
+  VISITING
+  TRAINING
+  EMERGENCY
+}
+
 model Allocation {
-  id                   String           @id @default(cuid())
-  staffId              String
-  bedId                String
-  startDate            DateTime         @db.Date
-  endDate              DateTime?        @db.Date
-  status               AllocationStatus @default(DRAFT)
-  reason               String?
-  requestId            String?
-  checkedInAt          DateTime?
-  checkedOutAt         DateTime?
-  checklist            Json?
-  notes                String?
+  id                      String           @id @default(cuid())
+  staffId                 String
+  bedId                   String
+  startDate               DateTime         @db.Date
+  endDate                 DateTime?        @db.Date
+  status                  AllocationStatus @default(DRAFT)
+  reason                  String?
+  requestId               String?
+  checkedInAt             DateTime?
+  checkedOutAt            DateTime?
+  checklist               Json?
+  notes                   String?
+  stayType                StayType         @default(PERMANENT)
+  // Emergency check-in (document 6.1): provisional until an Accommodation Admin approves within 24 hours.
+  provisional             Boolean          @default(false)
+  provisionalApproveBy    DateTime?
+  provisionalApprovedAt   DateTime?
+  provisionalApprovedById String?
   // Set on the allocation created by a transfer; links old and new records
   // so movement history is traceable (ACM-07).
-  previousAllocationId String?
-  createdById          String?
-  createdAt            DateTime         @default(now())
-  updatedAt            DateTime         @updatedAt
+  previousAllocationId    String?
+  createdById             String?
+  createdAt               DateTime         @default(now())
+  updatedAt               DateTime         @updatedAt
 
   staff     StaffProfile @relation(fields: [staffId], references: [id])
   bed       Bed          @relation(fields: [bedId], references: [id])
@@ -657,6 +797,9 @@ enum WorkOrderStatus {
   NEW
   TRIAGED
   ASSIGNED
+  ACCEPTED
+  ON_HOLD
+  VERIFIED
   IN_PROGRESS
   WAITING_STAFF
   WAITING_PARTS
@@ -667,38 +810,78 @@ enum WorkOrderStatus {
   CANCELLED
 }
 
-model WorkOrder {
-  id               String            @id @default(cuid())
-  ticketNumber     String            @unique
-  siteId           String
-  buildingId       String?
-  roomId           String?
-  category         String
-  description      String
-  priority         WorkOrderPriority @default(MEDIUM)
-  status           WorkOrderStatus   @default(NEW)
-  requesterId      String
-  assigneeId       String?
-  vendorId         String?
-  preferredContact String?
-  locationNote     String?
-  slaDueAt         DateTime?
-  acknowledgedAt   DateTime?
-  startedAt        DateTime?
-  resolvedAt       DateTime?
-  closedAt         DateTime?
-  resolutionNote   String?
-  reopenCount      Int               @default(0)
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
+enum WorkOrderSource {
+  RESIDENT
+  OFFICER
+  SECURITY
+  INSPECTION
+  PREVENTIVE
+  COORDINATOR
+}
 
-  site      Site            @relation(fields: [siteId], references: [id])
-  building  Building?       @relation(fields: [buildingId], references: [id])
-  room      Room?           @relation(fields: [roomId], references: [id])
-  requester User            @relation("WorkOrderRequester", fields: [requesterId], references: [id])
-  assignee  User?           @relation("WorkOrderAssignee", fields: [assigneeId], references: [id])
-  vendor    Vendor?         @relation(fields: [vendorId], references: [id])
-  notes     WorkOrderNote[]
+enum CostApprovalStatus {
+  NONE
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model WorkOrder {
+  id                   String             @id @default(cuid())
+  ticketNumber         String             @unique
+  siteId               String
+  buildingId           String?
+  roomId               String?
+  category             String
+  description          String
+  priority             WorkOrderPriority  @default(MEDIUM)
+  status               WorkOrderStatus    @default(NEW)
+  requesterId          String
+  assigneeId           String?
+  vendorId             String?
+  preferredContact     String?
+  locationNote         String?
+  slaDueAt             DateTime?
+  acknowledgedAt       DateTime?
+  startedAt            DateTime?
+  resolvedAt           DateTime?
+  closedAt             DateTime?
+  resolutionNote       String?
+  reopenCount          Int                @default(0)
+  source               WorkOrderSource    @default(RESIDENT)
+  holdReason           String?
+  // Cost approval (document 6.2): within threshold the Coordinator approves, above it an Admin.
+  costEstimate         Decimal?           @db.Decimal(12, 2)
+  costActual           Decimal?           @db.Decimal(12, 2)
+  costApprovalStatus   CostApprovalStatus @default(NONE)
+  costApprovedById     String?
+  costApprovedAt       DateTime?
+  costNote             String?
+  laborHours           Decimal?           @db.Decimal(6, 2)
+  rootCause            String?
+  acceptedAt           DateTime?
+  verifiedAt           DateTime?
+  verifiedById         String?
+  rating               Int?
+  ratingNote           String?
+  autoCloseAt          DateTime?
+  needsPermit          Boolean            @default(false)
+  visitStart           DateTime?
+  visitEnd             DateTime?
+  quoteRef             String?
+  invoiceRef           String?
+  preventiveScheduleId String?
+  inspectionId         String?
+  blockedBedId         String?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+  site                 Site               @relation(fields: [siteId], references: [id])
+  building             Building?          @relation(fields: [buildingId], references: [id])
+  room                 Room?              @relation(fields: [roomId], references: [id])
+  requester            User               @relation("WorkOrderRequester", fields: [requesterId], references: [id])
+  assignee             User?              @relation("WorkOrderAssignee", fields: [assigneeId], references: [id])
+  vendor               Vendor?            @relation(fields: [vendorId], references: [id])
+  notes                WorkOrderNote[]
 
   @@index([status, siteId])
   @@index([assigneeId, status])
@@ -741,7 +924,14 @@ model Facility {
   openingHours     Json?
   bookingRules     Json?
   requiresApproval Boolean      @default(false)
+  // Who may book and what it costs (document 5.6).
+  eligibility      Json?
+  feePerHour       Decimal?     @db.Decimal(10, 2)
+  noShowLimit      Int?
   status           RecordStatus @default(ACTIVE)
+  archivedAt       DateTime?
+  archivedById     String?
+  archiveReason    String?
   createdAt        DateTime     @default(now())
   updatedAt        DateTime     @updatedAt
 
@@ -813,8 +1003,15 @@ model Key {
   roomId        String?
   facilityId    String?
   allowCopies   Boolean   @default(false)
+  // Sensitive keys (master, store, server room) need the Key supervisor set (document 5.5).
+  sensitive     Boolean   @default(false)
+  cabinet       String?
+  lockRef       String?
   status        KeyStatus @default(AVAILABLE)
   notes         String?
+  archivedAt    DateTime?
+  archivedById  String?
+  archiveReason String?
   // Set on the key that replaced a lost/damaged one (KEY-04).
   replacesKeyId String?
   createdAt     DateTime  @default(now())
@@ -899,6 +1096,11 @@ model InventoryItem {
   status           RecordStatus   @default(ACTIVE)
   notes            String?
   retiredAt        DateTime?
+  store            String?
+  unitValue        Decimal?       @db.Decimal(12, 2)
+  archivedAt       DateTime?
+  archivedById     String?
+  archiveReason    String?
   createdAt        DateTime       @default(now())
   updatedAt        DateTime       @updatedAt
 
@@ -1232,4 +1434,1184 @@ model AuditEvent {
 
   @@index([entityType, entityId])
   @@index([actorId, createdAt])
+}
+
+// ===========================================================================
+// Roles, Permissions & Module Map: additional data model
+// ===========================================================================
+
+// ---------------------------------------------------------------------------
+// Setup: floors, units, masters, checklist templates, house rules, SLAs, KPIs
+// ---------------------------------------------------------------------------
+
+model Floor {
+  id            String       @id @default(cuid())
+  buildingId    String
+  code          String
+  name          String
+  level         Int          @default(0)
+  status        RecordStatus @default(ACTIVE)
+  archivedAt    DateTime?
+  archivedById  String?
+  archiveReason String?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  building Building @relation(fields: [buildingId], references: [id])
+  units    Unit[]
+  rooms    Room[]
+
+  @@unique([buildingId, code])
+}
+
+// A flat or apartment: an optional level between floor and room.
+model Unit {
+  id            String       @id @default(cuid())
+  buildingId    String
+  floorId       String?
+  code          String
+  name          String
+  status        RecordStatus @default(ACTIVE)
+  archivedAt    DateTime?
+  archivedById  String?
+  archiveReason String?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  building Building @relation(fields: [buildingId], references: [id])
+  floor    Floor?   @relation(fields: [floorId], references: [id])
+  rooms    Room[]
+
+  @@unique([buildingId, code])
+}
+
+enum MasterKind {
+  PROPERTY_TYPE
+  ROOM_TYPE
+  BED_TYPE
+  AMENITY
+  ELIGIBILITY_CATEGORY
+  DEPARTMENT
+  GRADE
+  REQUEST_CATEGORY
+  MAINTENANCE_CATEGORY
+  INCIDENT_CATEGORY
+  STORE
+  GATE
+  KEY_CABINET
+  PATROL_CHECKPOINT
+  VISITOR_POLICY
+  HOLIDAY
+  CHARGE_CATEGORY
+}
+
+// One flexible master table (document 4, "Organization & masters"). `data` carries kind-specific
+// settings: property type levels, visitor policy hours, patrol checkpoint codes, holiday dates, and so on.
+model MasterItem {
+  id             String       @id @default(cuid())
+  organizationId String
+  siteId         String?
+  kind           MasterKind
+  code           String
+  name           String
+  data           Json?
+  sortOrder      Int          @default(0)
+  status         RecordStatus @default(ACTIVE)
+  archivedAt     DateTime?
+  archivedById   String?
+  archiveReason  String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([organizationId, kind, code, siteId])
+  @@index([organizationId, kind, status])
+}
+
+enum ChecklistKind {
+  CHECK_IN
+  CHECK_OUT
+  INSPECTION
+  CLEANING
+}
+
+model ChecklistTemplate {
+  id             String        @id @default(cuid())
+  organizationId String
+  kind           ChecklistKind
+  name           String
+  items          Json
+  version        Int           @default(1)
+  active         Boolean       @default(true)
+  siteId         String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@index([organizationId, kind, active])
+}
+
+// House rules and agreements, versioned; residents read and acknowledge the current version.
+model HouseRule {
+  id             String   @id @default(cuid())
+  organizationId String
+  siteId         String?
+  code           String
+  title          String
+  body           String
+  version        Int      @default(1)
+  isCurrent      Boolean  @default(true)
+  publishedAt    DateTime @default(now())
+  publishedById  String?
+  createdAt      DateTime @default(now())
+
+  acknowledgements HouseRuleAcknowledgement[]
+
+  @@unique([organizationId, code, version])
+}
+
+model HouseRuleAcknowledgement {
+  id             String   @id @default(cuid())
+  houseRuleId    String
+  userId         String
+  acknowledgedAt DateTime @default(now())
+
+  houseRule HouseRule @relation(fields: [houseRuleId], references: [id])
+
+  @@unique([houseRuleId, userId])
+}
+
+// Free-form per-organisation settings (cost thresholds, no-show limits, stock-adjustment limits, ...).
+model OrgSetting {
+  id             String   @id @default(cuid())
+  organizationId String
+  key            String
+  value          Json
+  updatedById    String?
+  updatedAt      DateTime @updatedAt
+
+  @@unique([organizationId, key])
+}
+
+// KPI dictionary (document 11): one definition per KPI, shown as a tooltip wherever it appears.
+model KpiDefinition {
+  id             String   @id @default(cuid())
+  organizationId String
+  key            String
+  name           String
+  formula        String
+  source         String
+  owner          String
+  unit           String   @default("count")
+  higherIsBetter Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  targets KpiTarget[]
+
+  @@unique([organizationId, key])
+}
+
+model KpiTarget {
+  id        String   @id @default(cuid())
+  kpiId     String
+  siteId    String?
+  target    Decimal  @db.Decimal(14, 4)
+  setById   String?
+  updatedAt DateTime @updatedAt
+
+  kpi KpiDefinition @relation(fields: [kpiId], references: [id])
+
+  @@unique([kpiId, siteId])
+}
+
+// ---------------------------------------------------------------------------
+// People: dependents, joiners, exits, waitlist
+// ---------------------------------------------------------------------------
+
+model Dependent {
+  id            String          @id @default(cuid())
+  staffId       String
+  name          String
+  relationship  String
+  dateOfBirth   DateTime?       @db.Date
+  idNumber      String?
+  status        DependentStatus @default(PENDING)
+  requestedById String?
+  verifiedById  String?
+  archivedAt    DateTime?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  staff StaffProfile @relation(fields: [staffId], references: [id])
+
+  @@index([staffId])
+}
+
+enum DependentStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+enum JoinerStatus {
+  EXPECTED
+  ALLOCATED
+  ARRIVED
+  CANCELLED
+}
+
+// Joiners and transferees (HRMS sync or raised by an Accommodation Admin): a bed is reserved with an arrival date.
+model Joiner {
+  id              String       @id @default(cuid())
+  staffId         String
+  siteId          String?
+  expectedArrival DateTime     @db.Date
+  stayType        StayType     @default(PERMANENT)
+  status          JoinerStatus @default(EXPECTED)
+  allocationId    String?
+  notes           String?
+  source          StaffSource  @default(MANUAL)
+  raisedById      String?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  staff StaffProfile @relation(fields: [staffId], references: [id])
+
+  @@index([status, expectedArrival])
+}
+
+enum ExitStatus {
+  OPEN
+  CHECKOUT_DUE
+  CLEARING
+  CLEARED
+  CANCELLED
+}
+
+// Exit case: HR trigger, checkout due date, then clearance of keys, assets and charges.
+model ExitCase {
+  id            String      @id @default(cuid())
+  staffId       String
+  triggeredById String?
+  source        StaffSource @default(MANUAL)
+  lastDay       DateTime    @db.Date
+  status        ExitStatus  @default(OPEN)
+  reason        String?
+  clearedAt     DateTime?
+  clearedById   String?
+  clearanceNote String?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  staff StaffProfile @relation(fields: [staffId], references: [id])
+
+  @@index([status, lastDay])
+}
+
+enum WaitlistStatus {
+  WAITING
+  OFFERED
+  ALLOCATED
+  CANCELLED
+}
+
+model WaitlistEntry {
+  id           String         @id @default(cuid())
+  staffId      String
+  siteId       String?
+  roomType     String?
+  neededFrom   DateTime       @db.Date
+  priority     Int            @default(0)
+  status       WaitlistStatus @default(WAITING)
+  notes        String?
+  offeredBedId String?
+  allocationId String?
+  createdById  String?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  staff StaffProfile @relation(fields: [staffId], references: [id])
+
+  @@index([status, neededFrom])
+}
+
+// A task created when a provisional (emergency) check-in is rejected: the resident must be moved.
+model MoveTask {
+  id            String         @id @default(cuid())
+  allocationId  String
+  reason        String
+  status        MoveTaskStatus @default(OPEN)
+  createdAt     DateTime       @default(now())
+  completedAt   DateTime?
+  completedById String?
+}
+
+enum MoveTaskStatus {
+  OPEN
+  DONE
+}
+
+// Shift log kept by the desk (Officer) and the gate (Security).
+model ShiftLog {
+  id        String    @id @default(cuid())
+  siteId    String?
+  userId    String
+  role      Role
+  startedAt DateTime  @default(now())
+  endedAt   DateTime?
+  summary   Json?
+  notes     String?
+
+  @@index([siteId, startedAt])
+}
+
+// ---------------------------------------------------------------------------
+// Housekeeping and inspections
+// ---------------------------------------------------------------------------
+
+enum CleaningStatus {
+  OPEN
+  IN_PROGRESS
+  DONE
+  SKIPPED
+}
+
+enum CleaningReason {
+  CHECKOUT
+  PERIODIC
+  ADHOC
+  INSPECTION
+}
+
+model CleaningTask {
+  id            String         @id @default(cuid())
+  siteId        String
+  roomId        String?
+  bedId         String?
+  reason        CleaningReason @default(CHECKOUT)
+  status        CleaningStatus @default(OPEN)
+  assignedToId  String?
+  dueAt         DateTime?
+  completedAt   DateTime?
+  completedById String?
+  notes         String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@index([siteId, status])
+}
+
+enum InspectionStatus {
+  SCHEDULED
+  DONE
+  ISSUES_FOUND
+  CANCELLED
+}
+
+model Inspection {
+  id            String           @id @default(cuid())
+  siteId        String
+  roomId        String
+  templateId    String?
+  scheduleId    String?
+  scheduledFor  DateTime         @db.Date
+  status        InspectionStatus @default(SCHEDULED)
+  performedById String?
+  performedAt   DateTime?
+  results       Json?
+  notes         String?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  @@index([siteId, status, scheduledFor])
+}
+
+model InspectionSchedule {
+  id            String   @id @default(cuid())
+  siteId        String
+  buildingId    String?
+  roomId        String?
+  templateId    String?
+  title         String
+  frequencyDays Int
+  nextDueAt     DateTime @db.Date
+  active        Boolean  @default(true)
+  createdById   String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+// ---------------------------------------------------------------------------
+// Maintenance: parts, permits, preventive schedules, vendors
+// ---------------------------------------------------------------------------
+
+model WorkOrderPart {
+  id           String   @id @default(cuid())
+  workOrderId  String
+  itemId       String?
+  name         String
+  quantity     Int      @default(1)
+  unitCost     Decimal? @db.Decimal(12, 2)
+  recordedById String
+  createdAt    DateTime @default(now())
+
+  @@index([workOrderId])
+}
+
+enum PermitStatus {
+  REQUESTED
+  APPROVED
+  REJECTED
+  CLOSED
+  EXPIRED
+}
+
+// Work permit for high-risk jobs: starting work is disabled until it is approved.
+model WorkPermit {
+  id            String       @id @default(cuid())
+  workOrderId   String
+  type          String
+  hazards       String?
+  controls      String?
+  status        PermitStatus @default(REQUESTED)
+  requestedById String
+  approvedById  String?
+  decidedAt     DateTime?
+  decisionNote  String?
+  validFrom     DateTime?
+  validTo       DateTime?
+  closedAt      DateTime?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  @@index([workOrderId, status])
+}
+
+model PreventiveSchedule {
+  id              String            @id @default(cuid())
+  organizationId  String
+  siteId          String
+  buildingId      String?
+  roomId          String?
+  title           String
+  category        String
+  priority        WorkOrderPriority @default(MEDIUM)
+  description     String?
+  frequencyDays   Int
+  nextDueAt       DateTime
+  assigneeId      String?
+  vendorId        String?
+  active          Boolean           @default(true)
+  lastGeneratedAt DateTime?
+  createdById     String?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  @@index([active, nextDueAt])
+}
+
+enum VendorDocumentKind {
+  TRADE_LICENCE
+  INSURANCE
+  CONTRACT
+  ID_VERIFICATION
+  OTHER
+}
+
+model VendorDocument {
+  id           String             @id @default(cuid())
+  vendorId     String
+  kind         VendorDocumentKind
+  reference    String?
+  issuedAt     DateTime?          @db.Date
+  expiresAt    DateTime?          @db.Date
+  attachmentId String?
+  verifiedAt   DateTime?
+  verifiedById String?
+  createdAt    DateTime           @default(now())
+
+  @@index([vendorId, expiresAt])
+}
+
+model VendorRate {
+  id        String   @id @default(cuid())
+  vendorId  String
+  category  String
+  unit      String   @default("hour")
+  rate      Decimal  @db.Decimal(12, 2)
+  currency  String   @default("AED")
+  validFrom DateTime @default(now()) @db.Date
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@index([vendorId, category])
+}
+
+enum ContractorWorkerStatus {
+  PENDING
+  VERIFIED
+  SUSPENDED
+  REMOVED
+}
+
+model ContractorWorker {
+  id             String                 @id @default(cuid())
+  vendorId       String
+  name           String
+  idType         String?
+  idNumber       String?
+  phone          String?
+  policeVerified Boolean                @default(false)
+  status         ContractorWorkerStatus @default(PENDING)
+  userId         String?
+  verifiedById   String?
+  verifiedAt     DateTime?
+  isSupervisor   Boolean                @default(false)
+  archivedAt     DateTime?
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+
+  @@index([vendorId, status])
+}
+
+enum ContractorVisitStatus {
+  SCHEDULED
+  PASS_ISSUED
+  CHECKED_IN
+  CHECKED_OUT
+  DENIED
+  CANCELLED
+}
+
+model ContractorVisit {
+  id             String                @id @default(cuid())
+  siteId         String
+  workOrderId    String?
+  vendorId       String
+  workerIds      String[]
+  scheduledStart DateTime
+  scheduledEnd   DateTime
+  status         ContractorVisitStatus @default(SCHEDULED)
+  passCode       String?
+  escortRequired Boolean               @default(false)
+  deniedReason   String?
+  checkedInAt    DateTime?
+  checkedInById  String?
+  checkedOutAt   DateTime?
+  checkedOutById String?
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+
+  @@index([siteId, status, scheduledStart])
+}
+
+// ---------------------------------------------------------------------------
+// Keys and inventory
+// ---------------------------------------------------------------------------
+
+enum KeyLossStatus {
+  REPORTED
+  APPROVED
+  REJECTED
+  LOCK_CHANGE_ORDERED
+  CLOSED
+}
+
+// Lost key: approval by the Key supervisor or Admin, then a lock-change work order and a replacement key.
+model KeyLossCase {
+  id               String        @id @default(cuid())
+  keyId            String
+  reportedById     String
+  note             String?
+  status           KeyLossStatus @default(REPORTED)
+  approvedById     String?
+  decidedAt        DateTime?
+  decisionNote     String?
+  workOrderId      String?
+  replacementKeyId String?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  @@index([keyId, status])
+}
+
+enum KeyAuditStatus {
+  IN_PROGRESS
+  COMPLETED
+}
+
+model KeyAudit {
+  id            String         @id @default(cuid())
+  siteId        String
+  startedById   String
+  status        KeyAuditStatus @default(IN_PROGRESS)
+  expected      Json
+  counted       Json?
+  variances     Json?
+  startedAt     DateTime       @default(now())
+  completedAt   DateTime?
+  completedById String?
+}
+
+enum WriteOffStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+// Stock write-off: recorded by the inventory supervisor, approved by an Admin (above the limit, a Super Admin).
+model InventoryWriteOff {
+  id              String         @id @default(cuid())
+  itemId          String
+  quantity        Int
+  value           Decimal        @db.Decimal(12, 2)
+  reason          String
+  status          WriteOffStatus @default(PENDING)
+  recordedById    String
+  decidedById     String?
+  decidedAt       DateTime?
+  decisionNote    String?
+  needsSuperAdmin Boolean        @default(false)
+  createdAt       DateTime       @default(now())
+
+  @@index([status])
+}
+
+// ---------------------------------------------------------------------------
+// Facilities: no-show strikes, closures, blocks, booking waitlist
+// ---------------------------------------------------------------------------
+
+model FacilityStrike {
+  id         String    @id @default(cuid())
+  userId     String
+  facilityId String?
+  bookingId  String?
+  active     Boolean   @default(true)
+  liftedById String?
+  liftedAt   DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([userId, active])
+}
+
+model FacilityClosure {
+  id          String    @id @default(cuid())
+  facilityId  String
+  startsAt    DateTime
+  endsAt      DateTime
+  reason      String
+  workOrderId String?
+  createdById String
+  createdAt   DateTime  @default(now())
+  cancelledAt DateTime?
+
+  @@index([facilityId, startsAt])
+}
+
+enum FacilityBlockType {
+  BLOCK
+  EVENT
+  RECURRING
+}
+
+model FacilityBlock {
+  id          String            @id @default(cuid())
+  facilityId  String
+  type        FacilityBlockType @default(BLOCK)
+  title       String
+  startsAt    DateTime
+  endsAt      DateTime
+  recurrence  Json?
+  createdById String
+  createdAt   DateTime          @default(now())
+  cancelledAt DateTime?
+
+  @@index([facilityId, startsAt])
+}
+
+enum BookingWaitStatus {
+  WAITING
+  OFFERED
+  CONFIRMED
+  EXPIRED
+  CANCELLED
+}
+
+model BookingWaitlist {
+  id         String            @id @default(cuid())
+  facilityId String
+  userId     String
+  startsAt   DateTime
+  endsAt     DateTime
+  headcount  Int               @default(1)
+  status     BookingWaitStatus @default(WAITING)
+  offeredAt  DateTime?
+  bookingId  String?
+  createdAt  DateTime          @default(now())
+
+  @@index([facilityId, status, startsAt])
+}
+
+// ---------------------------------------------------------------------------
+// Security and visitors
+// ---------------------------------------------------------------------------
+
+enum VisitorKind {
+  DAY
+  OVERNIGHT
+  RESTRICTED_AREA
+  WALK_IN
+}
+
+enum VisitorStatus {
+  PRE_REGISTERED
+  PENDING_APPROVAL
+  APPROVED
+  WALK_IN_PENDING
+  CHECKED_IN
+  CHECKED_OUT
+  DENIED
+  CANCELLED
+}
+
+model Visitor {
+  id             String        @id @default(cuid())
+  siteId         String
+  kind           VisitorKind   @default(DAY)
+  status         VisitorStatus @default(PRE_REGISTERED)
+  name           String
+  phone          String?
+  idType         String?
+  idNumber       String?
+  company        String?
+  purpose        String?
+  hostStaffId    String?
+  hostUserId     String?
+  registeredById String?
+  expectedAt     DateTime?
+  expectedOutAt  DateTime?
+  nights         Int?
+  restrictedArea String?
+  vehicle        String?
+  gate           String?
+  passCode       String?
+  approvedById   String?
+  decidedAt      DateTime?
+  deniedReason   String?
+  checkedInAt    DateTime?
+  checkedInById  String?
+  checkedOutAt   DateTime?
+  checkedOutById String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@index([siteId, status, expectedAt])
+}
+
+enum IncidentSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum IncidentStatus {
+  REPORTED
+  UNDER_REVIEW
+  ACTION_TAKEN
+  CLOSED
+  ESCALATED
+}
+
+model Incident {
+  id              String           @id @default(cuid())
+  siteId          String
+  reference       String           @unique
+  category        String
+  severity        IncidentSeverity @default(MEDIUM)
+  status          IncidentStatus   @default(REPORTED)
+  description     String
+  location        String?
+  occurredAt      DateTime         @default(now())
+  reportedById    String
+  involvedStaffId String?
+  actionTaken     String?
+  closedById      String?
+  closedAt        DateTime?
+  closureNote     String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  updates IncidentUpdate[]
+
+  @@index([siteId, status])
+}
+
+model IncidentUpdate {
+  id         String          @id @default(cuid())
+  incidentId String
+  authorId   String
+  status     IncidentStatus?
+  note       String
+  createdAt  DateTime        @default(now())
+
+  incident Incident @relation(fields: [incidentId], references: [id])
+}
+
+enum ParcelStatus {
+  RECEIVED
+  NOTIFIED
+  COLLECTED
+  RETURNED
+}
+
+model Parcel {
+  id              String       @id @default(cuid())
+  siteId          String
+  staffId         String?
+  recipientName   String?
+  carrier         String?
+  reference       String?
+  receivedAt      DateTime     @default(now())
+  receivedById    String
+  notifiedAt      DateTime?
+  collectedAt     DateTime?
+  collectedByName String?
+  collectedById   String?
+  status          ParcelStatus @default(RECEIVED)
+  notes           String?
+
+  @@index([siteId, status])
+}
+
+enum SosStatus {
+  ACTIVE
+  ACKNOWLEDGED
+  RESOLVED
+  FALSE_ALARM
+}
+
+model SosAlert {
+  id               String    @id @default(cuid())
+  siteId           String
+  raisedById       String
+  raisedByRole     Role?
+  location         String?
+  note             String?
+  status           SosStatus @default(ACTIVE)
+  acknowledgedById String?
+  acknowledgedAt   DateTime?
+  resolvedById     String?
+  resolvedAt       DateTime?
+  resolutionNote   String?
+  createdAt        DateTime  @default(now())
+
+  @@index([siteId, status])
+}
+
+model PatrolRound {
+  id          String    @id @default(cuid())
+  siteId      String
+  userId      String
+  startedAt   DateTime  @default(now())
+  completedAt DateTime?
+  notes       String?
+
+  scans PatrolScan[]
+
+  @@index([siteId, startedAt])
+}
+
+model PatrolScan {
+  id             String   @id @default(cuid())
+  roundId        String
+  checkpointCode String
+  scannedAt      DateTime @default(now())
+  note           String?
+
+  round PatrolRound @relation(fields: [roundId], references: [id])
+}
+
+model RestrictedEntry {
+  id                   String    @id @default(cuid())
+  siteId               String?
+  name                 String
+  idNumber             String?
+  reason               String
+  addedById            String
+  addedAt              DateTime  @default(now())
+  removalRequestedById String?
+  removalRequestedAt   DateTime?
+  removedAt            DateTime?
+  removedById          String?
+  removalNote          String?
+
+  @@index([siteId, removedAt])
+}
+
+// ---------------------------------------------------------------------------
+// Charges (finance export)
+// ---------------------------------------------------------------------------
+
+enum RateKind {
+  ROOM_RENT
+  FACILITY_FEE
+  DAMAGE
+  OTHER
+}
+
+model Rate {
+  id             String   @id @default(cuid())
+  organizationId String
+  siteId         String?
+  kind           RateKind
+  code           String
+  name           String
+  amount         Decimal  @db.Decimal(12, 2)
+  unit           String   @default("each")
+  currency       String   @default("AED")
+  effectiveFrom  DateTime @default(now()) @db.Date
+  active         Boolean  @default(true)
+  createdById    String?
+  createdAt      DateTime @default(now())
+
+  @@unique([organizationId, kind, code, siteId])
+}
+
+enum ChargeStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+  EXPORTED
+  WAIVED
+}
+
+model Charge {
+  id            String       @id @default(cuid())
+  staffId       String
+  siteId        String?
+  kind          RateKind
+  description   String
+  quantity      Decimal      @default(1) @db.Decimal(10, 2)
+  amount        Decimal      @db.Decimal(12, 2)
+  currency      String       @default("AED")
+  status        ChargeStatus @default(PENDING_APPROVAL)
+  raisedById    String
+  decidedById   String?
+  decidedAt     DateTime?
+  decisionNote  String?
+  sourceType    String?
+  sourceId      String?
+  exportBatchId String?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  @@index([staffId, status])
+  @@index([status])
+}
+
+model ChargeExportBatch {
+  id             String   @id @default(cuid())
+  organizationId String
+  createdById    String
+  period         String
+  rowCount       Int
+  total          Decimal  @db.Decimal(14, 2)
+  createdAt      DateTime @default(now())
+}
+
+// ---------------------------------------------------------------------------
+// Communication, reports, integrations, retention
+// ---------------------------------------------------------------------------
+
+model NotificationTemplateOverride {
+  id             String              @id @default(cuid())
+  organizationId String
+  event          String
+  channel        NotificationChannel
+  subject        String?
+  body           String?
+  enabled        Boolean             @default(true)
+  updatedById    String?
+  updatedAt      DateTime            @updatedAt
+
+  @@unique([organizationId, event, channel])
+}
+
+enum ScheduleFrequency {
+  DAILY
+  WEEKLY
+  MONTHLY
+}
+
+// A report a user wants delivered on a schedule (document 11), sent only to roles permitted to see it.
+model ReportSubscription {
+  id        String            @id @default(cuid())
+  userId    String
+  report    String
+  filters   Json?
+  frequency ScheduleFrequency @default(WEEKLY)
+  nextRunAt DateTime
+  lastRunAt DateTime?
+  active    Boolean           @default(true)
+  createdAt DateTime          @default(now())
+
+  @@index([active, nextRunAt])
+}
+
+enum AlertComparison {
+  ABOVE
+  BELOW
+}
+
+model ReportAlert {
+  id              String          @id @default(cuid())
+  userId          String
+  kpiKey          String
+  comparison      AlertComparison
+  threshold       Decimal         @db.Decimal(14, 4)
+  siteId          String?
+  active          Boolean         @default(true)
+  lastTriggeredAt DateTime?
+  createdAt       DateTime        @default(now())
+
+  @@index([active])
+}
+
+enum IntegrationKind {
+  HRMS
+  SSO
+  EMAIL
+  SMS
+  WHATSAPP
+}
+
+model IntegrationConfig {
+  id             String          @id @default(cuid())
+  organizationId String
+  kind           IntegrationKind
+  name           String
+  enabled        Boolean         @default(false)
+  settings       Json?
+  lastSyncAt     DateTime?
+  lastStatus     String?
+  lastError      String?
+  updatedAt      DateTime        @updatedAt
+
+  runs SyncRun[]
+
+  @@unique([organizationId, kind])
+}
+
+model SyncRun {
+  id            String    @id @default(cuid())
+  integrationId String
+  startedAt     DateTime  @default(now())
+  finishedAt    DateTime?
+  status        String    @default("RUNNING")
+  created       Int       @default(0)
+  updated       Int       @default(0)
+  failed        Int       @default(0)
+  errors        Json?
+  trigger       String    @default("manual")
+
+  integration IntegrationConfig @relation(fields: [integrationId], references: [id])
+
+  @@index([integrationId, startedAt])
+}
+
+model ApiKey {
+  id             String    @id @default(cuid())
+  organizationId String
+  name           String
+  prefix         String
+  tokenHash      String    @unique
+  scopes         String[]
+  expiresAt      DateTime?
+  revokedAt      DateTime?
+  lastUsedAt     DateTime?
+  createdById    String
+  createdAt      DateTime  @default(now())
+}
+
+model Webhook {
+  id             String    @id @default(cuid())
+  organizationId String
+  url            String
+  events         String[]
+  secret         String
+  active         Boolean   @default(true)
+  failureCount   Int       @default(0)
+  lastDeliveryAt DateTime?
+  lastStatus     Int?
+  createdById    String
+  createdAt      DateTime  @default(now())
+
+  deliveries WebhookDelivery[]
+}
+
+model WebhookDelivery {
+  id            String    @id @default(cuid())
+  webhookId     String
+  event         String
+  payload       Json
+  status        Int?
+  error         String?
+  attempts      Int       @default(0)
+  nextAttemptAt DateTime?
+  deliveredAt   DateTime?
+  createdAt     DateTime  @default(now())
+
+  webhook Webhook @relation(fields: [webhookId], references: [id])
+
+  @@index([deliveredAt, nextAttemptAt])
+}
+
+enum RetentionAction {
+  ARCHIVE
+  ANONYMISE
+  DELETE
+}
+
+model RetentionPolicy {
+  id             String          @id @default(cuid())
+  organizationId String
+  recordType     String
+  retainDays     Int
+  action         RetentionAction @default(ARCHIVE)
+  active         Boolean         @default(true)
+  updatedAt      DateTime        @updatedAt
+
+  @@unique([organizationId, recordType])
+}
+
+enum DataRequestKind {
+  ACCESS
+  CORRECTION
+  ERASURE
+}
+
+enum DataRequestStatus {
+  REQUESTED
+  COMPLIANCE_APPROVED
+  REJECTED
+  COMPLETED
+}
+
+// Data-subject requests (DPDP Act 2023): residents view their data and ask for correction or erasure;
+// Compliance approves, the Super Admin executes.
+model DataRequest {
+  id            String            @id @default(cuid())
+  userId        String
+  kind          DataRequestKind
+  detail        String?
+  status        DataRequestStatus @default(REQUESTED)
+  decidedById   String?
+  decidedAt     DateTime?
+  decisionNote  String?
+  completedById String?
+  completedAt   DateTime?
+  createdAt     DateTime          @default(now())
+
+  @@index([status])
 }

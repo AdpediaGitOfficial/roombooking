@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import type { AllocationStatus } from "@prisma/client";
-import { requireRole } from "@/lib/auth/authorize";
+import { requireRole, userCan } from "@/lib/auth/authorize";
 import { REPORT_VIEW_ROLES } from "@sam/core/modules/reports/access";
 import { DEFINITIONS, filterOptions, movementReport, parseRange, scopeFor } from "@sam/core/modules/reports/suite";
 import { Definitions, ReportFilters, Stat, qs, table, tbody, td, th, thead, wrap } from "@/modules/reports/components/report-filters";
@@ -21,7 +21,7 @@ async function Content({ searchParams }: { searchParams: Search }) {
   const query = qs({ from: range.from, to: range.to, siteId: f.siteId, buildingId: f.buildingId, status, q: f.q });
   return (
     <>
-      <ReportFilters action="/reports/movements" range={range} sites={options.sites} values={f} csvHref={`/api/reports/movements.csv?${query}`} statuses={STATUSES.map((s) => [s, s.toLowerCase().replace("_", " ")])} search="Employee ID or name" />
+      <ReportFilters action="/reports/movements" range={range} sites={options.sites} values={f} csvHref={userCan(user, "rep.export") ? `/api/reports/movements.csv?${query}` : null} statuses={STATUSES.map((s) => [s, s.toLowerCase().replace("_", " ")])} search="Employee ID or name" />
       <dl className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-5">
         <Stat label="Allocations" value={r.summary.allocations} note="overlapping the range" /><Stat label="Arrivals" value={r.summary.arrivals} /><Stat label="Departures" value={r.summary.departures} /><Stat label="Transfers" value={r.summary.transfers} /><Stat label="Cancelled" value={r.summary.cancelled} />
       </dl>

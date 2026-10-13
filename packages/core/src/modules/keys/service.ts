@@ -2,6 +2,7 @@
 // database level; a key can have one open issue at a time.
 import type { KeyStatus, Prisma, PrismaClient } from "@prisma/client";
 import { prisma } from "../../lib/db";
+import { siteWhere, type SiteScope } from "../../lib/permissions/scope";
 import { recordAudit } from "../../lib/audit";
 import { enqueueNotification } from "../../lib/notifications";
 import { KeyError } from "./errors";
@@ -261,14 +262,14 @@ export async function retireKey(input: ExceptionInput) {
 
 export type KeyFilter = "all" | "available" | "issued" | "overdue" | "exceptions" | "retired";
 
-export async function listKeys(filter: KeyFilter, siteId?: string | null, now: Date = new Date()) {
+export async function listKeys(filter: KeyFilter, siteId?: SiteScope, now: Date = new Date()) {
   const byStatus: Prisma.KeyWhereInput =
     filter === "available" ? { status: "AVAILABLE" }
     : filter === "issued" || filter === "overdue" ? { status: { in: ["ISSUED", "LOST"] }, transactions: { some: { type: "ISSUE", returnedAt: null } } }
     : filter === "exceptions" ? { status: { in: ["LOST", "DAMAGED", "UNDER_REPAIR"] } }
     : filter === "retired" ? { status: "RETIRED" }
     : { status: { not: "RETIRED" } };
-  const keys = await prisma.key.findMany({ where: { ...byStatus, ...(siteId ? { siteId } : {}) }, include: keyInclude, orderBy: [{ site: { code: "asc" } }, { code: "asc" }] });
+  const keys = await prisma.key.findMany({ where: { ...byStatus, ...siteWhere(siteId) }, include: keyInclude, orderBy: [{ site: { code: "asc" } }, { code: "asc" }] });
   const rows = keys.map((key) => ({ key, issue: openIssue(key) }));
   return filter === "overdue" ? rows.filter((r) => r.issue && isOverdue(r.issue, now)) : rows;
 }
@@ -288,7 +289,7 @@ export async function keysForRoom(roomId: string, db: Db = prisma) {
   return keys.map((key) => ({ key, issue: openIssue(key) }));
 }
 
-export async function keySummary(siteId?: string | null, now: Date = new Date()) {
+export async function keySummary(siteId?: SiteScope, now: Date = new Date()) {
   const all = await listKeys("all", siteId, now);
   const issued = all.filter((r) => r.issue);
   return {

@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { hasRole, requireRole } from "@/lib/auth/authorize";
+import { sitesFor } from "@/lib/auth/scope";
 import { LOST_FOUND_OPERATE_ROLES, LOST_FOUND_VIEW_ROLES } from "@sam/core/modules/lost-found/access";
 import { CATEGORIES, ITEM_FILTERS, RETENTION_DAYS, listItems, lostFoundSummary, type ItemFilter } from "@sam/core/modules/lost-found/service";
 import { registerOptions } from "@/modules/lost-found/context";
@@ -16,7 +17,8 @@ async function Register({ searchParams }: { searchParams: Search }) {
   const { filter: raw, q } = await searchParams;
   const filter = (ITEM_FILTERS.some(([f]) => f === raw) ? raw : "open") as ItemFilter;
   const now = new Date();
-  const [items, summary, options] = await Promise.all([listItems({ filter, q: q || null, now }), lostFoundSummary(null, now), canOperate ? registerOptions() : null]);
+  const scope = await sitesFor(user, "lf.operate");
+  const [items, summary, options] = await Promise.all([listItems({ filter, q: q || null, now, siteId: scope }), lostFoundSummary(scope, now), canOperate ? registerOptions() : null]);
   return (
     <>
       <dl className="grid grid-cols-2 gap-3 sm:grid-cols-5">

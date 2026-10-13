@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import type { WorkOrderStatus } from "@prisma/client";
-import { requireRole } from "@/lib/auth/authorize";
+import { requireRole, userCan } from "@/lib/auth/authorize";
 import { REPORT_VIEW_ROLES } from "@sam/core/modules/reports/access";
 import { DEFINITIONS, filterOptions, maintenanceReport, parseRange, scopeFor } from "@sam/core/modules/reports/suite";
 import { Definitions, ReportFilters, Stat, qs, table, tbody, td, th, thead, wrap } from "@/modules/reports/components/report-filters";
@@ -23,7 +23,7 @@ async function Content({ searchParams }: { searchParams: Search }) {
   const open = r.backlogByStatus.reduce((s, x) => s + x.count, 0);
   return (
     <>
-      <ReportFilters action="/reports/maintenance" range={range} sites={options.sites} values={f} csvHref={`/api/reports/maintenance.csv?${query}`} statuses={STATUSES.map((s) => [s, low(s)])} categories={options.categories} />
+      <ReportFilters action="/reports/maintenance" range={range} sites={options.sites} values={f} csvHref={userCan(user, "rep.export") ? `/api/reports/maintenance.csv?${query}` : null} statuses={STATUSES.map((s) => [s, low(s)])} categories={options.categories} />
       <dl className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-5">
         <Stat label="Open now" value={open} /><Stat label="Overdue" value={r.overdue} note="past SLA" /><Stat label="Resolved in range" value={r.resolution.resolved} /><Stat label="Median hours" value={r.resolution.medianHours ?? "—"} note={r.resolution.meanHours != null ? `mean ${r.resolution.meanHours}` : undefined} /><Stat label="SLA met" value={r.resolution.slaMetPercent != null ? `${r.resolution.slaMetPercent}%` : "—"} note={`${r.resolution.slaMet} of ${r.resolution.resolved}`} />
       </dl>

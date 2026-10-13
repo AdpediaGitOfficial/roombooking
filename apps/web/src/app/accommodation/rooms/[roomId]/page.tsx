@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { canSeeSite } from "@/lib/auth/scope";
 import { hasRole, requireRole } from "@/lib/auth/authorize";
 import { ACCOMMODATION_MANAGE_ROLES, ACCOMMODATION_VIEW_ROLES } from "@sam/core/modules/accommodation/access";
 import { ALLOCATION_OPERATE_ROLES } from "@sam/core/modules/allocations/access";
@@ -16,6 +17,7 @@ async function RoomView({ params }: { params: Promise<{ roomId: string }> }) {
   const canOperate = hasRole(user, ...ALLOCATION_OPERATE_ROLES);
   const data = await getRoomOccupancy(roomId);
   if (!data) notFound();
+  if (!(await canSeeSite(user, "accom.view", data.room.building.siteId))) notFound();
   const { room, today, beds, summary } = data;
 
   return (

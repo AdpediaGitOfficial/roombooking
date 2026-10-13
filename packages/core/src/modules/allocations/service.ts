@@ -452,7 +452,7 @@ export async function getAllocation(id: string) {
 
 export type AllocationListFilter = "active" | "upcoming" | "history" | "all";
 
-export async function listAllocations(filter: AllocationListFilter, staffId?: string | null) {
+export async function listAllocations(filter: AllocationListFilter, staffId?: string | null, siteIds?: string[] | null) {
   const byStatus: Prisma.AllocationWhereInput =
     filter === "active"
       ? { status: "CHECKED_IN" }
@@ -461,7 +461,7 @@ export async function listAllocations(filter: AllocationListFilter, staffId?: st
         : filter === "history"
           ? { status: { in: ["CHECKED_OUT", "CANCELLED", "REJECTED", "EXPIRED"] } }
           : {};
-  const where: Prisma.AllocationWhereInput = staffId ? { ...byStatus, staffId } : byStatus;
+  const where: Prisma.AllocationWhereInput = { ...byStatus, ...(staffId ? { staffId } : {}), ...(siteIds ? { bed: { room: { building: { siteId: { in: siteIds } } } } } : {}) };
   return prisma.allocation.findMany({
     where,
     include: { staff: true, bed: { include: bedWithLocation } },

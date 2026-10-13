@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import Link from "next/link";
-import { requireRole } from "@/lib/auth/authorize";
+import { requireRole, userCan } from "@/lib/auth/authorize";
 import { REPORT_VIEW_ROLES } from "@sam/core/modules/reports/access";
 import { DEFINITIONS, facilityReport, filterOptions, parseRange, scopeFor } from "@sam/core/modules/reports/suite";
 import { Definitions, ReportFilters, Stat, qs, table, tbody, td, th, thead, wrap } from "@/modules/reports/components/report-filters";
@@ -20,7 +20,7 @@ async function Content({ searchParams }: { searchParams: Search }) {
   const util = rows.filter((r) => r.utilisation !== null);
   return (
     <>
-      <ReportFilters action="/reports/facilities" range={range} sites={options.sites.map((s) => ({ ...s, buildings: [] }))} values={f} csvHref={`/api/reports/facilities.csv?${query}`} facilities={options.facilities} />
+      <ReportFilters action="/reports/facilities" range={range} sites={options.sites.map((s) => ({ ...s, buildings: [] }))} values={f} csvHref={userCan(user, "rep.export") ? `/api/reports/facilities.csv?${query}` : null} facilities={options.facilities} />
       <dl className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-5">
         <Stat label="Bookings" value={sum("bookings")} /><Stat label="Attended" value={sum("attended")} /><Stat label="No-shows" value={sum("noShows")} /><Stat label="Cancelled" value={sum("cancelled")} /><Stat label="Utilisation" value={util.length ? `${Math.round(util.reduce((s, r) => s + (r.utilisation ?? 0), 0) / util.length)}%` : "—"} note="average over facilities" />
       </dl>

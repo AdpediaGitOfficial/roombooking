@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { hasRole, requireRole } from "@/lib/auth/authorize";
+import { guardScope } from "@/lib/auth/guards";
 import { ALLOCATION_ADMIN_ROLES, ALLOCATION_OPERATE_ROLES } from "@sam/core/modules/allocations/access";
 import { AllocationError } from "@sam/core/modules/allocations/errors";
 import { RequestError } from "@sam/core/modules/requests/errors";
@@ -31,6 +32,7 @@ async function run<T>(fn: () => Promise<T>): Promise<{ ok: true; value: T } | { 
 
 export async function allocateAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const user = await requireRole(ALLOCATION_OPERATE_ROLES);
+  await guardScope(user, "accom.view", formData, [["allocationId", "allocation"], ["bedId", "bed"], ["toBedId", "bed"]]);
   const result = await run(() =>
     allocate({
       staffId: str(formData, "staffId"),
@@ -48,6 +50,7 @@ export async function allocateAction(_prev: ActionState, formData: FormData): Pr
 
 export async function checkInAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const user = await requireRole(ALLOCATION_OPERATE_ROLES);
+  await guardScope(user, "accom.view", formData, [["allocationId", "allocation"], ["bedId", "bed"], ["toBedId", "bed"]]);
   const allocationId = str(formData, "allocationId");
   const result = await run(() => checkIn({ allocationId, actorId: user.id, notes: str(formData, "notes") || null }));
   if (!result.ok) return { error: result.error };
@@ -57,6 +60,7 @@ export async function checkInAction(_prev: ActionState, formData: FormData): Pro
 
 export async function checkOutAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const user = await requireRole(ALLOCATION_OPERATE_ROLES);
+  await guardScope(user, "accom.view", formData, [["allocationId", "allocation"], ["bedId", "bed"], ["toBedId", "bed"]]);
   const allocationId = str(formData, "allocationId");
   const result = await run(() =>
     checkOut({
@@ -74,6 +78,7 @@ export async function checkOutAction(_prev: ActionState, formData: FormData): Pr
 
 export async function cancelAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const user = await requireRole(ALLOCATION_ADMIN_ROLES);
+  await guardScope(user, "accom.view", formData, [["allocationId", "allocation"], ["bedId", "bed"], ["toBedId", "bed"]]);
   const allocationId = str(formData, "allocationId");
   const result = await run(() => cancel({ allocationId, actorId: user.id, reason: str(formData, "reason") }));
   if (!result.ok) return { error: result.error };
@@ -83,6 +88,7 @@ export async function cancelAction(_prev: ActionState, formData: FormData): Prom
 
 export async function transferAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const user = await requireRole(ALLOCATION_OPERATE_ROLES);
+  await guardScope(user, "accom.view", formData, [["allocationId", "allocation"], ["bedId", "bed"], ["toBedId", "bed"]]);
   const allocationId = str(formData, "allocationId");
   const result = await run(() =>
     transfer({
