@@ -597,6 +597,21 @@ Demo accounts (password `ChangeMe123!`): `admin@`, `officer@`, `staff@`,
 
 ---
 
+## 11a. Roles, permissions and module map (implemented)
+
+The platform follows "Staff Accommodation Platform – Roles, Permissions & Module Map". The delivered scope, by phase:
+
+1. **Permission engine** – one matrix (`lib/permissions/matrix.ts`) of modules × ten roles with default/grantable/locked/view/own cells, named capability sets, per-user and per-role grants, maker-checker for sensitive changes (including retention), username login.
+2. **Role homes and privacy** – per-role dashboards and navigation, masked personal data, watermarked exports, soft delete and a 30-day archive with restore.
+3. **People and stay lifecycle** – staff directory, verification, joiners/exits, floors and units, emergency (provisional) check-in, extensions, swaps, bulk allocation, accommodation waitlist.
+4. **Maintenance, keys, inventory** – triage board, cost approvals, permits, preventive plans, vendors, key loss and audit, stock write-offs.
+5. **Security, housekeeping, charges** – visitor approval and gate flow, patrol, restricted list, SOS; housekeeping rounds; charges with vendor recovery.
+6. **Reporting and governance** – report layers L1–L4, KPI dictionary with targets, scheduled reports, signed webhooks and API keys, retention policies, DPDP consent and data requests, audit context.
+7. **Approval routing** – steps scoped to the requester's or target site, a different approver per step, Super Admin stand-in; inter-site transfer, extension (within/beyond policy) and eligibility-exception request types.
+8. **Facilities** – closures, event blocks, recurring reservations, eligibility rules, fees, no-show strikes with lift, booking waitlist with timed offers (`sweepWaitlist`), who-booked view.
+
+Daily sweeps (`modules/jobs/daily.ts`) include provisional check-ins, profiles, joiners, exits, work-order auto-close, preventive, vendors, visitors, inspections, scheduled reports, alerts, retention, webhooks, bookings, requests and the facility waitlist.
+
 ## 12. Known gaps
 
 From the README and code review:
