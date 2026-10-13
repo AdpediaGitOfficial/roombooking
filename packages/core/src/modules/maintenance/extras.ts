@@ -371,7 +371,7 @@ async function vendorTransition(actor: ActorLike, vendorId: string, to: "ACTIVE"
     const open = await prisma.workOrder.count({ where: { vendorId, status: { notIn: ["CLOSED", "CANCELLED", "RESOLVED", "VERIFIED"] } } });
     if (open) throw new MaintenanceError("INVALID_TRANSITION", `${open} open work order${open === 1 ? " is" : "s are"} still assigned to this vendor: reassign or close them first.`);
   }
-  return prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     const updated = await tx.vendor.update({ where: { id: vendorId }, data: { state: to, stateReason: reason?.trim() || null, ...(to === "ACTIVE" ? { approvedById: actor.id, approvedAt: new Date(), status: "ACTIVE" } : {}), ...(to === "TERMINATED" ? { status: "INACTIVE" } : {}) } });
     if (to !== "ACTIVE") {
       // Access ends with the relationship: suspend the vendor's workers and cancel visits not yet started.
@@ -381,6 +381,9 @@ async function vendorTransition(actor: ActorLike, vendorId: string, to: "ACTIVE"
     await recordAudit({ actorId: actor.id, action: `VENDOR_${to === "ACTIVE" ? "APPROVED" : to}`, entityType: "Vendor", entityId: vendorId, after: { reason: reason ?? null } }, tx);
     return updated;
   });
+  // Contractors already inside when access is withdrawn raise a Security alert (document 11).
+  if (to !== "ACTIVE") { const { contractorsInsideAlert } = await import("../security/service"); await contractorsInsideAlert(vendorId); }
+  return result;
 }
 export const approveVendor = (actor: ActorLike, vendorId: string) => vendorTransition(actor, vendorId, "ACTIVE", null);
 export const suspendVendor = (actor: ActorLike, vendorId: string, reason: string) => vendorTransition(actor, vendorId, "SUSPENDED", reason);

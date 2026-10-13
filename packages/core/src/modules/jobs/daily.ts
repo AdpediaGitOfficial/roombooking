@@ -6,6 +6,8 @@ import { sweepExits, sweepJoiners } from "../people/lifecycle";
 import { runPreventive, sweepVendors, sweepWorkOrders } from "../maintenance/extras";
 import { sweepBookings } from "../facilities/service";
 import { sweepRequests } from "../requests/service";
+import { sweepVisitors } from "../security/service";
+import { runInspectionSchedules } from "../housekeeping/service";
 
 export type SweepResult = Record<string, unknown>;
 const SWEEPS: Array<[string, (now: Date) => Promise<unknown>]> = [
@@ -16,6 +18,8 @@ const SWEEPS: Array<[string, (now: Date) => Promise<unknown>]> = [
   ["workOrdersAutoClosed", (now) => sweepWorkOrders(now)],
   ["preventiveRaised", (now) => runPreventive(now)],
   ["vendors", (now) => sweepVendors(now)],
+  ["visitors", (now) => sweepVisitors(now)],
+  ["inspectionsScheduled", (now) => runInspectionSchedules(now)],
   ["bookings", () => sweepBookings()],
   ["requests", () => sweepRequests()],
 ];

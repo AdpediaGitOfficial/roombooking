@@ -1046,6 +1046,8 @@ model KeyTransaction {
   holderId         String?
   // Holder outside the staff register (contractor, visitor) when holderId is null.
   holderName       String?
+  // Set when a contractor draws the key: a loss is then charged to the vendor, not a resident (document 11).
+  holderVendorId   String?
   custodianId      String
   condition        String?
   notes            String?
@@ -2388,7 +2390,8 @@ enum ChargeStatus {
 
 model Charge {
   id            String       @id @default(cuid())
-  staffId       String
+  staffId       String?
+  vendorId      String?
   siteId        String?
   kind          RateKind
   description   String
@@ -2407,6 +2410,7 @@ model Charge {
   updatedAt     DateTime     @updatedAt
 
   @@index([staffId, status])
+  @@index([vendorId, status])
   @@index([status])
 }
 

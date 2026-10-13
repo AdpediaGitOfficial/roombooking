@@ -93,7 +93,7 @@ export async function registerKey(input: RegisterInput) {
 // Issue / return (KEY-02, KEY-03)
 // ---------------------------------------------------------------------------
 
-export type IssueInput = { keyId: string; actorId: string; holderStaffId?: string | null; holderName?: string | null; condition?: string | null; expectedReturnAt?: string | null; notes?: string | null };
+export type IssueInput = { keyId: string; actorId: string; holderStaffId?: string | null; holderName?: string | null; holderVendorId?: string | null; condition?: string | null; expectedReturnAt?: string | null; notes?: string | null };
 
 export async function issueKey(input: IssueInput) {
   try {
@@ -117,7 +117,7 @@ export async function issueKey(input: IssueInput) {
         expectedReturnAt = new Date(`${input.expectedReturnAt}T23:59:59.000Z`);
       }
       const txn = await tx.keyTransaction.create({
-        data: { keyId: key.id, type: "ISSUE", holderId: input.holderStaffId || null, holderName: input.holderStaffId ? null : holderName, custodianId: input.actorId, condition: input.condition?.trim() || "Good", expectedReturnAt, notes: input.notes?.trim() || null },
+        data: { keyId: key.id, type: "ISSUE", holderId: input.holderStaffId || null, holderName: input.holderStaffId ? null : holderName, holderVendorId: input.holderVendorId || null, custodianId: input.actorId, condition: input.condition?.trim() || "Good", expectedReturnAt, notes: input.notes?.trim() || null },
       });
       await tx.key.update({ where: { id: key.id }, data: { status: "ISSUED" } });
       await recordAudit({ actorId: input.actorId, action: "KEY_ISSUED", entityType: "Key", entityId: key.id, after: { transactionId: txn.id, holderId: txn.holderId, holderName: txn.holderName, expectedReturnAt: input.expectedReturnAt ?? null } }, tx);
@@ -172,7 +172,7 @@ export async function reportLost(input: ExceptionInput) {
     const notes = input.notes?.trim();
     if (!notes) throw new KeyError("VALIDATION", "Describe the incident.", { notes: "Required." });
     const issue = openIssue(key);
-    const txn = await tx.keyTransaction.create({ data: { keyId: key.id, type: "LOST", holderId: issue?.holderId ?? null, holderName: issue?.holderName ?? null, custodianId: input.actorId, notes: input.incidentRef ? `${notes} (incident ${input.incidentRef.trim()})` : notes } });
+    const txn = await tx.keyTransaction.create({ data: { keyId: key.id, type: "LOST", holderId: issue?.holderId ?? null, holderName: issue?.holderName ?? null, holderVendorId: issue?.holderVendorId ?? null, custodianId: input.actorId, notes: input.incidentRef ? `${notes} (incident ${input.incidentRef.trim()})` : notes } });
     await tx.key.update({ where: { id: key.id }, data: { status: "LOST" } });
     await recordAudit({ actorId: input.actorId, action: "KEY_LOST", entityType: "Key", entityId: key.id, before: { status: key.status }, after: { transactionId: txn.id, holderId: issue?.holderId ?? null, notes } }, tx);
     return txn;

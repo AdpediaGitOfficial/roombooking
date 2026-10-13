@@ -9,6 +9,7 @@ import { actorAccess, actorCan, type ActorLike } from "../../lib/permissions/act
 import { createWorkOrder } from "../maintenance/service";
 import { KeyError } from "./errors";
 import { issueKey, replaceKey, reportLost, returnKey, type IssueInput } from "./service";
+import { raiseCharge } from "../charges/service";
 
 type Tx = Prisma.TransactionClient;
 
@@ -45,7 +46,9 @@ export async function issueKeyAs(actor: ActorLike, input: Omit<IssueInput, "acto
   const key = await prisma.key.findUnique({ where: { id: input.keyId } });
   if (!key) throw new KeyError("NOT_FOUND", "Key not found.");
   await assertCanIssue(actor, key, input.notes);
-  return issueKey({ ...input, actorId: actor.id });
+  // A contractor drawing a job key is accountable through their vendor.
+  const holderVendorId = input.holderVendorId ?? (actor.vendorId && !input.holderStaffId ? actor.vendorId : null);
+  return issueKey({ ...input, holderVendorId, actorId: actor.id });
 }
 
 export async function returnKeyAs(actor: ActorLike, input: { keyId: string; condition?: string | null; notes?: string | null }) {
@@ -105,8 +108,18 @@ export async function decideLoss(actor: ActorLike, caseId: string, approve: bool
     const wo = await createWorkOrder({ requesterId: actor.id, siteId: key.siteId, buildingId: room?.buildingId ?? null, roomId: key.roomId, locationNote: key.roomId ? null : `Lock for key ${key.code}`, category: "Doors and locks", description: `Change the lock for lost key ${key.code}${key.label ? ` (${key.label})` : ""}${key.sensitive ? ". SENSITIVE key: urgent." : "."}`, priority: key.sensitive ? "URGENT" : "HIGH" });
     workOrderId = wo.id;
   }
+  // A contractor who loses a key: the charge goes to the vendor, not a resident (document 11).
+  let chargeNote = "";
+  if (approve) {
+    const lost = await prisma.keyTransaction.findFirst({ where: { keyId: key.id, type: "LOST" }, orderBy: { createdAt: "desc" } });
+    if (lost?.holderVendorId) {
+      const org = await prisma.organization.findFirst({ select: { id: true } });
+      const rate = await prisma.rate.findFirst({ where: { organizationId: org?.id, code: "KEY_LOSS", active: true } });
+      if (rate) { await raiseCharge(actor, { vendorId: lost.holderVendorId, siteId: key.siteId, kind: rate.kind, description: `Lost key ${key.code}`, rateCode: "KEY_LOSS", sourceType: "KeyLossCase", sourceId: caseId }); chargeNote = "Charge raised against the vendor."; }
+    }
+  }
   return prisma.$transaction(async (tx) => {
-    const updated = await tx.keyLossCase.update({ where: { id: caseId }, data: { status: approve ? (workOrderId ? "LOCK_CHANGE_ORDERED" : "APPROVED") : "REJECTED", approvedById: actor.id, decidedAt: new Date(), decisionNote: note?.trim() || null, workOrderId } });
+    const updated = await tx.keyLossCase.update({ where: { id: caseId }, data: { status: approve ? (workOrderId ? "LOCK_CHANGE_ORDERED" : "APPROVED") : "REJECTED", approvedById: actor.id, decidedAt: new Date(), decisionNote: [note?.trim(), chargeNote].filter(Boolean).join(" · ") || null, workOrderId } });
     await recordAudit({ actorId: actor.id, action: approve ? "KEY_LOSS_APPROVED" : "KEY_LOSS_REJECTED", entityType: "KeyLossCase", entityId: caseId, after: { workOrderId, note: note ?? null } }, tx);
     return updated;
   });
