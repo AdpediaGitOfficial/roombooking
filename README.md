@@ -24,6 +24,41 @@ one open key issue per key, one open assignment per serialised asset,
 non-negative stock, append-only audit log) are enforced in the database
 itself; see `prisma/migrations/*/migration.sql`.
 
+## Roles, permissions and module map
+
+The platform implements "Staff Accommodation Platform – Roles, Permissions &
+Module Map". One permission engine (`packages/core/src/lib/permissions`) drives
+navigation, server actions and data scope:
+
+- **Matrix** (`matrix.ts`): modules × ten roles (Super Admin, Accommodation Admin, Officer, Resident Staff, Maintenance Coordinator, Technician, Vendor, Security, Line Manager, Auditor). Each cell is default, grantable, locked, view-only or own-records-only. Use `actorCan`/`userCan` for full access and `actorAccess`/`userCanAccess` for any access.
+- **Capability sets** (`sets.ts`) such as key supervisor, inventory supervisor, facility manager, visitor approval, admin overrides and compliance, granted to a user or a role, scoped to a site or building.
+- **Maker-checker**: sensitive changes (roles, grants, retention, policy) are submitted and applied only after a different authorised person approves.
+- **Privacy**: personal data is masked by role, exports are watermarked, records are soft-deleted into `/admin/archive` (30-day restore), and the audit log is append-only with reason, IP, user agent and site.
+- **Approval routing**: request steps can use the requester's site or the target site, need a different approver per step, and the Super Admin can stand in when nobody else is available. Request types include inter-site transfer, stay extension (within and beyond policy) and eligibility exception.
+
+What is built, by area:
+
+| Area | Routes | Highlights |
+|------|--------|-----------|
+| Role homes | `/`, `/dashboard` | Per-role dashboards and navigation, executive 360 |
+| People | `/people` | Directory, verification, duplicates and merge, joiners, exits and clearance, dependents, entitlements |
+| Accommodation | `/accommodation` | Sites, buildings, floors, units, rooms, beds, readiness; allocations, bulk allocation, waitlist, swaps, extensions, emergency (provisional) check-in |
+| Front desk | `/desk` | Today board (arrivals, overstays, transfers, not-ready beds), emergency beds, shift log with handover summary |
+| Maintenance | `/maintenance` | Triage board, cost approval, permits, preventive plans, vendors, site visits |
+| Keys and inventory | `/keys`, `/inventory` | Loss handling, audits, bulk issue; stock write-offs |
+| Security | `/security` | Visitors with approval and gate flow, patrol, restricted list, SOS |
+| Housekeeping and charges | `/housekeeping`, `/charges` | Rounds and inspections; charges with vendor recovery |
+| Facilities | `/facilities`, `/my/facilities` | Closures, event blocks, recurring reservations, eligibility, fees, no-show strikes, waitlist with timed offers |
+| Reporting | `/reports` | Layers L1–L4, KPI dictionary with targets, scheduled reports |
+| Governance | `/admin/*` | Masters, retention, DPDP consent and data requests, webhooks and API keys (`hrms.sync`, `occupancy.read`), archive |
+
+Daily sweeps (`modules/jobs/daily.ts`, run by `npm run jobs`): provisional
+check-ins, profiles, joiners, exits, work-order auto-close, preventive plans,
+vendors, visitors, inspections, scheduled reports, alerts, retention,
+webhooks, bookings, requests and the facility waitlist.
+
+See [docs/application-guide.md](docs/application-guide.md) for journeys and architecture.
+
 ## Getting started
 
 ```bash
@@ -271,6 +306,18 @@ no-show, cancel with a reason, book on behalf, settings). Rules in
 - confirmations, pending notices, declines and manager cancellations go to the booker in-app and by email;
 - every change is audited; the overview reports bookings, attendance, no-shows, cancellations and utilisation (booked person-hours against capacity × opening hours) per facility.
 
+Beyond the base rules, facilities support closures (optionally linked to a
+work order), blocked slots, events and recurring weekly reservations, which
+make those times unavailable. Managers can restrict a facility by grade,
+department or staff category, set an hourly fee and a no-show limit. A booking
+marked used at a facility with a fee becomes a facility-fee charge awaiting
+approval by someone other than the person who recorded it. No-shows count as
+strikes within a rolling window (30 days by default); at the limit the person
+cannot book that facility until the strikes age out or a manager lifts the
+block. When a booking is cancelled the next waitlisted person is offered the
+slot and has two hours to accept before it passes on (`sweepWaitlist`).
+Managers can see who booked each slot.
+
 Demo facility manager: `facility@example.com`. The demo site has a gym (no
 approval, 30-minute slots) and a community hall (approval required, closed on
 Fridays, one group at a time).
@@ -498,40 +545,27 @@ Any other Node host works the same way: run `npm ci && npm run build`,
 
 ## Project layout
 
+npm workspaces monorepo:
+
 ```
-prisma/
-  schema.prisma        data model (SRS section 4 and 8)
-  migrations/          SQL migrations incl. constraints Prisma cannot express
-  seed.ts              demo data
-src/
-  app/globals.css      design tokens and component classes (Fynix minimal system)
-  components/shell/    deep-green sidebar shell, top bar, page header, role-gated navigation
-  app/search/          global search over people, beds and tickets
-  app/                 Next.js App Router pages and API routes
-    login/             sign-in page, server actions (login/logout)
-    api/health/        liveness + database check
-    api/auth/me/       current user
-  lib/db.ts            Prisma client singleton
-  lib/auth/            password hashing, session store, cookie session, authorisation
-  modules/accommodation/  occupancy rules and queries, server actions, components
-  modules/allocations/    allocation engine (service), server actions, components
-  modules/self-service/   resident portal: stay, profile, password, notifications
-  modules/requests/       form schemas, approval workflow service, actions, components
-  modules/maintenance/    work order service, actions, components
-  modules/keys/           key register service, actions, components
-  modules/admin/          users and roles administration, audit log
-  modules/reports/        occupancy dashboard, trend, CSV export, chart components
-  modules/notifications/  email templates, transports, outbox worker, admin actions
-scripts/notifications-worker.ts  standalone delivery process
-  lib/uploads.ts          photo validation and storage
-  lib/notifications.ts   notification outbox writer
-  lib/audit.ts         append-only audit writer
-  proxy.ts             request gate (redirect to /login)
-tests/                 vitest suites
+apps/
+  web/                 Next.js 16 app (UI, route handlers, server actions)
+    src/app/           App Router pages by area (people, accommodation, desk, maintenance,
+                       keys, inventory, security, housekeeping, charges, facilities, my, admin ...)
+    src/modules/       web-only actions, forms and components per area
+    src/lib/           session, audit context, action state, webhook emitter
+    src/components/    shell, navigation, generic ActionForm
+  worker/              notification delivery and scheduled jobs process
+packages/
+  core/                @sam/core: domain logic shared by web and worker
+    prisma/            schema.prisma, migrations (incl. DB constraints), seed.ts
+    src/lib/           db, audit, permissions (matrix, sets, scope, privacy), settings
+    src/modules/       services per area (accommodation, allocations, people, requests,
+                       maintenance, keys, inventory, facilities, security, housekeeping,
+                       charges, desk, reports, kpi, privacy, integrations, masters, jobs ...)
+    tests/             vitest suites against a real PostgreSQL
+docs/                  application-guide.md, architecture.md, deployment.md, requirements-analysis.md
 render.yaml            Render blueprint: database, web app with photo disk, jobs cron
-scripts/jobs.mjs       calls the jobs endpoint (cron)
-docs/
-  requirements-analysis.md
 ```
 
 ## Conventions

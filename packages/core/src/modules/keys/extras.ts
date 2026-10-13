@@ -3,6 +3,7 @@
 // audit / reconciliation, bulk creation, and sensitive-key history.
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/db";
+import { usersWithRoles } from "../../lib/recipients";
 import { recordAudit } from "../../lib/audit";
 import { enqueueNotification } from "../../lib/notifications";
 import { actorAccess, actorCan, type ActorLike } from "../../lib/permissions/actor";
@@ -85,7 +86,7 @@ export async function reportLoss(actor: ActorLike, keyId: string, note: string) 
   if (!actorCan(actor, "keys.report_lost", { siteId: key.siteId }) && !(actorAccess(actor, "keys.report_lost", { siteId: key.siteId }))) throw new KeyError("FORBIDDEN", "Your role does not allow reporting lost keys.");
   await reportLost({ keyId, actorId: actor.id, notes: note });
   const lossCase = await prisma.keyLossCase.create({ data: { keyId, reportedById: actor.id, note: note.trim() } });
-  const approvers = await prisma.user.findMany({ where: { status: "ACTIVE", roleAssignments: { some: { role: { in: ["ACCOMMODATION_ADMIN", "SYSTEM_ADMIN"] } } } }, select: { id: true } });
+  const approvers = await usersWithRoles(prisma, ["ACCOMMODATION_ADMIN", "SYSTEM_ADMIN"], key.siteId);
   await prisma.$transaction(async (tx) => {
     for (const a of approvers) await enqueueNotification(tx, { recipientId: a.id, event: "key.loss_reported", idempotencyKey: `key.loss:${lossCase.id}:${a.id}`, payload: { keyId, code: key.code, caseId: lossCase.id } });
     await recordAudit({ actorId: actor.id, action: "KEY_LOSS_REPORTED", entityType: "KeyLossCase", entityId: lossCase.id, after: { keyId, sensitive: key.sensitive } }, tx);
@@ -113,8 +114,8 @@ export async function decideLoss(actor: ActorLike, caseId: string, approve: bool
   if (approve) {
     const lost = await prisma.keyTransaction.findFirst({ where: { keyId: key.id, type: "LOST" }, orderBy: { createdAt: "desc" } });
     if (lost?.holderVendorId) {
-      const org = await prisma.organization.findFirst({ select: { id: true } });
-      const rate = await prisma.rate.findFirst({ where: { organizationId: org?.id, code: "KEY_LOSS", active: true } });
+      const org = await prisma.site.findUnique({ where: { id: key.siteId }, select: { organizationId: true } });
+      const rate = await prisma.rate.findFirst({ where: { organizationId: org?.organizationId, code: "KEY_LOSS", active: true } });
       if (rate) { await raiseCharge(actor, { vendorId: lost.holderVendorId, siteId: key.siteId, kind: rate.kind, description: `Lost key ${key.code}`, rateCode: "KEY_LOSS", sourceType: "KeyLossCase", sourceId: caseId }); chargeNote = "Charge raised against the vendor."; }
     }
   }

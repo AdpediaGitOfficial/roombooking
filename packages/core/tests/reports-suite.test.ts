@@ -8,7 +8,7 @@ let orgId: string; let siteId: string; let otherSiteId: string; let buildingId: 
 let staffA: string; let staffB: string;
 const all: Scope = { siteIds: null, canSeeNames: true };
 const masked: Scope = { siteIds: null, canSeeNames: false };
-const plus = (n: number) => new Date(Date.now() + n * 86400000).toISOString().slice(0, 10);
+const plus = (n: number) => new Date(Date.now() + 4 * 3600000 + n * 86400000).toISOString().slice(0, 10); // calendar date in the suite site (Asia/Dubai, UTC+4)
 const range = { from: plus(-30), to: plus(1) };
 
 beforeAll(async () => {

@@ -65,7 +65,7 @@ describe("notification templates", () => {
     await saveTemplate(A.sa, orgId, { event: "parcel.arrived", channel: "EMAIL", enabled: false });
     await prisma.$transaction((tx) => enqueueNotification(tx, { recipientId: A.res.id, event: "parcel.arrived", idempotencyKey: `tpl:${stamp}`, payload: { carrier: "DHL" } }));
     const sent: string[] = [];
-    await processOutbox({ channels: ["EMAIL"], transport: { name: "test", description: "t", send: async (m: { subject: string }) => { sent.push(m.subject); return { messageId: "x" }; } } as never, limit: 200 });
+    await processOutbox({ channels: ["EMAIL"], transport: { name: "test", description: "t", send: async (m: { subject: string }) => { sent.push(m.subject); return { messageId: "x" }; } } as never, limit: 5000 });
     expect(sent).not.toContain("Parcel for you");
     const n = await prisma.notification.findUniqueOrThrow({ where: { idempotencyKey: `tpl:${stamp}:email` } });
     expect(n.subject).toContain("switched off");

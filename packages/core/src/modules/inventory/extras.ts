@@ -1,6 +1,7 @@
 // Inventory extras from the Roles, Permissions & Module Map (5.5): goods in and store transfers for the Inventory
 // supervisor, adjustments within a limit, and write-offs that an Admin (or, above the limit, the Super Admin) approves.
 import { prisma } from "../../lib/db";
+import { usersWithRoles } from "../../lib/recipients";
 import { recordAudit } from "../../lib/audit";
 import { enqueueNotification } from "../../lib/notifications";
 import { actorCan, type ActorLike } from "../../lib/permissions/actor";
@@ -64,7 +65,7 @@ export async function requestWriteOff(actor: ActorLike, input: { itemId: string;
   return prisma.$transaction(async (tx) => {
     const w = await tx.inventoryWriteOff.create({ data: { itemId: item.id, quantity: qty, value, reason: input.reason.trim(), recordedById: actor.id, needsSuperAdmin: value > limit } });
     await recordAudit({ actorId: actor.id, action: "WRITE_OFF_REQUESTED", entityType: "InventoryWriteOff", entityId: w.id, after: { itemId: item.id, quantity: qty, value, needsSuperAdmin: w.needsSuperAdmin } }, tx);
-    const approvers = await tx.user.findMany({ where: { status: "ACTIVE", roleAssignments: { some: { role: { in: w.needsSuperAdmin ? ["SYSTEM_ADMIN"] : ["ACCOMMODATION_ADMIN", "SYSTEM_ADMIN"] } } } }, select: { id: true } });
+    const approvers = await usersWithRoles(tx, w.needsSuperAdmin ? ["SYSTEM_ADMIN"] : ["ACCOMMODATION_ADMIN", "SYSTEM_ADMIN"], item.siteId);
     for (const a of approvers) await enqueueNotification(tx, { recipientId: a.id, event: "inventory.writeoff_pending", idempotencyKey: `writeoff:${w.id}:${a.id}`, payload: { writeOffId: w.id, item: item.name, quantity: qty, value } });
     return w;
   });

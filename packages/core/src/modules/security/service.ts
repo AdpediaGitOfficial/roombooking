@@ -4,6 +4,7 @@
 import { randomInt } from "node:crypto";
 import type { IncidentSeverity, IncidentStatus, Prisma, VisitorKind } from "@prisma/client";
 import { prisma } from "../../lib/db";
+import { usersWithRoles } from "../../lib/recipients";
 import { recordAudit } from "../../lib/audit";
 import { enqueueNotification } from "../../lib/notifications";
 import { actorAccess, actorCan, type ActorLike } from "../../lib/permissions/actor";
@@ -455,11 +456,11 @@ export async function raiseSos(actor: ActorLike, input: { siteId: string; locati
   const role = actor.roles.includes("SECURITY") ? "SECURITY" : actor.roles[0];
   return prisma.$transaction(async (tx) => {
     const sos = await tx.sosAlert.create({ data: { siteId: input.siteId, raisedById: actor.id, raisedByRole: role, location: input.location?.trim() || null, note: input.note?.trim() || null } });
-    const responders = await tx.user.findMany({ where: { status: "ACTIVE", id: { not: actor.id }, roleAssignments: { some: { role: { in: ["SECURITY", "ACCOMMODATION_OFFICER", "ACCOMMODATION_ADMIN", "SYSTEM_ADMIN"] } } } }, select: { id: true } });
+    const responders = await usersWithRoles(tx, ["SECURITY", "ACCOMMODATION_OFFICER", "ACCOMMODATION_ADMIN", "SYSTEM_ADMIN"], input.siteId, { excludeId: actor.id });
     for (const r of responders) await enqueueNotification(tx, { recipientId: r.id, event: "sos.raised", idempotencyKey: `sos:${sos.id}:${r.id}`, payload: { sosId: sos.id, location: sos.location }, fanout: { email: false } });
     await recordAudit({ actorId: actor.id, action: "SOS_RAISED", entityType: "SosAlert", entityId: sos.id, after: { siteId: input.siteId, location: sos.location } }, tx);
     return sos;
-  });
+  }, { timeout: 30_000 });
 }
 
 export async function acknowledgeSos(actor: ActorLike, sosId: string) {

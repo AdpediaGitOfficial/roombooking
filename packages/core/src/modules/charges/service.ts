@@ -54,7 +54,9 @@ export async function raiseCharge(actor: ActorLike, input: RaiseInput) {
   let unit = input.amount ?? null;
   let currency = "AED";
   if (input.rateCode) {
-    const org = await prisma.organization.findFirst({ select: { id: true } });
+    const bySite = input.siteId ? await prisma.site.findUnique({ where: { id: input.siteId }, select: { organizationId: true } }) : null;
+    const byStaff = !bySite && input.staffId ? await prisma.staffProfile.findUnique({ where: { id: input.staffId }, select: { organizationId: true } }) : null;
+    const org = bySite ? { id: bySite.organizationId } : byStaff ? { id: byStaff.organizationId } : await prisma.organization.findFirst({ select: { id: true } });
     const rate = await prisma.rate.findFirst({ where: { organizationId: org?.id, kind: input.kind, code: input.rateCode.toUpperCase(), active: true, OR: [{ siteId: input.siteId ?? null }, { siteId: null }] }, orderBy: { siteId: "desc" } });
     if (!rate) throw new ChargeError("VALIDATION", "That rate does not exist.", { rateCode: "Unknown rate." });
     unit = Number(rate.amount);

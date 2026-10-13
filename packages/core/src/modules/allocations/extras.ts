@@ -2,6 +2,7 @@
 // emergency (provisional) check-in, extensions, bed swaps, bulk allocation, waitlist and room readiness.
 import type { BedReadiness, Prisma } from "@prisma/client";
 import { prisma } from "../../lib/db";
+import { usersWithRoles } from "../../lib/recipients";
 import { recordAudit } from "../../lib/audit";
 import { enqueueNotification } from "../../lib/notifications";
 import { actorCan, type ActorLike } from "../../lib/permissions/actor";
@@ -60,9 +61,9 @@ export async function decideProvisional(actor: ActorLike, allocationId: string, 
 
 /** Flags provisional stays that were not decided within 24 hours (daily or hourly sweep). */
 export async function sweepProvisional(now: Date = new Date()) {
-  const overdue = await prisma.allocation.findMany({ where: { provisional: true, provisionalApprovedAt: null, provisionalApproveBy: { lt: now }, status: "CHECKED_IN" }, include: { bed: true } });
-  const admins = await prisma.user.findMany({ where: { status: "ACTIVE", roleAssignments: { some: { role: { in: ["ACCOMMODATION_ADMIN", "SYSTEM_ADMIN"] } } } }, select: { id: true } });
+  const overdue = await prisma.allocation.findMany({ where: { provisional: true, provisionalApprovedAt: null, provisionalApproveBy: { lt: now }, status: "CHECKED_IN" }, include: { bed: { include: { room: { include: { building: { select: { siteId: true } } } } } } } });
   for (const a of overdue) {
+    const admins = await usersWithRoles(prisma, ["ACCOMMODATION_ADMIN", "SYSTEM_ADMIN"], a.bed.room.building.siteId);
     await prisma.$transaction(async (tx) => {
       for (const u of admins) await enqueueNotification(tx, { recipientId: u.id, event: "checkin.provisional_overdue", idempotencyKey: `provisional.overdue:${a.id}:${u.id}:${now.toISOString().slice(0, 10)}`, payload: { allocationId: a.id, bed: a.bed.code } });
     });
