@@ -4,6 +4,8 @@ import { recordAudit } from "../../lib/audit";
 import { hashPassword, verifyPassword } from "../../lib/auth/password";
 import { createSessionRecord, revokeSessionByToken } from "../../lib/auth/session-store";
 import { AuthError } from "./errors";
+import { acceptToken, lookupToken } from "../admin/users-service";
+import { AdminError } from "../admin/errors";
 
 const MAX_FAILED_ATTEMPTS = Number(process.env.LOGIN_MAX_FAILED_ATTEMPTS ?? 5);
 const LOCKOUT_MINUTES = Number(process.env.LOGIN_LOCKOUT_MINUTES ?? 15);
@@ -99,3 +101,19 @@ export function toSessionUser(user: User & { roleAssignments: RoleAssignment[] }
 }
 
 export type SessionUser = ReturnType<typeof toSessionUser>;
+
+/** What an invite or reset link is for, without revealing anything beyond the person it was sent to. */
+export async function inviteInfo(token: string) {
+  const user = await lookupToken(token);
+  if (!user) throw new AdminError("NOT_FOUND", "This link is invalid or has expired.");
+  return { name: user.name, email: user.email, purpose: (user.tokenPurpose === "RESET" ? "RESET" : "INVITE") as "INVITE" | "RESET" };
+}
+
+/** Sets the password from an invite or reset link, then starts a session for the person. */
+export async function acceptInvite(input: { token: string; password: string }, meta: SignInMeta = {}) {
+  const accepted = await acceptToken(input);
+  const { token, session } = await createSessionRecord(accepted.id, meta);
+  await recordAudit({ actorId: accepted.id, action: "LOGIN_SUCCESS", entityType: "User", entityId: accepted.id, after: { via: "invite_link" } });
+  const user = await prisma.user.findUniqueOrThrow({ where: { id: accepted.id }, include: { roleAssignments: true } });
+  return { token, expiresAt: session.expiresAt, user: toSessionUser(user) };
+}

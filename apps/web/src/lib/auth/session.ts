@@ -1,43 +1,37 @@
 import "server-only";
 import { cache } from "react";
-import { cookies, headers } from "next/headers";
-import {
-  createSessionRecord,
-  resolveSession,
-  revokeSessionByToken,
-} from "@sam/core/lib/auth/session-store";
+import { cookies } from "next/headers";
+import { ApiError } from "@sam/contract/index";
+import { SESSION_COOKIE, api, getSessionToken } from "@/lib/api";
 
-export const SESSION_COOKIE = "sam_session";
+export { SESSION_COOKIE };
 
-export async function createSession(userId: string) {
-  const h = await headers();
-  const { token, session } = await createSessionRecord(userId, {
-    ipAddress: h.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null,
-    userAgent: h.get("user-agent"),
-  });
+/** Stores the token the API issued in an httpOnly cookie. */
+export async function setSessionCookie(token: string, expiresAt: Date) {
   const cookieStore = await cookies();
   cookieStore.set(SESSION_COOKIE, token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     path: "/",
-    expires: session.expiresAt,
+    expires: expiresAt,
   });
-  return session;
 }
 
 /** Current user for this request, or null. Memoised per request. */
 export const getCurrentUser = cache(async () => {
-  const cookieStore = await cookies();
-  const token = cookieStore.get(SESSION_COOKIE)?.value;
-  if (!token) return null;
-  const session = await resolveSession(token);
-  return session?.user ?? null;
+  if (!(await getSessionToken())) return null;
+  try {
+    return await api.auth.me();
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 401) return null;
+    throw error;
+  }
 });
 
 export async function destroyCurrentSession() {
-  const cookieStore = await cookies();
-  const token = cookieStore.get(SESSION_COOKIE)?.value;
-  if (token) await revokeSessionByToken(token);
-  cookieStore.delete(SESSION_COOKIE);
+  if (await getSessionToken()) {
+    try { await api.auth.logout(); } catch { /* the session may already be gone; the cookie is cleared regardless */ }
+  }
+  (await cookies()).delete(SESSION_COOKIE);
 }

@@ -23,6 +23,14 @@ declare module "fastify" {
 
 const toFastifyPath = (p: string) => p;
 
+/**
+ * Fields that must never leave the API, whichever service loaded the record
+ * and however deep it is nested. Services sometimes include whole user rows;
+ * this is the last line of defence against leaking credentials.
+ */
+const SECRET_KEYS = new Set(["passwordHash", "passwordChangedAt", "tokenHash", "tokenPurpose", "tokenExpiresAt", "failedLoginAttempts", "lockedUntil", "storageKey"]);
+export const stripSecrets = (key: string, value: unknown) => (SECRET_KEYS.has(key) ? undefined : value);
+
 /** Reads the request's path, query and body into one object; multipart bodies may carry files. */
 async function collectInput(request: FastifyRequest, def: OpDef, maxUploadBytes: number): Promise<Record<string, unknown>> {
   const out: Record<string, unknown> = {};
@@ -94,7 +102,7 @@ export function registerOps<C extends Contract>(app: FastifyInstance, contract: 
             return reply.send(Buffer.from(file.body));
           }
           if (result === undefined) return reply.code(204).send();
-          return reply.send(result);
+          return reply.type("application/json; charset=utf-8").send(JSON.stringify(result, stripSecrets));
         },
       });
     }

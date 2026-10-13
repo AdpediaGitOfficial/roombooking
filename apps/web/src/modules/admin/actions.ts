@@ -4,11 +4,13 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { Role, UserStatus } from "@prisma/client";
 import { requireRole, requireUser } from "@/lib/auth/authorize";
-import { createSession, getCurrentUser } from "@/lib/auth/session";
+import { getCurrentUser, setSessionCookie } from "@/lib/auth/session";
+import { api } from "@/lib/api";
+import { ApiError } from "@sam/contract/index";
 import { recordAudit } from "@sam/core/lib/audit";
 import { USER_ADMIN_ROLES } from "@sam/core/modules/admin/access";
 import { AdminError } from "@sam/core/modules/admin/errors";
-import { acceptToken, addRole, createUser, issueToken, removeRole, setUserStatus, signOutEverywhere, updateUser, type RoleGrant } from "@sam/core/modules/admin/users-service";
+import { addRole, createUser, issueToken, removeRole, setUserStatus, signOutEverywhere, updateUser, type RoleGrant } from "@sam/core/modules/admin/users-service";
 
 export type FormState = { error?: string; fieldErrors?: Record<string, string>; values?: Record<string, string> };
 export type ActionState = { error?: string; message?: string; link?: string };
@@ -121,15 +123,13 @@ export async function acceptInviteAction(_prev: FormState, formData: FormData): 
   const token = str(formData, "token");
   const password = str(formData, "password");
   if (password !== str(formData, "confirmPassword")) return { error: "The passwords do not match.", fieldErrors: { confirmPassword: "Does not match." } };
-  let userId: string;
   try {
-    userId = (await acceptToken({ token, password })).id;
+    const session = await api.auth.acceptInvite({ token, password });
+    await setSessionCookie(session.token, session.expiresAt);
   } catch (error) {
-    if (error instanceof AdminError) return { error: error.message, fieldErrors: error.fieldErrors };
+    if (error instanceof ApiError && error.status < 500) return { error: error.message, fieldErrors: error.fieldErrors };
     throw error;
   }
-  await createSession(userId);
-  await recordAudit({ actorId: userId, action: "LOGIN_SUCCESS", entityType: "User", entityId: userId, after: { via: "invite_link" } });
   redirect("/");
 }
 

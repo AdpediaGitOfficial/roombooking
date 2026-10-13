@@ -15,7 +15,7 @@ export interface ClientOptions {
   /** Session token to send as a bearer token. */
   token?: () => string | null | undefined | Promise<string | null | undefined>;
   /** Extra headers on every request, for example a forwarded client address. */
-  headers?: () => Record<string, string>;
+  headers?: () => Record<string, string> | Promise<Record<string, string>>;
   fetch?: typeof fetch;
   timeoutMs?: number;
 }
@@ -51,7 +51,7 @@ export function createClient<C extends Contract>(contract: C, options: ClientOpt
           return encodeURIComponent(String(value));
         });
         const url = new URL(base + path);
-        const headers: Record<string, string> = { accept: def.kind === "file" ? "*/*" : "application/json", ...options.headers?.() };
+        const headers: Record<string, string> = { accept: def.kind === "file" ? "*/*" : "application/json", ...(await options.headers?.()) };
         const token = await options.token?.();
         if (token) headers.authorization = `Bearer ${token}`;
 

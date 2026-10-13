@@ -7,6 +7,7 @@ import { fileInput, fileOp, int, op, out, type Contract } from "@sam/contract/de
 import { createClient, ApiError, contract as realContract } from "@sam/contract/index";
 import { buildApp } from "../src/app";
 import { TtlCache } from "../src/session-cache";
+import { issueToken } from "@sam/core/modules/admin/users-service";
 import { PASSWORD, bearer, ensureUser, tokenFor } from "./helpers";
 
 // A small contract that exercises the engine: roles, validation, errors, uploads, downloads, limits.
@@ -17,6 +18,7 @@ const testContract = {
     fail: op({ id: "t.fail", method: "POST", path: "/v1/t/fail/:kind", summary: "fail", tag: "Test", input: z.object({ kind: z.string() }), output: out<{ ok: true }>() }),
     upload: op({ id: "t.upload", method: "POST", path: "/v1/t/upload", summary: "upload", tag: "Test", multipart: true, input: z.object({ note: z.string(), photo: fileInput.optional() }), output: out<{ note: string; bytes: number; name: string | null }>() }),
     download: fileOp({ id: "t.download", method: "GET", path: "/v1/t/download", summary: "download", tag: "Test", input: z.object({}) }),
+    secrets: op({ id: "t.secrets", method: "GET", path: "/v1/t/secrets", summary: "secrets", tag: "Test", input: z.object({}), output: out<unknown>() }),
     limited: op({ id: "t.limited", method: "GET", path: "/v1/t/limited", summary: "limited", tag: "Test", access: "public", rateLimit: { max: 2, windowSeconds: 60 }, input: z.object({}), output: out<{ ok: true }>() }),
   },
 } satisfies Contract;
@@ -33,6 +35,7 @@ const testHandlers = {
     },
     upload: (_ctx: unknown, input: { note: string; photo?: { bytes: Uint8Array; fileName: string } }) => ({ note: input.note, bytes: input.photo?.bytes.length ?? 0, name: input.photo?.fileName ?? null }),
     download: () => ({ body: new Uint8Array([1, 2, 3]), contentType: "text/csv", fileName: "report.csv" }),
+    secrets: () => ({ ok: 1, passwordHash: "x", requester: { name: "A", tokenHash: "y", staffProfile: { phone: "1", lockedUntil: new Date() } }, rows: [{ failedLoginAttempts: 3, id: "r1" }] }),
     limited: () => ({ ok: true as const }),
   },
 };
@@ -150,6 +153,36 @@ describe("authentication", () => {
   });
 });
 
+describe("invite links", () => {
+  async function invitedUser(email: string) {
+    const org = await prisma.organization.findFirstOrThrow({ where: { code: "APITEST" } });
+    const user = await prisma.user.upsert({ where: { email }, update: { status: "INVITED", passwordHash: null, tokenHash: null }, create: { organizationId: org.id, email, name: "Invited Person", status: "INVITED" } });
+    const link = await issueToken({ actorId: admin.id, userId: user.id, purpose: "INVITE" });
+    return { user, token: link.path.replace("/invite/", "") };
+  }
+
+  it("shows who the link is for without needing a session", async () => {
+    const { token } = await invitedUser("api-invitee@example.com");
+    const res = await app.inject({ method: "GET", url: `/v1/auth/invites/${token}` });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ name: "Invited Person", email: "api-invitee@example.com", purpose: "INVITE" });
+    expect((await app.inject({ method: "GET", url: "/v1/auth/invites/not-a-link" })).statusCode).toBe(404);
+  });
+
+  it("sets the password, signs in, and works once", async () => {
+    const { token } = await invitedUser("api-invitee2@example.com");
+    const weak = await app.inject({ method: "POST", url: `/v1/auth/invites/${token}/accept`, payload: { password: "short" } });
+    expect(weak.statusCode).toBe(422);
+    expect(weak.json().error.fieldErrors.password).toBeTruthy();
+    const ok = await app.inject({ method: "POST", url: `/v1/auth/invites/${token}/accept`, payload: { password: "A-Strong-Password-2026" } });
+    expect(ok.statusCode).toBe(200);
+    const session = ok.json();
+    expect((await app.inject({ method: "GET", url: "/v1/auth/me", headers: bearer(session.token) })).json().email).toBe("api-invitee2@example.com");
+    const again = await app.inject({ method: "POST", url: `/v1/auth/invites/${token}/accept`, payload: { password: "A-Strong-Password-2026" } });
+    expect(again.statusCode).toBe(409);
+  });
+});
+
 describe("role policy", () => {
   it("allows a listed role and refuses everyone else", async () => {
     expect((await app.inject({ method: "GET", url: "/v1/t/admin", headers: bearer(admin.token) })).statusCode).toBe(200);
@@ -181,6 +214,11 @@ describe("validation and errors", () => {
     const validation = await app.inject({ method: "POST", url: "/v1/t/fail/validation", headers: h, payload: {} });
     expect(validation.statusCode).toBe(422);
     expect(validation.json().error.fieldErrors).toEqual({ category: "Choose a category." });
+  });
+
+  it("strips credential fields wherever they are nested", async () => {
+    const res = await app.inject({ method: "GET", url: "/v1/t/secrets", headers: bearer(staff.token) });
+    expect(res.json()).toEqual({ ok: 1, requester: { name: "A", staffProfile: { phone: "1" } }, rows: [{ id: "r1" }] });
   });
 
   it("hides the details of unexpected failures", async () => {

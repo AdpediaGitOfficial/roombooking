@@ -1,11 +1,15 @@
 import { Suspense } from "react";
 import Link from "next/link";
-import { lookupToken } from "@sam/core/modules/admin/users-service";
+import { ApiError } from "@sam/contract/index";
+import { api } from "@/lib/api";
 import { AcceptInviteForm } from "@/modules/admin/components/forms";
 
 async function Content({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
-  const user = await lookupToken(token);
+  const user = await api.auth.inviteInfo({ token }).catch((error) => {
+    if (error instanceof ApiError && error.status < 500) return null;
+    throw error;
+  });
   if (!user) {
     return (
       <>
@@ -17,7 +21,7 @@ async function Content({ params }: { params: Promise<{ token: string }> }) {
   }
   return (
     <>
-      <h1 className="page-title">{user.tokenPurpose === "RESET" ? "Set a new password" : `Welcome, ${user.name.split(" ")[0]}`}</h1>
+      <h1 className="page-title">{user.purpose === "RESET" ? "Set a new password" : `Welcome, ${user.name.split(" ")[0]}`}</h1>
       <p className="mt-1 mb-8 text-sm text-zinc-600">{user.email}</p>
       <AcceptInviteForm token={token} />
     </>
