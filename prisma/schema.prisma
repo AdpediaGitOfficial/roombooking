@@ -116,12 +116,13 @@ model Room {
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
 
-  building         Building          @relation(fields: [buildingId], references: [id])
-  beds             Bed[]
-  keys             Key[]
-  inventoryItems   InventoryItem[]
-  assetAssignments AssetAssignment[]
-  workOrders       WorkOrder[]
+  building              Building               @relation(fields: [buildingId], references: [id])
+  beds                  Bed[]
+  keys                  Key[]
+  inventoryItems        InventoryItem[]
+  inventoryTransactions InventoryTransaction[]
+  assetAssignments      AssetAssignment[]
+  workOrders            WorkOrder[]
 
   @@unique([buildingId, code])
 }
@@ -196,6 +197,8 @@ model User {
   facilityBookings      FacilityBooking[]
   keyTransactions       KeyTransaction[]
   inventoryTransactions InventoryTransaction[]
+  assetAssignments      AssetAssignment[]      @relation("AssetAssignedBy")
+  assetAssignmentsEnded AssetAssignment[]      @relation("AssetEndedBy")
   lostFoundCustody      LostFoundItem[]
   notifications         Notification[]
   auditEvents           AuditEvent[]
@@ -276,12 +279,13 @@ model StaffProfile {
   createdAt             DateTime         @default(now())
   updatedAt             DateTime         @updatedAt
 
-  organization     Organization      @relation(fields: [organizationId], references: [id])
-  user             User?             @relation(fields: [userId], references: [id])
-  allocations      Allocation[]
-  keyTransactions  KeyTransaction[]
-  assetAssignments AssetAssignment[]
-  lostFoundClaims  LostFoundClaim[]
+  organization          Organization           @relation(fields: [organizationId], references: [id])
+  user                  User?                  @relation(fields: [userId], references: [id])
+  allocations           Allocation[]
+  keyTransactions       KeyTransaction[]
+  assetAssignments      AssetAssignment[]
+  inventoryTransactions InventoryTransaction[]
+  lostFoundClaims       LostFoundClaim[]
 
   @@unique([organizationId, employeeId])
 }
@@ -582,9 +586,11 @@ model Facility {
   createdAt        DateTime     @default(now())
   updatedAt        DateTime     @updatedAt
 
-  site     Site              @relation(fields: [siteId], references: [id])
-  bookings FacilityBooking[]
-  keys     Key[]
+  site                  Site                   @relation(fields: [siteId], references: [id])
+  bookings              FacilityBooking[]
+  keys                  Key[]
+  inventoryTransactions InventoryTransaction[]
+  assetAssignments      AssetAssignment[]
 
   @@unique([siteId, code])
 }
@@ -721,22 +727,31 @@ model InventoryItem {
   sku              String
   name             String
   category         String
+  description      String?
+  unit             String         @default("pcs")
   trackingType     TrackingType   @default(STOCK)
   serialNumber     String?        @unique
+  // Stock: units on hand. Serialised asset: 1 while in store, 0 while issued or retired.
   quantity         Int            @default(0)
   reorderThreshold Int?
+  storageLocation  String?
   roomId           String?
   condition        AssetCondition @default(GOOD)
   status           RecordStatus   @default(ACTIVE)
+  notes            String?
+  retiredAt        DateTime?
   createdAt        DateTime       @default(now())
   updatedAt        DateTime       @updatedAt
 
-  site         Site                   @relation(fields: [siteId], references: [id])
-  room         Room?                  @relation(fields: [roomId], references: [id])
-  transactions InventoryTransaction[]
-  assignments  AssetAssignment[]
+  site          Site                   @relation(fields: [siteId], references: [id])
+  room          Room?                  @relation(fields: [roomId], references: [id])
+  transactions  InventoryTransaction[] @relation("ItemTransactions")
+  counterpartOf InventoryTransaction[] @relation("TransferCounterpart")
+  assignments   AssetAssignment[]
 
   @@unique([siteId, sku, serialNumber])
+  @@index([siteId, category])
+  @@index([siteId, status, trackingType])
 }
 
 enum InventoryTransactionType {
@@ -749,36 +764,62 @@ enum InventoryTransactionType {
   RETIREMENT
 }
 
+// Movement log (INV-02). `quantity` is the signed change to the item's
+// on-hand quantity; `balanceAfter` is the on-hand quantity once applied.
 model InventoryTransaction {
-  id        String                   @id @default(cuid())
-  itemId    String
-  type      InventoryTransactionType
-  quantity  Int
-  actorId   String
-  notes     String?
-  createdAt DateTime                 @default(now())
+  id                String                   @id @default(cuid())
+  itemId            String
+  type              InventoryTransactionType
+  quantity          Int
+  balanceAfter      Int?
+  actorId           String
+  roomId            String?
+  staffId           String?
+  facilityId        String?
+  counterpartItemId String?
+  condition         AssetCondition?
+  reference         String?
+  notes             String?
+  createdAt         DateTime                 @default(now())
 
-  item  InventoryItem @relation(fields: [itemId], references: [id])
-  actor User          @relation(fields: [actorId], references: [id])
+  item        InventoryItem  @relation("ItemTransactions", fields: [itemId], references: [id])
+  counterpart InventoryItem? @relation("TransferCounterpart", fields: [counterpartItemId], references: [id])
+  actor       User           @relation(fields: [actorId], references: [id])
+  room        Room?          @relation(fields: [roomId], references: [id])
+  staff       StaffProfile?  @relation(fields: [staffId], references: [id])
+  facility    Facility?      @relation(fields: [facilityId], references: [id])
 
   @@index([itemId, createdAt])
+  @@index([createdAt])
+  @@index([staffId])
+  @@index([roomId])
 }
 
 // A serialised asset may have at most one open assignment (partial unique
 // index in migration SQL).
 model AssetAssignment {
-  id        String    @id @default(cuid())
-  itemId    String
-  roomId    String?
-  staffId   String?
-  startedAt DateTime  @default(now())
-  endedAt   DateTime?
+  id           String    @id @default(cuid())
+  itemId       String
+  roomId       String?
+  staffId      String?
+  facilityId   String?
+  assignedById String
+  endedById    String?
+  notes        String?
+  startedAt    DateTime  @default(now())
+  endedAt      DateTime?
 
-  item  InventoryItem @relation(fields: [itemId], references: [id])
-  room  Room?         @relation(fields: [roomId], references: [id])
-  staff StaffProfile? @relation(fields: [staffId], references: [id])
+  item       InventoryItem @relation(fields: [itemId], references: [id])
+  room       Room?         @relation(fields: [roomId], references: [id])
+  staff      StaffProfile? @relation(fields: [staffId], references: [id])
+  facility   Facility?     @relation(fields: [facilityId], references: [id])
+  assignedBy User          @relation("AssetAssignedBy", fields: [assignedById], references: [id])
+  endedBy    User?         @relation("AssetEndedBy", fields: [endedById], references: [id])
 
   @@index([itemId, endedAt])
+  @@index([staffId, endedAt])
+  @@index([roomId, endedAt])
+  @@index([facilityId, endedAt])
 }
 
 // ---------------------------------------------------------------------------

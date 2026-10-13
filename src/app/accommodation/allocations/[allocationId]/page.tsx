@@ -8,6 +8,8 @@ import { AllocationStatusBadge } from "@/modules/allocations/components/status-b
 import { CancelForm, CheckInForm, CheckOutForm } from "@/modules/allocations/components/forms";
 import { isoDate } from "@/modules/accommodation/occupancy";
 import { KEY_OPERATE_ROLES } from "@/modules/keys/access";
+import { INVENTORY_OPERATE_ROLES } from "@/modules/inventory/access";
+import { ResidentItemsPanel } from "@/modules/inventory/components/resident-items-panel";
 import { RoomKeysPanel } from "@/modules/keys/components/room-keys-panel";
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
@@ -74,6 +76,7 @@ async function AllocationView({ params }: { params: Promise<{ allocationId: stri
           <h2 className="text-lg font-semibold">Actions</h2>
           <div className="mt-3 grid gap-4 sm:grid-cols-2">
             <RoomKeysPanel roomId={bed.room.id} staffId={allocation.staffId} canOperate={hasRole(user, ...KEY_OPERATE_ROLES)} returnPath={`/accommodation/allocations/${allocation.id}`} />
+            <ResidentItemsPanel staffId={allocation.staffId} canOperate={hasRole(user, ...INVENTORY_OPERATE_ROLES)} returnPath={`/accommodation/allocations/${allocation.id}`} />
             {allocation.status === "CONFIRMED" && <CheckInForm allocationId={allocation.id} />}
             {allocation.status === "CHECKED_IN" && <CheckOutForm allocationId={allocation.id} blockers={blockers} canOverride={canAdmin} />}
             <div className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">

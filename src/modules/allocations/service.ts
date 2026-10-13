@@ -6,6 +6,7 @@ import { prisma } from "@/lib/db";
 import { recordAudit } from "@/lib/audit";
 import { enqueueNotification } from "@/lib/notifications";
 import { OCCUPYING_STATUSES, isoDate, todayInTimezone } from "@/modules/accommodation/occupancy";
+import { itemsHeldBy } from "@/modules/inventory/service";
 import { AllocationError } from "./errors";
 import { fulfilRoomChangeTx } from "@/modules/requests/service";
 
@@ -259,13 +260,13 @@ export async function checkIn(input: CheckInInput) {
 export type ClearanceBlocker = { type: "KEY" | "ASSET"; label: string };
 
 export async function clearanceBlockers(staffId: string, db: Db = prisma): Promise<ClearanceBlocker[]> {
-  const [keys, assets] = await Promise.all([
+  const [keys, items] = await Promise.all([
     db.keyTransaction.findMany({ where: { holderId: staffId, type: "ISSUE", returnedAt: null }, include: { key: true } }),
-    db.assetAssignment.findMany({ where: { staffId, endedAt: null }, include: { item: true } }),
+    itemsHeldBy({ staffId }, db),
   ]);
   return [
     ...keys.map((k) => ({ type: "KEY" as const, label: `Key ${k.key.code}${k.key.label ? ` (${k.key.label})` : ""}` })),
-    ...assets.map((a) => ({ type: "ASSET" as const, label: `${a.item.name}${a.item.serialNumber ? ` #${a.item.serialNumber}` : ""}` })),
+    ...items.map((a) => ({ type: "ASSET" as const, label: a.serialNumber ? `${a.name} #${a.serialNumber}` : `${a.quantity} × ${a.name}` })),
   ];
 }
 

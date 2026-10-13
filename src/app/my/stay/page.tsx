@@ -3,6 +3,7 @@ import { requireResident } from "@/modules/self-service/context";
 import { getMyStay } from "@/modules/self-service/service";
 import { StayCard } from "@/modules/self-service/components/stay-card";
 import { isoDate } from "@/modules/accommodation/occupancy";
+import { itemsHeldBy } from "@/modules/inventory/service";
 import { keysHeldBy } from "@/modules/keys/service";
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
@@ -19,7 +20,7 @@ async function StayContent() {
   if (!staff) {
     return <p className="mt-4 text-sm text-zinc-600 dark:text-zinc-400">Your account is not linked to a staff record yet. Contact the accommodation office.</p>;
   }
-  const [stay, heldKeys] = await Promise.all([getMyStay(staff.id), keysHeldBy(staff.id)]);
+  const [stay, heldKeys, heldItems] = await Promise.all([getMyStay(staff.id), keysHeldBy(staff.id), itemsHeldBy({ staffId: staff.id })]);
   const site = stay.current?.bed.room.building.site ?? stay.upcoming?.bed.room.building.site ?? null;
 
   return (
@@ -42,6 +43,21 @@ async function StayContent() {
         <section className="mt-6">
           <h2 className="text-lg font-semibold">{stay.current ? "Your next bed" : "Upcoming stay"}</h2>
           <div className="mt-2"><StayCard allocation={stay.upcoming} /></div>
+        </section>
+      )}
+
+      {heldItems.length > 0 && (
+        <section className="mt-6" data-held-items>
+          <h2 className="text-lg font-semibold">Items issued to you</h2>
+          <p className="mt-1 text-xs text-zinc-500">Return these at check-out.</p>
+          <ul className="mt-2 divide-y divide-zinc-200 rounded-lg border border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
+            {heldItems.map((h) => (
+              <li key={h.itemId} className="flex justify-between gap-3 p-3 text-sm">
+                <div className="font-medium">{h.name}{h.serialNumber ? ` #${h.serialNumber}` : ""}</div>
+                <div className="text-right text-xs text-zinc-500">{h.serialNumber ? "" : `${h.quantity} ${h.unit}`}{h.since ? ` · since ${h.since.toISOString().slice(0, 10)}` : ""}</div>
+              </li>
+            ))}
+          </ul>
         </section>
       )}
 

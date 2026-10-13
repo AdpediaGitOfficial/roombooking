@@ -161,6 +161,29 @@ permanent transaction history and the actions for its state. Rules in
 
 Demo custodian: `custodian@example.com`.
 
+## Inventory
+
+Custodians and administrators keep the register at `/inventory` (summary,
+filters, search, add item), work each item at `/inventory/:id` (receive, issue,
+return, damage, count adjustment, transfer, retire, edit, permanent history)
+and read `/inventory/reports` (stock balance by category, asset condition,
+allocated items by location, movements with filters and CSV export). Rules in
+`src/modules/inventory/service.ts`:
+
+- two kinds of item: a *stock line* (SKU, counted units, unit of measure, reorder threshold) and a *serialised asset* (one unit tracked by serial number or asset tag with a condition). A site has one stock line per SKU; serial numbers are unique;
+- every change to the on-hand figure is a logged movement with actor, timestamp, signed quantity, balance after, destination, condition, reference and notes. The log cannot be deleted;
+- stock is issued to and returned from a room, a resident or a facility; the units out at each place are derived from the log, and a return cannot exceed what is out there. Units returned damaged are written off in the same step;
+- an asset is issued to exactly one place at a time (database constraint), is taken back with a condition, and cannot be issued while damaged. Its on-hand count is 1 in store and 0 while issued, so the stock check also guards against double issue;
+- issues run under a row lock and a conditional decrement, so two concurrent issues cannot take stock below zero; the database also refuses a negative quantity;
+- adjustments set a counted figure with a mandatory reason; damage write-offs and retirement need a reason; retirement is refused while anything is still out;
+- transfers move stock to the same SKU at another site, creating the line there if needed, as two linked movements; an asset in store can be re-homed to another site;
+- stock at or below its reorder threshold is flagged on the register, on the item and in the summary (`Low stock` filter);
+- items issued to a resident appear on their allocation page (return and issue from there) and in My stay, and count as check-out clearance blockers alongside keys.
+
+Demo data: bedding, linen, toiletries and electrical stock lines (two below
+threshold), five appliances and electronics assets (one damaged), a mini fridge
+and two pillows issued to the resident E1001.
+
 ## Facility booking
 
 Residents book shared facilities at `/my/facilities` (list, day-by-day

@@ -333,6 +333,46 @@ async function main() {
     },
   });
 
+  // Inventory: stock lines, serialised assets, one asset and some bedding issued to the resident.
+  const ensureStock = async (sku: string, name: string, category: string, quantity: number, reorderThreshold: number, unit = "pcs", storageLocation = "Store room A") => {
+    const existing = await prisma.inventoryItem.findFirst({ where: { siteId: site.id, sku, serialNumber: null } });
+    if (existing) return existing;
+    const item = await prisma.inventoryItem.create({ data: { siteId: site.id, sku, name, category, quantity, reorderThreshold, unit, storageLocation, trackingType: "STOCK" } });
+    await prisma.inventoryTransaction.create({ data: { itemId: item.id, type: "RECEIPT", quantity, balanceAfter: quantity, actorId: adminUser.id, notes: "Opening balance" } });
+    return item;
+  };
+  const ensureAsset = async (sku: string, name: string, category: string, serialNumber: string, condition: "NEW" | "GOOD" | "FAIR" | "DAMAGED" = "GOOD") => {
+    const existing = await prisma.inventoryItem.findUnique({ where: { serialNumber } });
+    if (existing) return existing;
+    const item = await prisma.inventoryItem.create({ data: { siteId: site.id, sku, name, category, serialNumber, condition, quantity: 1, unit: "unit", trackingType: "SERIALIZED", storageLocation: "Store room B" } });
+    await prisma.inventoryTransaction.create({ data: { itemId: item.id, type: "RECEIPT", quantity: 1, balanceAfter: 1, actorId: adminUser.id, notes: "Asset registered" } });
+    return item;
+  };
+  const pillows = await ensureStock("PILLOW-STD", "Pillow", "Bedding", 40, 10);
+  await ensureStock("SHEET-SGL", "Bed sheet (single)", "Bedding", 60, 20);
+  await ensureStock("BLANKET", "Blanket", "Bedding", 8, 10);
+  await ensureStock("TOWEL-BATH", "Bath towel", "Linen", 35, 15);
+  await ensureStock("SOAP-100", "Soap bar 100g", "Toiletries", 12, 24, "pcs", "Store room A, shelf 2");
+  await ensureStock("BULB-LED9", "LED bulb 9W", "Electrical", 48, 12);
+  const fridge = await ensureAsset("FRIDGE-MINI", "Mini fridge", "Appliances", "MF-2024-0001");
+  await ensureAsset("FRIDGE-MINI", "Mini fridge", "Appliances", "MF-2024-0002", "NEW");
+  await ensureAsset("TV-32", "Television 32\"", "Electronics", "TV-2023-0107");
+  await ensureAsset("KETTLE", "Electric kettle", "Appliances", "KT-2022-0031", "FAIR");
+  await ensureAsset("HEATER", "Oil heater", "Appliances", "OH-2021-0004", "DAMAGED");
+  if (!(await prisma.assetAssignment.findFirst({ where: { itemId: fridge.id, endedAt: null } })) && fridge.quantity === 1) {
+    await prisma.$transaction([
+      prisma.assetAssignment.create({ data: { itemId: fridge.id, staffId: residentProfile.id, assignedById: adminUser.id, notes: "Issued at check-in" } }),
+      prisma.inventoryItem.update({ where: { id: fridge.id }, data: { quantity: 0 } }),
+      prisma.inventoryTransaction.create({ data: { itemId: fridge.id, type: "ISSUE", quantity: -1, balanceAfter: 0, actorId: adminUser.id, staffId: residentProfile.id, notes: "Issued at check-in" } }),
+    ]);
+  }
+  if (!(await prisma.inventoryTransaction.findFirst({ where: { itemId: pillows.id, type: "ISSUE", staffId: residentProfile.id } }))) {
+    await prisma.$transaction([
+      prisma.inventoryItem.update({ where: { id: pillows.id }, data: { quantity: { decrement: 2 } } }),
+      prisma.inventoryTransaction.create({ data: { itemId: pillows.id, type: "ISSUE", quantity: -2, balanceAfter: pillows.quantity - 2, actorId: adminUser.id, staffId: residentProfile.id, notes: "Issued at check-in" } }),
+    ]);
+  }
+
   const counts = {
     buildings: await prisma.building.count(),
     rooms: await prisma.room.count(),
@@ -342,6 +382,7 @@ async function main() {
     keys: await prisma.key.count(),
     requestTypes: await prisma.requestType.count(),
     facilities: await prisma.facility.count(),
+    inventoryItems: await prisma.inventoryItem.count(),
   };
   console.log("Seed complete", counts);
 }
