@@ -1,6 +1,9 @@
 export type AllocationErrorCode =
   | "NOT_FOUND"
   | "STAFF_INACTIVE"
+  | "STAFF_UNVERIFIED"
+  | "NOT_ELIGIBLE"
+  | "NOT_READY"
   | "BED_UNAVAILABLE"
   | "GENDER_POLICY"
   | "INVALID_DATES"

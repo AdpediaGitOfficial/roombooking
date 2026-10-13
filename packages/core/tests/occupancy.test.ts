@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classifyBed, summarize, todayInTimezone, type BedLike } from "../src/modules/accommodation/occupancy";
+import { classifyBed, containerStatus, summarize, todayInTimezone, type BedLike } from "../src/modules/accommodation/occupancy";
 
 const staff = (n: number) => ({ id: `s${n}`, employeeId: `E${n}`, firstName: "Staff", lastName: String(n) });
 const d = (iso: string) => new Date(`${iso}T00:00:00.000Z`);
@@ -116,7 +116,26 @@ describe("summarize", () => {
       blocked: 1,
       retired: 1,
       upcomingArrivals: 1,
+      maintenance: 0,
+      needsCleaning: 0,
+      draft: 0,
     });
+  });
+
+  it("reports the document's extra bed states: needs cleaning, under maintenance and draft", () => {
+    const beds: BedLike[] = [
+      bed({ id: "1", code: "R-1", readiness: "NEEDS_CLEANING" }),
+      bed({ id: "2", code: "R-2", status: "MAINTENANCE", blockReason: "Leak" }),
+      bed({ id: "3", code: "R-3", status: "DRAFT" }),
+      bed({ id: "4", code: "R-4", status: "ARCHIVED" }),
+      bed({ id: "5", code: "R-5" }),
+    ];
+    const views = beds.map((b) => classifyBed(b, TODAY));
+    expect(views.map((v) => v.state)).toEqual(["NEEDS_CLEANING", "MAINTENANCE", "DRAFT", "RETIRED", "VACANT"]);
+    expect(summarize(views)).toMatchObject({ capacity: 3, vacant: 2, needsCleaning: 1, blocked: 1, maintenance: 1, draft: 1, retired: 1 });
+    // A blocked building governs everything inside it.
+    expect(classifyBed(bed({ id: "6", code: "R-6" }), TODAY, containerStatus("ACTIVE", "BLOCKED", "ACTIVE")).state).toBe("BLOCKED");
+    expect(containerStatus("ACTIVE", "ACTIVE", "DRAFT")).toBe("DRAFT");
   });
 });
 

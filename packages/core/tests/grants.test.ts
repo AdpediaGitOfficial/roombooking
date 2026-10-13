@@ -110,7 +110,7 @@ describe("maker-checker", () => {
 
 describe("accounts", () => {
   it("creates a user with a temporary password that must be changed, without needing an email", async () => {
-    const { user, temporaryPassword, invitePath } = await createUser({ actorId: sa1, organizationId: orgId, name: "Phone User", username: `+971500${stamp.slice(0, 5)}`.replace(/[^a-z0-9+._@-]/g, ""), roles: [{ role: "STAFF" }], mode: "temp_password" });
+    const { user, temporaryPassword, invitePath } = await createUser({ actorId: sa1, organizationId: orgId, name: "Phone User", username: `+97150${stamp}`.replace(/[^a-z0-9+._@-]/g, ""), roles: [{ role: "STAFF" }], mode: "temp_password" });
     expect(invitePath).toBeNull();
     expect(user.email).toBeNull();
     expect(user.status).toBe("ACTIVE");

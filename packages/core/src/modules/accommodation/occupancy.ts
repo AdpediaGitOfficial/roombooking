@@ -1,6 +1,6 @@
 // Bed-level occupancy. Pure functions so the rules are unit-testable; the
 // query helpers at the bottom load the data shape these functions expect.
-import type { AllocationStatus, BedStatus, RoomStatus } from "@prisma/client";
+import type { AllocationStatus, BedReadiness, BedStatus, RecordStatus, RoomStatus } from "@prisma/client";
 import { prisma } from "../../lib/db";
 
 /** Allocation statuses that occupy or reserve a bed. */
@@ -25,10 +25,23 @@ export type BedLike = {
   code: string;
   status: BedStatus;
   blockReason: string | null;
+  readiness?: BedReadiness;
   allocations: AllocationLike[];
 };
 
-export type BedState = "OCCUPIED" | "ALLOCATED" | "VACANT" | "BLOCKED" | "RETIRED";
+// Document 7 bed states: Available (VACANT), Reserved (ALLOCATED), Occupied, Needs cleaning, Blocked,
+// Under maintenance, plus Draft and Archived (RETIRED) which are outside capacity.
+export type BedState = "OCCUPIED" | "ALLOCATED" | "VACANT" | "NEEDS_CLEANING" | "BLOCKED" | "MAINTENANCE" | "DRAFT" | "RETIRED";
+
+/**
+ * The status that governs a bed from above (document 7): blocking a building or site blocks everything
+ * inside it. The most restrictive of site, building and room wins; ACTIVE only when all three are.
+ */
+export function containerStatus(room: RoomStatus, building?: RecordStatus | null, site?: RecordStatus | null): RoomStatus {
+  const rank: Record<string, number> = { ACTIVE: 0, DRAFT: 1, MAINTENANCE: 2, BLOCKED: 3, INACTIVE: 4, ARCHIVED: 5 };
+  const parts = [room, building, site].filter((x): x is RoomStatus => !!x);
+  return parts.reduce((worst, x) => ((rank[x] ?? 0) > (rank[worst] ?? 0) ? x : worst), "ACTIVE" as RoomStatus);
+}
 
 export type BedView = {
   id: string;
@@ -52,6 +65,10 @@ export type OccupancySummary = {
   blocked: number;
   retired: number;
   upcomingArrivals: number;
+  /** Subsets reported alongside the counts above. */
+  maintenance: number;
+  needsCleaning: number;
+  draft: number;
 };
 
 /** Calendar date (YYYY-MM-DD) in the given IANA timezone. */
@@ -103,8 +120,11 @@ export function classifyBed(bed: BedLike, today: string, roomStatus: RoomStatus 
   const current = checkedIn ?? started ?? null;
   let state: BedState;
   if (current) state = checkedIn ? "OCCUPIED" : "ALLOCATED";
-  else if (bed.status === "RETIRED") state = "RETIRED";
+  else if (bed.status === "RETIRED" || bed.status === "ARCHIVED" || roomStatus === "ARCHIVED" || roomStatus === "INACTIVE") state = roomStatus === "INACTIVE" && bed.status !== "RETIRED" && bed.status !== "ARCHIVED" ? "BLOCKED" : "RETIRED";
+  else if (bed.status === "DRAFT" || roomStatus === "DRAFT") state = "DRAFT";
+  else if (bed.status === "MAINTENANCE" || roomStatus === "MAINTENANCE") state = "MAINTENANCE";
   else if (bed.status === "BLOCKED" || roomStatus !== "ACTIVE") state = "BLOCKED";
+  else if (bed.readiness && bed.readiness !== "READY") state = "NEEDS_CLEANING";
   else state = "VACANT";
 
   return {
@@ -131,10 +151,17 @@ export function summarize(views: BedView[]): OccupancySummary {
     blocked: 0,
     retired: 0,
     upcomingArrivals: 0,
+    maintenance: 0,
+    needsCleaning: 0,
+    draft: 0,
   };
   for (const v of views) {
     if (v.state === "RETIRED") {
       s.retired++;
+      continue;
+    }
+    if (v.state === "DRAFT") {
+      s.draft++;
       continue;
     }
     s.capacity++;
@@ -145,7 +172,13 @@ export function summarize(views: BedView[]): OccupancySummary {
       s.occupied++;
       s.awaitingCheckIn++;
     } else if (v.state === "BLOCKED") s.blocked++;
-    else s.vacant++;
+    else if (v.state === "MAINTENANCE") {
+      s.blocked++;
+      s.maintenance++;
+    } else if (v.state === "NEEDS_CLEANING") {
+      s.vacant++;
+      s.needsCleaning++;
+    } else s.vacant++;
     if (v.upcoming) s.upcomingArrivals++;
   }
   return s;
@@ -162,8 +195,11 @@ export function mergeSummaries(items: OccupancySummary[]): OccupancySummary {
       blocked: acc.blocked + s.blocked,
       retired: acc.retired + s.retired,
       upcomingArrivals: acc.upcomingArrivals + s.upcomingArrivals,
+      maintenance: acc.maintenance + s.maintenance,
+      needsCleaning: acc.needsCleaning + s.needsCleaning,
+      draft: acc.draft + s.draft,
     }),
-    { capacity: 0, occupied: 0, checkedIn: 0, awaitingCheckIn: 0, vacant: 0, blocked: 0, retired: 0, upcomingArrivals: 0 },
+    { capacity: 0, occupied: 0, checkedIn: 0, awaitingCheckIn: 0, vacant: 0, blocked: 0, retired: 0, upcomingArrivals: 0, maintenance: 0, needsCleaning: 0, draft: 0 },
   );
 }
 
@@ -188,7 +224,7 @@ export async function getRoomOccupancy(roomId: string) {
   });
   if (!room) return null;
   const today = todayInTimezone(room.building.site.timezone);
-  const beds = room.beds.map((b) => classifyBed(b, today, room.status));
+  const beds = room.beds.map((b) => classifyBed(b, today, containerStatus(room.status, room.building.status, room.building.site.status)));
   return { room, today, beds, summary: summarize(beds) };
 }
 
@@ -203,7 +239,7 @@ export async function getBuildingOccupancy(buildingId: string) {
   if (!building) return null;
   const today = todayInTimezone(building.site.timezone);
   const rooms = building.rooms.map((room) => {
-    const beds = room.beds.map((b) => classifyBed(b, today, room.status));
+    const beds = room.beds.map((b) => classifyBed(b, today, containerStatus(room.status, building.status, building.site.status)));
     return { room, beds, summary: summarize(beds) };
   });
   return { building, today, rooms, summary: mergeSummaries(rooms.map((r) => r.summary)) };
@@ -224,7 +260,7 @@ export async function getSitesOverview(siteIds?: string[] | null) {
     const today = todayInTimezone(site.timezone);
     const buildings = site.buildings.map((building) => {
       const roomSummaries = building.rooms.map((room) =>
-        summarize(room.beds.map((b) => classifyBed(b, today, room.status))),
+        summarize(room.beds.map((b) => classifyBed(b, today, containerStatus(room.status, building.status, site.status)))),
       );
       return { building, roomCount: building.rooms.length, summary: mergeSummaries(roomSummaries) };
     });

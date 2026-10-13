@@ -1,5 +1,5 @@
 // Integration tests for the allocation engine against DATABASE_URL.
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { prisma } from "../src/lib/db";
 import { AllocationError } from "../src/modules/allocations/errors";
 import { allocate, cancel, checkIn, checkOut, findAvailableBeds, transfer } from "../src/modules/allocations/service";
@@ -46,7 +46,7 @@ beforeAll(async () => {
       create: { buildingId: building.id, code, genderPolicy: extra.genderPolicy ?? "ANY", status: extra.status ?? "ACTIVE" },
     });
   const bed = async (roomId: string, code: string, status: "ACTIVE" | "BLOCKED" = "ACTIVE") =>
-    prisma.bed.upsert({ where: { roomId_code: { roomId, code } }, update: { status }, create: { roomId, code, status } });
+    prisma.bed.upsert({ where: { roomId_code: { roomId, code } }, update: { status, readiness: "READY" }, create: { roomId, code, status } });
 
   const r1 = await room("ALT-R1");
   const r2 = await room("ALT-R2", { genderPolicy: "FEMALE" });
@@ -81,6 +81,9 @@ beforeAll(async () => {
 
   await prisma.allocation.deleteMany({ where: { staffId: { in: [ids.s1, ids.s2, ids.s3, ids.s4] } } });
 });
+
+// Check-out marks a bed as needing cleaning; these tests reuse the same beds, so put them back in service between cases.
+beforeEach(async () => { await prisma.bed.updateMany({ where: { room: { buildingId: ids.building } }, data: { readiness: "READY" } }); });
 
 afterAll(async () => {
   await prisma.allocation.deleteMany({ where: { staffId: { in: [ids.s1, ids.s2, ids.s3, ids.s4] } } });

@@ -6,7 +6,7 @@ import { prisma } from "../../lib/db";
 import { recordAudit } from "../../lib/audit";
 import { hashPassword, validatePasswordStrength, verifyPassword } from "../../lib/auth/password";
 import { revokeOtherUserSessions } from "../../lib/auth/session-store";
-import { OCCUPYING_STATUSES, classifyBed, isoDate, summarize, todayInTimezone } from "../accommodation/occupancy";
+import { OCCUPYING_STATUSES, classifyBed, containerStatus, isoDate, summarize, todayInTimezone } from "../accommodation/occupancy";
 
 export class SelfServiceError extends Error {
   constructor(message: string) {
@@ -65,7 +65,7 @@ export async function getMyStay(staffId: string, now: Date = new Date()): Promis
         },
       },
     });
-    const summary = summarize(beds.map((b) => classifyBed(b, today, current.bed.room.status)));
+    const summary = summarize(beds.map((b) => classifyBed(b, today, containerStatus(current.bed.room.status, current.bed.room.building.status, current.bed.room.building.site.status))));
     roomSharing = { capacity: summary.capacity, occupied: summary.occupied };
   }
 

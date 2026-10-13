@@ -2,7 +2,7 @@
 import { prisma } from "../../lib/db";
 import { siteWhere, type SiteScope } from "../../lib/permissions/scope";
 import { recordAudit } from "../../lib/audit";
-import { OCCUPYING_STATUSES, classifyBed, isoDate, mergeSummaries, summarize, todayInTimezone, type OccupancySummary } from "../accommodation/occupancy";
+import { OCCUPYING_STATUSES, classifyBed, containerStatus, isoDate, mergeSummaries, summarize, todayInTimezone, type OccupancySummary } from "../accommodation/occupancy";
 
 export const ARRIVAL_WINDOW_DAYS = 14;
 
@@ -24,7 +24,7 @@ export async function getDashboard(siteId: SiteScope, now: Date = new Date()) {
   const sites = await prisma.site.findMany({
     where: { status: "ACTIVE", ...siteWhere(siteId, "id") },
     orderBy: { name: "asc" },
-    include: { buildings: { where: { status: "ACTIVE" }, orderBy: { code: "asc" }, include: { rooms: { include: { beds: { include: bedInclude } } } } } },
+    include: { buildings: { where: { status: { in: ["ACTIVE", "BLOCKED", "MAINTENANCE"] } }, orderBy: { code: "asc" }, include: { rooms: { include: { beds: { include: bedInclude } } } } } },
   });
   const allSites = await prisma.site.findMany({ where: { status: "ACTIVE", ...siteWhere(siteId && !Array.isArray(siteId) ? null : siteId, "id") }, orderBy: { name: "asc" }, select: { id: true, name: true, timezone: true } });
   const timezone = sites[0]?.timezone ?? "UTC";
@@ -36,7 +36,7 @@ export async function getDashboard(siteId: SiteScope, now: Date = new Date()) {
   const departures: MovementRow[] = [];
   for (const site of sites) {
     for (const building of site.buildings) {
-      const roomSummaries = building.rooms.map((room) => summarize(room.beds.map((b) => classifyBed(b, today, room.status))));
+      const roomSummaries = building.rooms.map((room) => summarize(room.beds.map((b) => classifyBed(b, today, containerStatus(room.status, building.status, site.status)))));
       buildings.push({ id: building.id, name: building.name, siteName: site.name, summary: mergeSummaries(roomSummaries) });
       for (const room of building.rooms) {
         for (const bed of room.beds) {
@@ -109,7 +109,7 @@ export async function getOccupancyTrend(siteId: SiteScope, days = 30, now: Date 
       select: { checkedInAt: true, checkedOutAt: true, status: true },
     }),
     // Same definition as the dashboard tiles: every non-retired bed in an active building (blocked rooms still count as capacity).
-    prisma.bed.count({ where: { status: { not: "RETIRED" }, room: { building: { status: "ACTIVE", ...siteWhere(siteId) } } } }),
+    prisma.bed.count({ where: { status: { not: "RETIRED" }, room: { building: { status: { in: ["ACTIVE", "BLOCKED", "MAINTENANCE"] }, ...siteWhere(siteId) } } } }),
   ]);
   const points: TrendPoint[] = [];
   for (let i = days - 1; i >= 0; i--) {
@@ -153,7 +153,7 @@ export async function occupancyCsv(siteId: SiteScope, actorId: string, now: Date
     for (const building of site.buildings) {
       for (const room of building.rooms) {
         for (const bed of room.beds) {
-          const v = classifyBed(bed, today, room.status);
+          const v = classifyBed(bed, today, containerStatus(room.status, building.status, site.status));
           rows.push([site.name, building.name, room.code, bed.code, v.state, v.occupant?.employeeId ?? "", v.occupant?.name ?? "", v.since ?? "", v.until ?? "", v.upcoming ? `${v.upcoming.occupant.employeeId} from ${v.upcoming.startDate}` : "", v.blockReason ?? ""]);
         }
       }

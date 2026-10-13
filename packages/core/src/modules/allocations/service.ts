@@ -1,7 +1,7 @@
 // Allocation engine: search, allocate, check in, check out, transfer, cancel.
 // Every mutation runs in one transaction; the database exclusion constraint
 // on Allocation is the final guard against two people getting one bed.
-import type { GenderPolicy, Prisma, PrismaClient } from "@prisma/client";
+import type { GenderPolicy, Prisma, PrismaClient, StayType } from "@prisma/client";
 import { prisma } from "../../lib/db";
 import { recordAudit } from "../../lib/audit";
 import { enqueueNotification } from "../../lib/notifications";
@@ -9,6 +9,9 @@ import { OCCUPYING_STATUSES, isoDate, todayInTimezone } from "../accommodation/o
 import { itemsHeldBy } from "../inventory/service";
 import { AllocationError } from "./errors";
 import { fulfilRoomChangeTx } from "../requests/service";
+import { actorCan, type ActorLike } from "../../lib/permissions/actor";
+import { checkEligibility } from "./eligibility";
+import { effectivePolicy } from "../structure/service";
 
 type Tx = Prisma.TransactionClient;
 type Db = Tx | PrismaClient;
@@ -113,6 +116,13 @@ export type AllocateInput = {
   actorId: string;
   previousAllocationId?: string | null;
   requestId?: string | null;
+  stayType?: StayType;
+  /** Who is acting, so the eligibility override can be checked against their grants (Admins only, with a reason). */
+  actor?: ActorLike;
+  /** Proceed despite failing the eligibility check; needs the Eligibility override grant and a reason. */
+  eligibilityOverrideReason?: string | null;
+  /** Emergency check-in: the stay is provisional until an Accommodation Admin approves it within 24 hours. */
+  provisional?: boolean;
 };
 
 async function allocateTx(tx: Tx, input: AllocateInput) {
@@ -121,17 +131,34 @@ async function allocateTx(tx: Tx, input: AllocateInput) {
 
   const staff = await tx.staffProfile.findUnique({ where: { id: input.staffId } });
   if (!staff) throw new AllocationError("NOT_FOUND", "Staff member not found.");
-  if (staff.employmentStatus !== "ACTIVE") {
-    throw new AllocationError("STAFF_INACTIVE", `${staff.firstName} ${staff.lastName} is ${staff.employmentStatus.toLowerCase().replace("_", " ")} and cannot be allocated.`);
+  if (staff.employmentStatus !== "ACTIVE" || staff.archivedAt) {
+    throw new AllocationError("STAFF_INACTIVE", `${staff.firstName} ${staff.lastName} is ${staff.archivedAt ? "archived" : staff.employmentStatus.toLowerCase().replace("_", " ")} and cannot be allocated.`);
+  }
+  // Staff added by an officer stay Unverified until an Accommodation Admin verifies them; only an emergency check-in may go ahead.
+  if (staff.verificationStatus === "UNVERIFIED" && !input.provisional) {
+    throw new AllocationError("STAFF_UNVERIFIED", `${staff.firstName} ${staff.lastName}'s profile is not verified yet. An Accommodation Admin must verify it before a bed is allocated.`);
   }
 
   const bed = await tx.bed.findUnique({ where: { id: input.bedId }, include: bedWithLocation });
   if (!bed) throw new AllocationError("NOT_FOUND", "Bed not found.");
   if (bed.status !== "ACTIVE") throw new AllocationError("BED_UNAVAILABLE", `Bed ${bed.code} is ${bed.status.toLowerCase()}.`);
   if (bed.room.status !== "ACTIVE") throw new AllocationError("BED_UNAVAILABLE", `Room ${bed.room.code} is ${bed.room.status.toLowerCase()}.`);
-  if (bed.room.building.status !== "ACTIVE") throw new AllocationError("BED_UNAVAILABLE", `${bed.room.building.name} is inactive.`);
-  if (bed.room.genderPolicy !== "ANY" && staff.gender !== "ANY" && staff.gender !== bed.room.genderPolicy) {
-    throw new AllocationError("GENDER_POLICY", `Room ${bed.room.code} is reserved for ${bed.room.genderPolicy.toLowerCase()} residents.`);
+  if (bed.room.building.status !== "ACTIVE") throw new AllocationError("BED_UNAVAILABLE", `${bed.room.building.name} is ${bed.room.building.status === "INACTIVE" ? "inactive" : bed.room.building.status.toLowerCase()}.`);
+  if (bed.room.building.site.status !== "ACTIVE") throw new AllocationError("BED_UNAVAILABLE", `${bed.room.building.site.name} is ${bed.room.building.site.status.toLowerCase()}.`);
+  // Gender policy and eligibility are inherited from the building and site unless the room overrides them (document 7).
+  const policy = effectivePolicy(bed.room, bed.room.building, bed.room.building.site);
+  if (policy.genderPolicy !== "ANY" && staff.gender !== "ANY" && staff.gender !== policy.genderPolicy) {
+    throw new AllocationError("GENDER_POLICY", `Room ${bed.room.code} is reserved for ${policy.genderPolicy.toLowerCase()} residents.`);
+  }
+  const eligibility = checkEligibility(staff, bed.room, policy.eligibility, { startDate: input.startDate, endDate });
+  let eligibilityOverride: string | null = null;
+  if (!eligibility.ok) {
+    const why = input.eligibilityOverrideReason?.trim();
+    if (!why) throw new AllocationError("NOT_ELIGIBLE", `${staff.firstName} ${staff.lastName} is not eligible for room ${bed.room.code}: ${eligibility.reasons.join(" ")}`, { reasons: eligibility.reasons });
+    if (!input.actor || !actorCan(input.actor, "accom.eligibility_override", { siteId: bed.room.building.siteId, buildingId: bed.room.buildingId })) {
+      throw new AllocationError("FORBIDDEN", "Only an Accommodation Admin with the Eligibility override grant can allocate outside eligibility.");
+    }
+    eligibilityOverride = why;
   }
 
   const staffClash = await tx.allocation.findFirst({
@@ -158,8 +185,17 @@ async function allocateTx(tx: Tx, input: AllocateInput) {
       previousAllocationId: input.previousAllocationId ?? null,
       createdById: input.actorId,
       requestId: input.requestId ?? null,
+      stayType: input.provisional ? "EMERGENCY" : (input.stayType ?? "PERMANENT"),
+      provisional: input.provisional ?? false,
+      provisionalApproveBy: input.provisional ? new Date(Date.now() + 24 * 3600000) : null,
     },
   });
+  if (eligibilityOverride) {
+    // Overrides are flagged: reason mandatory, shown in exception reports, approvers notified.
+    await recordAudit({ actorId: input.actorId, action: "ELIGIBILITY_OVERRIDE", entityType: "Allocation", entityId: allocation.id, after: { reason: eligibilityOverride, failed: eligibility.reasons, staffId: staff.id, bedCode: bed.code } }, tx);
+    const approvers = await tx.user.findMany({ where: { status: "ACTIVE", id: { not: input.actorId }, roleAssignments: { some: { role: "ACCOMMODATION_ADMIN" } } }, select: { id: true }, take: 20 });
+    for (const a of approvers) await enqueueNotification(tx, { recipientId: a.id, event: "override.flagged", idempotencyKey: `override:${allocation.id}:${a.id}`, payload: { what: "Eligibility override", reason: eligibilityOverride, allocationId: allocation.id } });
+  }
 
   await recordAudit(
     {
@@ -194,7 +230,16 @@ export async function allocate(input: AllocateInput) {
 // Check-in (ACM-08)
 // ---------------------------------------------------------------------------
 
-export type CheckInInput = { allocationId: string; actorId: string; notes?: string | null; today?: string };
+export type CheckInInput = {
+  allocationId: string;
+  actorId: string;
+  notes?: string | null;
+  today?: string;
+  /** Check-in checklist ticks (from the check-in template): item id to done, with the resident having seen room assets. */
+  checklist?: Record<string, boolean | string> | null;
+  /** Hand over a bed that is not marked ready (needs cleaning); flagged in the audit log. */
+  acceptNotReady?: boolean;
+};
 
 async function checkInTx(tx: Tx, input: CheckInInput) {
   const allocation = await tx.allocation.findUnique({
@@ -211,6 +256,11 @@ async function checkInTx(tx: Tx, input: CheckInInput) {
   const today = input.today ?? (await siteTodayForBed(tx, allocation.bedId));
   if (allocation.endDate && isoDate(allocation.endDate) <= today) {
     throw new AllocationError("INVALID_DATES", "This allocation's end date has already passed. Create a new allocation.");
+  }
+  // A bed that still needs cleaning is not handed over unless the desk accepts it knowingly.
+  const readiness = (allocation.bed as { readiness?: string }).readiness ?? "READY";
+  if (readiness !== "READY" && !input.acceptNotReady) {
+    throw new AllocationError("NOT_READY", `Bed ${allocation.bed.code} is marked ${readiness.toLowerCase().replace("_", " ")}. Mark it ready first, or accept it as it is.`);
   }
   const now = new Date();
 
@@ -234,12 +284,13 @@ async function checkInTx(tx: Tx, input: CheckInInput) {
     data: {
       status: "CHECKED_IN",
       checkedInAt: now,
+      ...(input.checklist ? { checklist: { ...(typeof allocation.checklist === "object" && allocation.checklist ? (allocation.checklist as object) : {}), checkIn: input.checklist } as Prisma.InputJsonValue } : {}),
       ...(input.notes ? { notes: input.notes } : {}),
       ...(earlyArrival ? { startDate: toDate(today) } : {}),
     },
   });
   await recordAudit(
-    { actorId: input.actorId, action: "ALLOCATION_CHECKED_IN", entityType: "Allocation", entityId: allocation.id, after: { bedCode: allocation.bed.code, checkedInAt: now.toISOString(), earlyArrival, notes: input.notes ?? null } },
+    { actorId: input.actorId, action: "ALLOCATION_CHECKED_IN", entityType: "Allocation", entityId: allocation.id, after: { bedCode: allocation.bed.code, checkedInAt: now.toISOString(), earlyArrival, notes: input.notes ?? null, notReadyAccepted: readiness !== "READY" } },
     tx,
   );
   return updated;
@@ -277,6 +328,8 @@ export type CheckOutInput = {
   today?: string;
   overrideReason?: string | null;
   canOverride?: boolean;
+  /** Check-out checklist ticks (room condition, keys, assets handed back). */
+  checklist?: Record<string, boolean | string> | null;
 };
 
 async function checkOutTx(tx: Tx, input: CheckOutInput) {
@@ -294,6 +347,10 @@ async function checkOutTx(tx: Tx, input: CheckOutInput) {
       throw new AllocationError("CLEARANCE_BLOCKED", `Outstanding items must be returned before check-out: ${blockers.map((b) => b.label).join(", ")}.`, { blockers });
     }
     if (!input.canOverride) throw new AllocationError("FORBIDDEN", "Only an accommodation administrator can override clearance blockers.");
+    // An override is flagged and the approvers are told (document 3: reason mandatory, flagged, approver notified).
+    await recordAudit({ actorId: input.actorId, action: "CLEARANCE_OVERRIDE", entityType: "Allocation", entityId: allocation.id, after: { reason: overrideReason, blockers: blockers.map((b) => b.label) } }, tx);
+    const admins = await tx.user.findMany({ where: { status: "ACTIVE", id: { not: input.actorId }, roleAssignments: { some: { role: { in: ["ACCOMMODATION_ADMIN", "SYSTEM_ADMIN"] } } } }, select: { id: true }, take: 20 });
+    for (const a of admins) await enqueueNotification(tx, { recipientId: a.id, event: "override.flagged", idempotencyKey: `override:clearance:${allocation.id}:${a.id}`, payload: { what: "Check-out clearance override", reason: overrideReason, allocationId: allocation.id } });
   }
 
   const now = new Date();
@@ -304,9 +361,14 @@ async function checkOutTx(tx: Tx, input: CheckOutInput) {
       status: "CHECKED_OUT",
       checkedOutAt: now,
       ...(keepEnd ? {} : { endDate: toDate(today) }),
+      ...(input.checklist ? { checklist: { ...(typeof allocation.checklist === "object" && allocation.checklist ? (allocation.checklist as object) : {}), checkOut: input.checklist } as Prisma.InputJsonValue } : {}),
       ...(input.notes ? { notes: input.notes } : {}),
     },
   });
+  // The bed needs cleaning before the next arrival: flag it and open a housekeeping task.
+  const bedRoom = await tx.bed.findUnique({ where: { id: allocation.bedId }, include: { room: { include: { building: true } } } });
+  await tx.bed.update({ where: { id: allocation.bedId }, data: { readiness: "NEEDS_CLEANING", readinessUpdatedAt: now } });
+  if (bedRoom) await tx.cleaningTask.create({ data: { siteId: bedRoom.room.building.siteId, roomId: bedRoom.roomId, bedId: bedRoom.id, reason: "CHECKOUT", dueAt: new Date(now.getTime() + 24 * 3600000) } });
   await recordAudit(
     {
       actorId: input.actorId,
