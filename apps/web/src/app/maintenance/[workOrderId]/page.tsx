@@ -1,12 +1,13 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { requireRole, userAccess } from "@/lib/auth/authorize";
+import { requireRole, userAccess, userCan } from "@/lib/auth/authorize";
 import { MAINTENANCE_AREA_ROLES } from "@sam/core/modules/maintenance/access";
 import { CATEGORIES, accessFor, allowedTransitions, getWorkOrder, listAssignees, listAttachments, locationLabel, reopenWindowOpen, visibleNotes } from "@sam/core/modules/maintenance/service";
 import { actorOf } from "@/modules/maintenance/context";
 import { NoteList, PriorityLabel, SlaLabel, WorkOrderStatusBadge } from "@/modules/maintenance/components/views";
 import { AssignForm, NoteForm, StatusForm, TriageForm } from "@/modules/maintenance/components/forms";
+import { JobPanels } from "@/modules/maintenance/components/job-panels";
 import { PageHeader } from "@/components/shell/page-header";
 
 async function Content({ params }: { params: Promise<{ workOrderId: string }> }) {
@@ -79,6 +80,7 @@ async function Content({ params }: { params: Promise<{ workOrderId: string }> })
               {wo.preferredContact && <p className="mt-2 text-xs text-zinc-500">Preferred contact: {wo.preferredContact}</p>}
             </div>
           </section>
+          <JobPanels wo={wo} access={access} can={(k) => userCan(user, k, { siteId: wo.siteId, buildingId: wo.buildingId })} isRequester={wo.requesterId === user.id} />
           <section className="panel">
             <div className="panel-head"><div><h2>Actions</h2></div></div>
             <div className="panel-body grid gap-4">

@@ -2,8 +2,12 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { canSeeSite } from "@/lib/auth/scope";
-import { hasRole, requireRole } from "@/lib/auth/authorize";
-import { KEY_MANAGE_ROLES, KEY_OPERATE_ROLES, KEY_VIEW_ROLES } from "@sam/core/modules/keys/access";
+import { actorOf, requireRole, userCan, userCanAccess } from "@/lib/auth/authorize";
+import { KEY_VIEW_ROLES } from "@sam/core/modules/keys/access";
+import { keyHistory } from "@sam/core/modules/keys/extras";
+import { KeyError } from "@sam/core/modules/keys/errors";
+import { ActionForm } from "@/components/forms/action-form";
+import { sensitiveAction } from "@/modules/keys/actions";
 import { getKey, holderLabel, isOverdue, keyLocation, openIssue } from "@sam/core/modules/keys/service";
 import { staffOptions } from "@/modules/keys/context";
 import { KeyStatusBadge, TransactionHistory } from "@/modules/keys/components/views";
@@ -15,16 +19,19 @@ async function Content({ params }: { params: Promise<{ keyId: string }> }) {
   const key = await getKey(keyId);
   if (!key) notFound();
   if (!(await canSeeSite(user, ["keys.standard", "keys.register"], key.siteId))) notFound();
-  const canOperate = hasRole(user, ...KEY_OPERATE_ROLES);
-  const canManage = hasRole(user, ...KEY_MANAGE_ROLES);
+  const ctx = { siteId: key.siteId };
+  const canOperate = userCanAccess(user, key.sensitive ? "keys.sensitive" : "keys.standard", ctx);
+  const canManage = userCan(user, "keys.register", ctx) || userCan(user, "keys.retire_replace", ctx);
+  const canReportLost = userCanAccess(user, "keys.report_lost", ctx);
+  const history = await keyHistory(actorOf(user), key.id).then(() => true).catch((e) => { if (e instanceof KeyError) return false; throw e; });
   const issue = openIssue(key);
   const now = new Date();
   const staff = canOperate && key.status === "AVAILABLE" ? await staffOptions() : [];
 
   const exceptionKinds: Array<{ kind: string; label: string; danger?: boolean }> = [];
+  if (canReportLost && (key.status === "AVAILABLE" || key.status === "ISSUED")) exceptionKinds.push({ kind: "LOST", label: "Report lost", danger: true });
   if (canManage) {
-    if (key.status === "AVAILABLE") { exceptionKinds.push({ kind: "DAMAGED", label: "Mark damaged" }, { kind: "LOST", label: "Report lost", danger: true }, { kind: "RETIRE", label: "Retire", danger: true }); }
-    if (key.status === "ISSUED") exceptionKinds.push({ kind: "LOST", label: "Report lost", danger: true });
+    if (key.status === "AVAILABLE") { exceptionKinds.push({ kind: "DAMAGED", label: "Mark damaged" }, { kind: "RETIRE", label: "Retire", danger: true }); }
     if (key.status === "LOST") exceptionKinds.push({ kind: "FOUND", label: "Found" });
     if (key.status === "DAMAGED") exceptionKinds.push({ kind: "SEND_REPAIR", label: "Send for repair" }, { kind: "RETIRE", label: "Retire", danger: true });
     if (key.status === "UNDER_REPAIR") exceptionKinds.push({ kind: "BACK_REPAIR", label: "Back from repair" }, { kind: "RETIRE", label: "Retire", danger: true });
@@ -34,7 +41,7 @@ async function Content({ params }: { params: Promise<{ keyId: string }> }) {
     <>
       <div className="mt-1 flex flex-wrap items-center gap-3">
         <h1 className="page-title">Key {key.code}</h1>
-        <KeyStatusBadge status={key.status} />
+        <KeyStatusBadge status={key.status} />{key.sensitive && <span className="chip chip-danger">Sensitive</span>}
       </div>
       <p className="mt-1 text-sm text-zinc-600">{key.label ? `${key.label} · ` : ""}{keyLocation(key)}{key.allowCopies ? " · copies exist" : ""}</p>
       {key.replaces && <p className="mt-1 text-xs text-zinc-500">Replaces <Link href={`/keys/${key.replaces.id}`} className="underline">{key.replaces.code}</Link></p>}
@@ -52,7 +59,7 @@ async function Content({ params }: { params: Promise<{ keyId: string }> }) {
         <section>
           <h2 className="section-title">History</h2>
           <p className="mb-2 text-xs text-zinc-500">Every issue, return and exception is kept permanently.</p>
-          <TransactionHistory transactions={key.transactions} />
+          {history ? <TransactionHistory transactions={key.transactions} /> : <p className="text-sm text-zinc-500">The history of a sensitive key is limited to Key supervisors, Admins and Auditors.</p>}
         </section>
         <section className="space-y-4">
           <h2 className="section-title">Actions</h2>
@@ -60,6 +67,7 @@ async function Content({ params }: { params: Promise<{ keyId: string }> }) {
           {canOperate && issue && key.status === "ISSUED" && <ReturnKeyForm keyId={key.id} />}
           <KeyExceptionForm keyId={key.id} kinds={exceptionKinds} withIncident={key.status === "ISSUED" || key.status === "AVAILABLE"} />
           {canManage && ["LOST", "DAMAGED", "UNDER_REPAIR"].includes(key.status) && <ReplaceKeyForm keyId={key.id} suggestedCode={`${key.code}-R${key.replacedBy.length + 1}`} />}
+          {userCan(user, "keys.register", ctx) && <ActionForm compact tone="secondary" action={sensitiveAction} hidden={{ keyId: key.id, sensitive: key.sensitive ? "0" : "1" }} submit={key.sensitive ? "Mark as standard key" : "Mark as sensitive key"} />}
           {!canOperate && <p className="text-sm text-zinc-500">Read-only access.</p>}
         </section>
       </div>

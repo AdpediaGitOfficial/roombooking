@@ -7,6 +7,7 @@ import { ITEM_FILTERS, categories, describeLocation, inventorySummary, listItems
 import { targetOptions } from "@/modules/inventory/context";
 import { ConditionBadge, ItemStateBadge } from "@/modules/inventory/components/views";
 import { CreateItemForm } from "@/modules/inventory/components/forms";
+import { requireUser, userCanAccess } from "@/lib/auth/authorize";
 import { PageHeader } from "@/components/shell/page-header";
 
 type Search = Promise<{ filter?: string; q?: string; category?: string }>;
@@ -62,10 +63,15 @@ async function Register({ searchParams }: { searchParams: Search }) {
   );
 }
 
+async function HeaderLinks() {
+  const user = await requireUser("/inventory");
+  return userCanAccess(user, "inv.writeoff") || userCanAccess(user, "inv.adjust") ? <Link href="/inventory/writeoffs" className="btn">Write-offs</Link> : null;
+}
+
 export default function InventoryPage({ searchParams }: PageProps<"/inventory">) {
   return (
     <main>
-      <PageHeader title="Inventory" subtitle="Stock lines and serialised assets: receipts, issues, returns, transfers, adjustments, damage and retirement." crumbs={[["Inventory"]]} />
+      <PageHeader title="Inventory" subtitle="Stock lines and serialised assets: receipts, issues, returns, transfers, adjustments, damage and retirement." crumbs={[["Inventory"]]} actions={<Suspense fallback={null}><HeaderLinks /></Suspense>} />
       <Suspense fallback={<p className="text-sm text-zinc-500">Loading…</p>}>
         <Register searchParams={searchParams as Search} />
       </Suspense>

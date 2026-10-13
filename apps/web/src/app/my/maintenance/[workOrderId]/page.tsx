@@ -5,6 +5,8 @@ import { requireUser } from "@/lib/auth/authorize";
 import { accessFor, allowedTransitions, getWorkOrder, listAttachments, locationLabel, reopenWindowOpen, visibleNotes } from "@sam/core/modules/maintenance/service";
 import { actorOf } from "@/modules/maintenance/context";
 import { NoteList, PriorityLabel, WorkOrderStatusBadge } from "@/modules/maintenance/components/views";
+import { ActionForm } from "@/components/forms/action-form";
+import { verifyAction } from "@/modules/maintenance/extras-actions";
 import { NoteForm, StatusForm } from "@/modules/maintenance/components/forms";
 
 async function Content({ params }: { params: Promise<{ workOrderId: string }> }) {
@@ -38,6 +40,7 @@ async function Content({ params }: { params: Promise<{ workOrderId: string }> })
       </section>
 
       <section className="mt-6 space-y-4">
+        {wo.status === "RESOLVED" && <ActionForm action={verifyAction} hidden={{ workOrderId: wo.id }} title="Confirm it is fixed" submit="Verify and rate" fields={[{ name: "rating", label: "Rating", type: "select", options: [5, 4, 3, 2, 1].map((n) => ({ value: String(n), label: `${n} ${"★".repeat(n)}` })) }, { name: "comment", label: "Comment" }]} />}
         <StatusForm workOrderId={wo.id} options={options} noteLabel="Note (required to reopen or cancel)" />
         {!["CLOSED", "CANCELLED"].includes(wo.status) && <NoteForm workOrderId={wo.id} allowInternal={false} />}
       </section>

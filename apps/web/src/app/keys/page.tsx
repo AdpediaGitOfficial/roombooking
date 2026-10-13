@@ -1,19 +1,20 @@
 import { Suspense } from "react";
 import Link from "next/link";
-import { hasRole, requireRole } from "@/lib/auth/authorize";
+import { requireRole, userCan } from "@/lib/auth/authorize";
 import { sitesFor } from "@/lib/auth/scope";
-import { KEY_MANAGE_ROLES, KEY_VIEW_ROLES } from "@sam/core/modules/keys/access";
+import { KEY_VIEW_ROLES } from "@sam/core/modules/keys/access";
 import { keyLocation, keySummary, listKeys, type KeyFilter } from "@sam/core/modules/keys/service";
 import { registerOptions } from "@/modules/keys/context";
 import { HolderCell, KeyStatusBadge } from "@/modules/keys/components/views";
 import { RegisterKeyForm } from "@/modules/keys/components/forms";
+import { KeyTabs } from "@/modules/keys/components/tabs";
 import { PageHeader } from "@/components/shell/page-header";
 
 const FILTERS: Array<[KeyFilter, string]> = [["all", "All"], ["available", "Available"], ["issued", "Issued"], ["overdue", "Overdue"], ["exceptions", "Lost / damaged / repair"], ["retired", "Retired"]];
 
 async function Register({ searchParams }: { searchParams: Promise<{ filter?: string }> }) {
   const user = await requireRole(KEY_VIEW_ROLES, "/keys");
-  const canManage = hasRole(user, ...KEY_MANAGE_ROLES);
+  const canManage = userCan(user, "keys.register");
   const { filter: raw } = await searchParams;
   const filter = (FILTERS.some(([f]) => f === raw) ? raw : "all") as KeyFilter;
   const now = new Date();
@@ -21,6 +22,7 @@ async function Register({ searchParams }: { searchParams: Promise<{ filter?: str
   const [rows, summary, options] = await Promise.all([listKeys(filter, scope, now), keySummary(scope, now), canManage ? registerOptions() : null]);
   return (
     <>
+      <KeyTabs user={user} active="register" />
       <dl className="grid grid-cols-2 gap-3 sm:grid-cols-5">
         {[["Keys", summary.total], ["Available", summary.available], ["Issued", summary.issued], ["Overdue", summary.overdue], ["Exceptions", summary.exceptions]].map(([label, value]) => (
           <div key={label} className="kpi"><dt className="kpi-label">{label}</dt><dd data-summary={label} className="kpi-value">{value}</dd></div>

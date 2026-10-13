@@ -417,7 +417,7 @@ export async function queueSummary(actor: Actor, now: Date = new Date()) {
 export async function listAssignees(db: Db = prisma) {
   const [engineers, vendors] = await Promise.all([
     db.user.findMany({ where: { status: "ACTIVE", roleAssignments: { some: { role: "TECHNICIAN" } } }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
-    db.vendor.findMany({ where: { status: "ACTIVE" }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
+    db.vendor.findMany({ where: { status: "ACTIVE", state: "ACTIVE", archivedAt: null }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
   ]);
   return { engineers, vendors };
 }

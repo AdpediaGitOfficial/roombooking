@@ -5,6 +5,9 @@ const STATUS_STYLE: Partial<Record<WorkOrderStatus, string>> = {
   NEW: "chip-warning",
   TRIAGED: "chip-warning",
   ASSIGNED: "chip-info",
+  ACCEPTED: "chip-info",
+  ON_HOLD: "chip-warning",
+  VERIFIED: "chip-success",
   IN_PROGRESS: "chip-info",
   WAITING_STAFF: "chip-warning",
   WAITING_PARTS: "chip-warning",
@@ -34,7 +37,7 @@ export function SlaLabel({ wo, now }: { wo: Pick<WorkOrderRecord, "status" | "sl
   if (!wo.slaDueAt) return null;
   const overdue = isOverdue(wo, now);
   const hours = Math.round((wo.slaDueAt.getTime() - now.getTime()) / 3600000);
-  if (!["NEW", "TRIAGED", "ASSIGNED", "IN_PROGRESS", "WAITING_STAFF", "WAITING_PARTS", "WAITING_ACCESS", "REOPENED"].includes(wo.status)) return null;
+  if (!["NEW", "TRIAGED", "ASSIGNED", "ACCEPTED", "ON_HOLD", "IN_PROGRESS", "WAITING_STAFF", "WAITING_PARTS", "WAITING_ACCESS", "REOPENED"].includes(wo.status)) return null;
   return (
     <span data-overdue={overdue ? "true" : "false"} className={overdue ? "chip chip-danger" : hours <= 12 ? "chip chip-warning" : "text-xs text-zinc-500"}>
       {overdue ? `Overdue by ${Math.abs(hours)} h` : `Due in ${hours} h`}

@@ -5,6 +5,7 @@ import { MAINTENANCE_AREA_ROLES } from "@sam/core/modules/maintenance/access";
 import { listWorkOrders, locationLabel, queueSummary, type QueueFilter } from "@sam/core/modules/maintenance/service";
 import { actorOf } from "@/modules/maintenance/context";
 import { PriorityLabel, SlaLabel, WorkOrderStatusBadge } from "@/modules/maintenance/components/views";
+import { MaintenanceTabs } from "@/modules/maintenance/components/tabs";
 import { PageHeader } from "@/components/shell/page-header";
 
 const FILTERS: Array<[QueueFilter, string]> = [
@@ -25,6 +26,7 @@ async function Queue({ searchParams }: { searchParams: Promise<{ filter?: string
   ];
   return (
     <>
+      <MaintenanceTabs user={user} active="queue" />
       <dl className="grid grid-cols-2 gap-3 sm:grid-cols-5">
         {tiles.map(([label, value, accent, f]) => (
           <Link key={label} href={`/maintenance?filter=${f}`} className="kpi" style={{ "--acc": accent } as React.CSSProperties}>

@@ -1,7 +1,9 @@
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { canSeeSite } from "@/lib/auth/scope";
-import { hasRole, requireRole } from "@/lib/auth/authorize";
+import { hasRole, requireRole, userCan } from "@/lib/auth/authorize";
+import { ActionForm } from "@/components/forms/action-form";
+import { storeMoveAction, writeOffRequestAction } from "@/modules/inventory/extras-actions";
 import { INVENTORY_MANAGE_ROLES, INVENTORY_OPERATE_ROLES, INVENTORY_VIEW_ROLES } from "@sam/core/modules/inventory/access";
 import { describeLocation, getItem, isLowStock, targetLabel } from "@sam/core/modules/inventory/service";
 import { targetOptions } from "@/modules/inventory/context";
@@ -19,6 +21,8 @@ async function Content({ params }: { params: Params }) {
   const user = await requireRole(INVENTORY_VIEW_ROLES, `/inventory/${itemId}`);
   const canOperate = hasRole(user, ...INVENTORY_OPERATE_ROLES);
   const canManage = hasRole(user, ...INVENTORY_MANAGE_ROLES);
+  const ctx = { siteId: undefined as string | undefined };
+  void ctx;
   const detail = await getItem(itemId);
   if (!detail) notFound();
   if (!(await canSeeSite(user, "inv.room_assets", detail.item.siteId))) notFound();
@@ -66,13 +70,15 @@ async function Content({ params }: { params: Params }) {
         <section className="mt-6">
           <h2 className="section-title">Actions</h2>
           <div className="mt-3 grid gap-4 sm:grid-cols-2">
-            {!serialised && <MovementForm kind="RECEIVE" {...base} />}
+            {!serialised && userCan(user, "inv.goods_in") && <MovementForm kind="RECEIVE" {...base} />}
             {(serialised ? !open && item.condition !== "DAMAGED" : item.quantity > 0) && <MovementForm kind="ISSUE" {...base} options={options} />}
             {outstandingOptions.length > 0 && <MovementForm kind="RETURN" {...base} options={options} outstanding={outstandingOptions} />}
             {(serialised ? item.condition !== "DAMAGED" : item.quantity > 0) && <MovementForm kind="DAMAGE" {...base} />}
-            {canManage && !serialised && <MovementForm kind="ADJUST" {...base} />}
-            {canManage && (serialised ? !open : item.quantity > 0) && <MovementForm kind="TRANSFER" {...base} sites={options.sites.filter((s) => s.id !== item.siteId)} />}
-            {canManage && !open && <MovementForm kind="RETIRE" {...base} />}
+            {userCan(user, "inv.adjust") && !serialised && <MovementForm kind="ADJUST" {...base} />}
+            {userCan(user, "inv.goods_in") && (serialised ? !open : item.quantity > 0) && <MovementForm kind="TRANSFER" {...base} sites={options.sites.filter((s) => s.id !== item.siteId)} />}
+            {userCan(user, "inv.goods_in") && !open && <ActionForm action={storeMoveAction} hidden={{ itemId: item.id }} title="Move to another store" submit="Move" fields={[{ name: "store", label: "Store", defaultValue: item.store ?? "" }, { name: "notes", label: "Note" }]} />}
+            {(userCan(user, "inv.adjust") || userCan(user, "inv.writeoff")) && !open && (serialised || item.quantity > 0) && <ActionForm action={writeOffRequestAction} hidden={{ itemId: item.id }} title="Request a write-off" intro="An Admin approves; above the value limit a Super Admin does." submit="Request write-off" fields={[...(serialised ? [] : [{ name: "quantity", label: "Quantity", type: "number" as const, min: 1, max: item.quantity }]), { name: "reason", label: "Reason", required: true }]} />}
+            {userCan(user, "inv.writeoff") && !open && <MovementForm kind="RETIRE" {...base} />}
           </div>
         </section>
       )}

@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { AssetCondition } from "@prisma/client";
-import { requireRole } from "@/lib/auth/authorize";
+import { actorOf, requireRole, requireUser, userCan } from "@/lib/auth/authorize";
+import { adjustWithinLimit, goodsIn } from "@sam/core/modules/inventory/extras";
 import { guardScope } from "@/lib/auth/guards";
 import { INVENTORY_MANAGE_ROLES, INVENTORY_OPERATE_ROLES } from "@sam/core/modules/inventory/access";
 import { InventoryError } from "@sam/core/modules/inventory/errors";
@@ -72,8 +73,8 @@ export async function updateItemAction(_prev: FormState, formData: FormData): Pr
 /** Receive, issue, return, damage, adjust, transfer and retire share one handler keyed by `kind`. */
 export async function movementAction(_prev: FormState, formData: FormData): Promise<FormState> {
   const kind = str(formData, "kind");
-  const manageOnly = ["ADJUST", "TRANSFER", "RETIRE"].includes(kind);
-  const user = await requireRole(manageOnly ? INVENTORY_MANAGE_ROLES : INVENTORY_OPERATE_ROLES, "/inventory");
+  const supervisorOnly = ["RECEIVE", "ADJUST", "TRANSFER", "RETIRE"].includes(kind);
+  const user = supervisorOnly ? await requireUser("/inventory") : await requireRole(INVENTORY_OPERATE_ROLES, "/inventory");
   await guardScope(user, "inv.room_assets", formData, [["itemId", "inventoryItem"]]);
   const itemId = str(formData, "itemId");
   const values: Record<string, string> = {};
@@ -82,13 +83,13 @@ export async function movementAction(_prev: FormState, formData: FormData): Prom
   let message = "Saved.";
   try {
     switch (kind) {
-      case "RECEIVE": { const t = await receiveStock({ itemId, actorId: user.id, quantity: quantity ?? NaN, reference: values.reference, notes: values.notes }); message = `Received ${t.quantity}; ${t.balanceAfter} on hand.`; break; }
+      case "RECEIVE": { const t = await goodsIn(actorOf(user), { itemId, quantity: quantity ?? NaN, reference: values.reference, notes: values.notes }); message = `Received ${t.quantity}; ${t.balanceAfter} on hand.`; break; }
       case "ISSUE": { const t = await issueItem({ itemId, actorId: user.id, quantity, target: target(formData), notes: values.notes }); message = t.balanceAfter == null ? "Issued." : `Issued; ${t.balanceAfter} on hand.`; break; }
       case "RETURN": { await returnItem({ itemId, actorId: user.id, quantity, target: target(formData), condition: condition(formData), notes: values.notes }); message = values.condition === "DAMAGED" ? "Returned and recorded as damaged." : "Returned."; break; }
       case "DAMAGE": { await recordDamage({ itemId, actorId: user.id, quantity, notes: values.notes }); message = "Damage recorded."; break; }
-      case "ADJUST": { const t = await adjustStock({ itemId, actorId: user.id, countedQuantity: int(formData, "countedQuantity") ?? NaN, reason: values.reason }); message = `Adjusted by ${t.quantity > 0 ? "+" : ""}${t.quantity}; ${t.balanceAfter} on hand.`; break; }
-      case "TRANSFER": { await transferItem({ itemId, actorId: user.id, toSiteId: values.toSiteId, quantity, notes: values.notes }); message = "Transferred."; break; }
-      case "RETIRE": { await retireItem({ itemId, actorId: user.id, notes: values.notes }); message = "Retired."; break; }
+      case "ADJUST": { const t = await adjustWithinLimit(actorOf(user), { itemId, countedQuantity: int(formData, "countedQuantity") ?? NaN, reason: values.reason }); message = `Adjusted by ${t.quantity > 0 ? "+" : ""}${t.quantity}; ${t.balanceAfter} on hand.`; break; }
+      case "TRANSFER": { if (!userCan(user, "inv.goods_in")) throw new InventoryError("FORBIDDEN", "Transfers need the Inventory supervisor or an Admin."); await transferItem({ itemId, actorId: user.id, toSiteId: values.toSiteId, quantity, notes: values.notes }); message = "Transferred."; break; }
+      case "RETIRE": { if (!userCan(user, "inv.writeoff")) throw new InventoryError("FORBIDDEN", "Only an Admin can retire items: record a write-off request."); await retireItem({ itemId, actorId: user.id, notes: values.notes }); message = "Retired."; break; }
       default: throw new InventoryError("VALIDATION", "Unknown action.");
     }
   } catch (error) {

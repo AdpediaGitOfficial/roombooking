@@ -8,4 +8,4 @@ export const KEY_MANAGE_ROLES: Role[] = rolesWithDefault("keys.register");
 export const KEY_OPERATE_ROLES: Role[] = rolesWithDefault("keys.standard");
 
 /** View the register and reports. */
-export const KEY_VIEW_ROLES: Role[] = [...new Set([...rolesWithDefault("keys.standard"), ...rolesWithDefault("keys.register", "full", "view")])];
+export const KEY_VIEW_ROLES: Role[] = [...new Set([...rolesWithDefault("keys.standard", "full", "limited"), ...rolesWithDefault("keys.register", "full", "view")])];
