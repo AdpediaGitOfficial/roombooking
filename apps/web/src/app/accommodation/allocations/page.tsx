@@ -1,10 +1,11 @@
 import { Suspense } from "react";
 import Link from "next/link";
+import { api } from "@/lib/api";
 import { requireRole } from "@/lib/auth/authorize";
 import { ALLOCATION_VIEW_ROLES } from "@sam/core/modules/allocations/access";
-import { listAllocations, type AllocationListFilter } from "@sam/core/modules/allocations/service";
+import type { AllocationListFilter } from "@sam/core/modules/allocations/rules";
 import { AllocationStatusBadge } from "@/modules/allocations/components/status-badge";
-import { isoDate } from "@sam/core/modules/accommodation/occupancy";
+import { isoDate } from "@sam/core/modules/accommodation/occupancy-rules";
 import { PageHeader } from "@/components/shell/page-header";
 
 const FILTERS: Array<[AllocationListFilter, string]> = [
@@ -18,7 +19,7 @@ async function AllocationList({ searchParams }: { searchParams: Promise<{ filter
   await requireRole(ALLOCATION_VIEW_ROLES, "/accommodation/allocations");
   const { filter: raw, staffId, requestId } = await searchParams;
   const filter = (FILTERS.some(([f]) => f === raw) ? raw : "active") as AllocationListFilter;
-  const allocations = await listAllocations(filter, staffId || null);
+  const allocations = await api.allocations.list({ filter, staffId: staffId || undefined });
 
   const counts = { active: allocations.filter((a) => a.status === "CHECKED_IN").length };
   return (

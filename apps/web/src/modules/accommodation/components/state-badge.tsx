@@ -1,4 +1,4 @@
-import type { BedState } from "@sam/core/modules/accommodation/occupancy";
+import type { BedState } from "@sam/core/modules/accommodation/occupancy-rules";
 
 const STYLES: Record<BedState, string> = {
   OCCUPIED: "bg-blue-100 text-blue-800",

@@ -1,4 +1,4 @@
-import type { OccupancySummary } from "@sam/core/modules/accommodation/occupancy";
+import type { OccupancySummary } from "@sam/core/modules/accommodation/occupancy-rules";
 
 export function SummaryTiles({ summary }: { summary: OccupancySummary }) {
   const tiles: Array<[string, number, string?]> = [

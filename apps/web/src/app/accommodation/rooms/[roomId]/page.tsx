@@ -1,10 +1,9 @@
 import { Suspense } from "react";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { api, orNotFound } from "@/lib/api";
 import { hasRole, requireRole } from "@/lib/auth/authorize";
 import { ACCOMMODATION_MANAGE_ROLES, ACCOMMODATION_VIEW_ROLES } from "@sam/core/modules/accommodation/access";
 import { ALLOCATION_OPERATE_ROLES } from "@sam/core/modules/allocations/access";
-import { getRoomOccupancy } from "@sam/core/modules/accommodation/occupancy";
 import { SummaryTiles } from "@/modules/accommodation/components/summary-tiles";
 import { StateBadge } from "@/modules/accommodation/components/state-badge";
 import { AddBedsForm, BedStatusForm, RoomStatusForm } from "@/modules/accommodation/components/bed-forms";
@@ -14,8 +13,7 @@ async function RoomView({ params }: { params: Promise<{ roomId: string }> }) {
   const user = await requireRole(ACCOMMODATION_VIEW_ROLES, `/accommodation/rooms/${roomId}`);
   const canManage = hasRole(user, ...ACCOMMODATION_MANAGE_ROLES);
   const canOperate = hasRole(user, ...ALLOCATION_OPERATE_ROLES);
-  const data = await getRoomOccupancy(roomId);
-  if (!data) notFound();
+  const data = await orNotFound(api.accommodation.room({ roomId }));
   const { room, today, beds, summary } = data;
 
   return (

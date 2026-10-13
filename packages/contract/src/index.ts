@@ -1,3 +1,5 @@
+import { accommodation } from "./ops/accommodation";
+import { allocations } from "./ops/allocations";
 import { auth } from "./ops/auth";
 import { me, searchOps } from "./ops/me";
 
@@ -5,6 +7,8 @@ import { me, searchOps } from "./ops/me";
 export const contract = {
   auth,
   me,
+  accommodation,
+  allocations,
   search: searchOps,
 };
 

@@ -2,11 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { hasRole, requireRole } from "@/lib/auth/authorize";
+import { ApiError } from "@sam/contract/index";
+import { api } from "@/lib/api";
+import { requireRole } from "@/lib/auth/authorize";
 import { ALLOCATION_ADMIN_ROLES, ALLOCATION_OPERATE_ROLES } from "@sam/core/modules/allocations/access";
-import { AllocationError } from "@sam/core/modules/allocations/errors";
-import { RequestError } from "@sam/core/modules/requests/errors";
-import { allocate, cancel, checkIn, checkOut, transfer } from "@sam/core/modules/allocations/service";
 
 export type ActionState = { error?: string; message?: string };
 
@@ -24,21 +23,20 @@ async function run<T>(fn: () => Promise<T>): Promise<{ ok: true; value: T } | { 
   try {
     return { ok: true, value: await fn() };
   } catch (error) {
-    if (error instanceof AllocationError || error instanceof RequestError) return { ok: false, error: error.message };
+    if (error instanceof ApiError && error.status < 500) return { ok: false, error: error.message };
     throw error;
   }
 }
 
 export async function allocateAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
-  const user = await requireRole(ALLOCATION_OPERATE_ROLES);
+  await requireRole(ALLOCATION_OPERATE_ROLES);
   const result = await run(() =>
-    allocate({
+    api.allocations.allocate({
       staffId: str(formData, "staffId"),
       bedId: str(formData, "bedId"),
       startDate: str(formData, "startDate"),
-      endDate: str(formData, "endDate") || null,
-      reason: str(formData, "reason") || null,
-      actorId: user.id,
+      endDate: str(formData, "endDate") || undefined,
+      reason: str(formData, "reason") || undefined,
     }),
   );
   if (!result.ok) return { error: result.error };
@@ -47,55 +45,46 @@ export async function allocateAction(_prev: ActionState, formData: FormData): Pr
 }
 
 export async function checkInAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
-  const user = await requireRole(ALLOCATION_OPERATE_ROLES);
-  const allocationId = str(formData, "allocationId");
-  const result = await run(() => checkIn({ allocationId, actorId: user.id, notes: str(formData, "notes") || null }));
+  await requireRole(ALLOCATION_OPERATE_ROLES);
+  const id = str(formData, "allocationId");
+  const result = await run(() => api.allocations.checkIn({ id, notes: str(formData, "notes") || undefined }));
   if (!result.ok) return { error: result.error };
-  revalidateAccommodation(allocationId);
+  revalidateAccommodation(id);
   return { message: "Checked in." };
 }
 
 export async function checkOutAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
-  const user = await requireRole(ALLOCATION_OPERATE_ROLES);
-  const allocationId = str(formData, "allocationId");
-  const result = await run(() =>
-    checkOut({
-      allocationId,
-      actorId: user.id,
-      notes: str(formData, "notes") || null,
-      overrideReason: str(formData, "overrideReason") || null,
-      canOverride: hasRole(user, ...ALLOCATION_ADMIN_ROLES),
-    }),
-  );
+  await requireRole(ALLOCATION_OPERATE_ROLES);
+  const id = str(formData, "allocationId");
+  const result = await run(() => api.allocations.checkOut({ id, notes: str(formData, "notes") || undefined, overrideReason: str(formData, "overrideReason") || undefined }));
   if (!result.ok) return { error: result.error };
-  revalidateAccommodation(allocationId);
+  revalidateAccommodation(id);
   return { message: "Checked out." };
 }
 
 export async function cancelAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
-  const user = await requireRole(ALLOCATION_ADMIN_ROLES);
-  const allocationId = str(formData, "allocationId");
-  const result = await run(() => cancel({ allocationId, actorId: user.id, reason: str(formData, "reason") }));
+  await requireRole(ALLOCATION_ADMIN_ROLES);
+  const id = str(formData, "allocationId");
+  const result = await run(() => api.allocations.cancel({ id, reason: str(formData, "reason") }));
   if (!result.ok) return { error: result.error };
-  revalidateAccommodation(allocationId);
+  revalidateAccommodation(id);
   return { message: "Allocation cancelled." };
 }
 
 export async function transferAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
-  const user = await requireRole(ALLOCATION_OPERATE_ROLES);
-  const allocationId = str(formData, "allocationId");
+  await requireRole(ALLOCATION_OPERATE_ROLES);
+  const id = str(formData, "allocationId");
   const result = await run(() =>
-    transfer({
-      allocationId,
+    api.allocations.transfer({
+      id,
       toBedId: str(formData, "toBedId"),
       effectiveDate: str(formData, "effectiveDate"),
       reason: str(formData, "reason"),
-      actorId: user.id,
-      requestId: str(formData, "requestId") || null,
+      requestId: str(formData, "requestId") || undefined,
     }),
   );
   if (!result.ok) return { error: result.error };
-  revalidateAccommodation(allocationId);
+  revalidateAccommodation(id);
   revalidateAccommodation(result.value.id);
   revalidatePath("/approvals");
   revalidatePath("/my/requests");

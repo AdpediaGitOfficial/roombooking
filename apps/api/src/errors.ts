@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { ZodError } from "zod";
+import { AccommodationError } from "@sam/core/modules/accommodation/errors";
 import { AdminError } from "@sam/core/modules/admin/errors";
 import { AllocationError } from "@sam/core/modules/allocations/errors";
 import { AuthError } from "@sam/core/modules/auth/errors";
@@ -39,7 +40,7 @@ export function toHttpError(error: unknown): HttpError | null {
     return new HttpError(422, "VALIDATION", "Some fields are not valid.", fieldErrors);
   }
   if (
-    error instanceof AdminError || error instanceof AllocationError || error instanceof AuthError || error instanceof BroadcastError ||
+    error instanceof AccommodationError || error instanceof AdminError || error instanceof AllocationError || error instanceof AuthError || error instanceof BroadcastError ||
     error instanceof FacilityError || error instanceof ImportError || error instanceof InventoryError || error instanceof KeyError ||
     error instanceof LostFoundError || error instanceof MaintenanceError || error instanceof RequestError
   ) {

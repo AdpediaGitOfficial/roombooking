@@ -1,6 +1,17 @@
 import "server-only";
 import { cookies, headers } from "next/headers";
-import { contract, createClient } from "@sam/contract/index";
+import { notFound } from "next/navigation";
+import { ApiError, contract, createClient } from "@sam/contract/index";
+
+/** Awaits an API call and renders the 404 page when the API says the record does not exist. */
+export async function orNotFound<T>(call: Promise<T>): Promise<T> {
+  try {
+    return await call;
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 404) notFound();
+    throw error;
+  }
+}
 
 export const SESSION_COOKIE = "sam_session";
 

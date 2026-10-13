@@ -1,12 +1,11 @@
 import { Suspense } from "react";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { api, orNotFound } from "@/lib/api";
 import { hasRole, requireRole } from "@/lib/auth/authorize";
 import { ALLOCATION_ADMIN_ROLES, ALLOCATION_OPERATE_ROLES, ALLOCATION_VIEW_ROLES } from "@sam/core/modules/allocations/access";
-import { clearanceBlockers, getAllocation } from "@sam/core/modules/allocations/service";
 import { AllocationStatusBadge } from "@/modules/allocations/components/status-badge";
 import { CancelForm, CheckInForm, CheckOutForm } from "@/modules/allocations/components/forms";
-import { isoDate } from "@sam/core/modules/accommodation/occupancy";
+import { isoDate } from "@sam/core/modules/accommodation/occupancy-rules";
 import { KEY_OPERATE_ROLES } from "@sam/core/modules/keys/access";
 import { INVENTORY_OPERATE_ROLES } from "@sam/core/modules/inventory/access";
 import { ResidentItemsPanel } from "@/modules/inventory/components/resident-items-panel";
@@ -24,11 +23,9 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 async function AllocationView({ params }: { params: Promise<{ allocationId: string }> }) {
   const { allocationId } = await params;
   const user = await requireRole(ALLOCATION_VIEW_ROLES, `/accommodation/allocations/${allocationId}`);
-  const allocation = await getAllocation(allocationId);
-  if (!allocation) notFound();
+  const { allocation, blockers } = await orNotFound(api.allocations.get({ id: allocationId }));
   const canOperate = hasRole(user, ...ALLOCATION_OPERATE_ROLES);
   const canAdmin = hasRole(user, ...ALLOCATION_ADMIN_ROLES);
-  const blockers = allocation.status === "CHECKED_IN" ? await clearanceBlockers(allocation.staffId) : [];
   const { staff, bed } = allocation;
 
   return (

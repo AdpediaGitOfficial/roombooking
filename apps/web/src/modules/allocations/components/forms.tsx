@@ -2,7 +2,7 @@
 
 import { useActionState } from "react";
 import { allocateAction, cancelAction, checkInAction, checkOutAction, transferAction, type ActionState } from "../actions";
-import type { ClearanceBlocker } from "@sam/core/modules/allocations/service";
+import type { ClearanceBlocker } from "@sam/core/modules/allocations/rules";
 
 function Feedback({ state }: { state: ActionState }) {
   if (state.error) return <p role="alert" className="mt-2 text-sm text-red-700">{state.error}</p>;

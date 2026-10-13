@@ -1,14 +1,13 @@
 import { Suspense } from "react";
 import Link from "next/link";
-import { notFound } from "next/navigation";
-import { prisma } from "@sam/core/lib/db";
+import { api, orNotFound } from "@/lib/api";
 import { requireRole } from "@/lib/auth/authorize";
 import { ALLOCATION_OPERATE_ROLES } from "@sam/core/modules/allocations/access";
-import { findAvailableBeds, getAllocation, isIsoDate } from "@sam/core/modules/allocations/service";
-import { AllocationError } from "@sam/core/modules/allocations/errors";
+import { isIsoDate } from "@sam/core/modules/allocations/rules";
+import { ApiError } from "@sam/contract/index";
 import { TransferForm } from "@/modules/allocations/components/forms";
 import { BedResultList } from "@/modules/allocations/components/bed-results";
-import { isoDate, todayInTimezone } from "@sam/core/modules/accommodation/occupancy";
+import { isoDate, todayInTimezone } from "@sam/core/modules/accommodation/occupancy-rules";
 
 type Params = { effectiveDate?: string; buildingId?: string; reason?: string; requestId?: string };
 const input = "mt-1 block w-full rounded-md border border-zinc-300 px-3 py-2 text-sm";
@@ -16,29 +15,29 @@ const input = "mt-1 block w-full rounded-md border border-zinc-300 px-3 py-2 tex
 async function TransferView({ params, searchParams }: { params: Promise<{ allocationId: string }>; searchParams: Promise<Params> }) {
   const { allocationId } = await params;
   await requireRole(ALLOCATION_OPERATE_ROLES, `/accommodation/allocations/${allocationId}/transfer`);
-  const [allocation, query] = await Promise.all([getAllocation(allocationId), searchParams]);
-  if (!allocation) notFound();
+  const [detail, query] = await Promise.all([orNotFound(api.allocations.get({ id: allocationId })), searchParams]);
+  const { allocation } = detail;
   const transferable = allocation.status === "CONFIRMED" || allocation.status === "CHECKED_IN";
 
   const today = todayInTimezone(allocation.bed.room.building.site.timezone);
   const effectiveDate = query.effectiveDate || today;
   const reason = query.reason ?? "";
-  const buildings = await prisma.building.findMany({ where: { status: "ACTIVE" }, include: { site: true }, orderBy: [{ site: { name: "asc" } }, { code: "asc" }] });
+  const { buildings } = await api.allocations.formOptions();
 
-  let beds: Awaited<ReturnType<typeof findAvailableBeds>> = [];
+  let beds: Awaited<ReturnType<typeof api.allocations.availableBeds>> = [];
   let searchError: string | null = null;
   const searched = transferable && isIsoDate(effectiveDate) && reason.trim().length > 0;
   if (searched) {
     try {
-      beds = await findAvailableBeds({
+      beds = await api.allocations.availableBeds({
         startDate: effectiveDate,
-        endDate: allocation.endDate ? isoDate(allocation.endDate) : null,
-        buildingId: query.buildingId || null,
+        endDate: allocation.endDate ? isoDate(allocation.endDate) : undefined,
+        buildingId: query.buildingId || undefined,
         gender: allocation.staff.gender,
         excludeBedId: allocation.bedId,
       });
     } catch (error) {
-      if (error instanceof AllocationError) searchError = error.message;
+      if (error instanceof ApiError && error.status < 500) searchError = error.message;
       else throw error;
     }
   }
