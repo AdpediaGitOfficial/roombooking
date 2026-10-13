@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { requireRole } from "@/lib/auth/authorize";
 import { APPROVALS_AREA_ROLES } from "@/modules/requests/access";
-import { canDecide, currentStep, getRequest, requestAccessFor } from "@/modules/requests/service";
+import { canDecide, currentStep, getRequest, requestAccessFor, withDelegations } from "@/modules/requests/service";
 import { RequestDetails, RequestHistory, RequestStatusBadge, RequestSteps } from "@/modules/requests/components/request-view";
 import { DecisionForm } from "@/modules/requests/components/forms";
 import { isoDate } from "@/modules/accommodation/occupancy";
@@ -12,7 +12,7 @@ import { isoDate } from "@/modules/accommodation/occupancy";
 async function ApprovalContent({ params }: { params: Promise<{ requestId: string }> }) {
   const { requestId } = await params;
   const user = await requireRole(APPROVALS_AREA_ROLES, `/approvals/${requestId}`);
-  const actor = { id: user.id, roles: user.roleAssignments.map((r) => r.role) };
+  const actor = await withDelegations({ id: user.id, roles: user.roleAssignments.map((r) => r.role) });
   const request = await getRequest(requestId);
   if (!request) notFound();
   const access = requestAccessFor(request, actor);
@@ -69,7 +69,10 @@ async function ApprovalContent({ params }: { params: Promise<{ requestId: string
 
       <section className="mt-6">
         {decision.ok && step ? (
-          <DecisionForm requestId={request.id} requireComment={step.requireComment} stepName={step.name} />
+          <>
+            {decision.onBehalfOf && <p data-on-behalf className="mb-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-950 dark:text-amber-200">You are deciding this step on behalf of {decision.onBehalfOf.delegatorName}; the decision will record both names.</p>}
+            <DecisionForm requestId={request.id} requireComment={step.requireComment} stepName={step.name} />
+          </>
         ) : request.status === "PENDING_APPROVAL" ? (
           <p className="text-sm text-zinc-500">{decision.ok ? "" : decision.reason}</p>
         ) : null}

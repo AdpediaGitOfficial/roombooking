@@ -6,7 +6,7 @@ import type { DecisionAction } from "@prisma/client";
 import { requireRole, requireUser } from "@/lib/auth/authorize";
 import { APPROVALS_AREA_ROLES } from "./access";
 import { RequestError } from "./errors";
-import { decideRequest, resubmitRequest, submitRequest, withdrawRequest } from "./service";
+import { decideRequest, resubmitRequest, submitRequest, withDelegations, withdrawRequest } from "./service";
 
 export type FormState = { error?: string; fieldErrors?: Record<string, string>; values?: Record<string, string> };
 export type ActionState = { error?: string; message?: string };
@@ -86,7 +86,7 @@ export async function decideRequestAction(_prev: ActionState, formData: FormData
   const action = String(formData.get("action") ?? "") as DecisionAction;
   if (!["APPROVE", "REJECT", "REQUEST_CHANGES"].includes(action)) return { error: "Choose a decision." };
   try {
-    await decideRequest({ requestId, actor: { id: user.id, roles: user.roleAssignments.map((r) => r.role) }, action, comment: String(formData.get("comment") ?? "") });
+    await decideRequest({ requestId, actor: await withDelegations({ id: user.id, roles: user.roleAssignments.map((r) => r.role) }), action, comment: String(formData.get("comment") ?? "") });
   } catch (error) {
     if (error instanceof RequestError) return { error: error.message };
     throw error;

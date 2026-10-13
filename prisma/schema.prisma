@@ -216,6 +216,11 @@ model User {
   broadcastsSent            Broadcast[]            @relation("BroadcastsSent")
   workflowVersionsCreated   WorkflowVersion[]      @relation("WorkflowVersionsCreated")
   workflowVersionsPublished WorkflowVersion[]      @relation("WorkflowVersionsPublished")
+  decisionsOnBehalfOf       ApprovalDecision[]     @relation("DecisionsOnBehalfOf")
+  delegationsGiven          ApprovalDelegation[]   @relation("DelegationsGiven")
+  delegationsReceived       ApprovalDelegation[]   @relation("DelegationsReceived")
+  delegationsCreated        ApprovalDelegation[]   @relation("DelegationsCreated")
+  delegationsRevoked        ApprovalDelegation[]   @relation("DelegationsRevoked")
   notifications             Notification[]
   auditEvents               AuditEvent[]
   attachments               Attachment[]
@@ -494,16 +499,54 @@ model ApprovalDecision {
   requestId         String
   stepId            String
   approverId        String
+  // Set when the approver acted under a delegation from this person (WF-06).
+  onBehalfOfId      String?
+  delegationId      String?
   action            DecisionAction
   comment           String?
   submissionVersion Int            @default(1)
   createdAt         DateTime       @default(now())
 
-  request  Request      @relation(fields: [requestId], references: [id])
-  step     ApprovalStep @relation(fields: [stepId], references: [id])
-  approver User         @relation(fields: [approverId], references: [id])
+  request    Request             @relation(fields: [requestId], references: [id])
+  step       ApprovalStep        @relation(fields: [stepId], references: [id])
+  approver   User                @relation(fields: [approverId], references: [id])
+  onBehalfOf User?               @relation("DecisionsOnBehalfOf", fields: [onBehalfOfId], references: [id])
+  delegation ApprovalDelegation? @relation(fields: [delegationId], references: [id])
 
   @@index([requestId])
+}
+
+enum DelegationStatus {
+  ACTIVE
+  REVOKED
+}
+
+// Absence cover (WF-06): for the dates given, the delegate may decide steps
+// that need any of the delegator's approver roles (all of them when `roles`
+// is empty). Decisions record both people. Delegated authority is never
+// passed on again and never applies to the delegator's own requests.
+model ApprovalDelegation {
+  id          String           @id @default(cuid())
+  delegatorId String
+  delegateId  String
+  roles       Role[]
+  startsAt    DateTime         @db.Date
+  endsAt      DateTime         @db.Date
+  reason      String?
+  status      DelegationStatus @default(ACTIVE)
+  createdById String
+  revokedById String?
+  revokedAt   DateTime?
+  createdAt   DateTime         @default(now())
+
+  delegator User               @relation("DelegationsGiven", fields: [delegatorId], references: [id])
+  delegate  User               @relation("DelegationsReceived", fields: [delegateId], references: [id])
+  createdBy User               @relation("DelegationsCreated", fields: [createdById], references: [id])
+  revokedBy User?              @relation("DelegationsRevoked", fields: [revokedById], references: [id])
+  decisions ApprovalDecision[]
+
+  @@index([delegateId, status, startsAt, endsAt])
+  @@index([delegatorId, status])
 }
 
 // ---------------------------------------------------------------------------

@@ -150,6 +150,20 @@ fields are neither required nor stored on submission. Types can be set
 inactive to hide them from residents. Every create, save, publish, discard and
 settings change is audited.
 
+### Delegation and absence cover
+
+Approvers hand their approvals to a colleague for a period of leave at
+`/approvals/delegations` (WF-06); administrators can arrange cover for anyone.
+A delegation names the delegator, the delegate, the roles covered (all of the
+delegator's approver roles unless narrowed), start and end dates and a reason.
+While it is live the delegate sees the delegator's pending steps in their
+inbox, marked as cover, and may decide them; each such decision records the
+delegate, the person they acted for and the delegation, in the request
+history and the audit log. Cover never applies to the delegator's own
+requests, cannot be passed on, and ends at the end date or when the
+delegator, the delegate or an administrator ends it. Both people are notified
+when cover starts, is arranged for them, or ends.
+
 ## Maintenance
 
 Residents report issues from the portal (`/my/maintenance`) with location,

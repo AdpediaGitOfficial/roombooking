@@ -34,6 +34,9 @@ const T: Record<string, WaTemplate> = {
   "lostfound.claim_rejected": { name: "lostfound_update", body: "Hello {{1}}, your lost and found claim {{2}} {{3}}. Open the staff portal for details.", params: (p, n) => [n, str(p, "reference"), "could not be verified"] },
   "lostfound.returned": { name: "lostfound_update", body: "Hello {{1}}, your lost and found claim {{2}} {{3}}. Open the staff portal for details.", params: (p, n) => [n, str(p, "reference"), "is complete: the item has been handed over"] },
   "broadcast": { name: "announcement", body: "Hello {{1}}, there is a new announcement from the accommodation office: {{2}}. Open the staff portal to read it.", params: (p, n) => [n, str(p, "title", "announcement")] },
+  "delegation.started": { name: "delegation_update", body: "Hello {{1}}, approval cover: {{2}}. Open the staff portal for details.", params: (p, n) => [n, `you are covering for ${str(p, "delegator")} from ${str(p, "startsAt")} to ${str(p, "endsAt")}`] },
+  "delegation.arranged": { name: "delegation_update", body: "Hello {{1}}, approval cover: {{2}}. Open the staff portal for details.", params: (p, n) => [n, `${str(p, "delegate")} will cover your approvals from ${str(p, "startsAt")} to ${str(p, "endsAt")}`] },
+  "delegation.ended": { name: "delegation_update", body: "Hello {{1}}, approval cover: {{2}}. Open the staff portal for details.", params: (p, n) => [n, `your cover for ${str(p, "delegator")} has ended`] },
   "test.whatsapp": { name: "test_message", body: "Hello {{1}}, this is a test message from Staff Accommodation Management. No action is needed.", params: (_p, n) => [n] },
 };
 const GENERIC: WaTemplate = { name: "notification", body: "Hello {{1}}, you have a new notification in the staff accommodation portal: {{2}}. Please open the portal for details.", params: (_p, n) => [n, "update"] };

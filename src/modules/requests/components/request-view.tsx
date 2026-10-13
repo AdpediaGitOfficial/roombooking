@@ -57,7 +57,7 @@ export function RequestHistory({ request, showApproverNames }: { request: Reques
     ...request.decisions.map<Item>((d) => ({
       at: d.createdAt,
       kind: "decision",
-      title: `${d.action === "APPROVE" ? "Approved" : d.action === "REJECT" ? "Rejected" : "Changes requested"} · ${d.step.name}${showApproverNames ? ` · ${d.approver.name}` : ""}`,
+      title: `${d.action === "APPROVE" ? "Approved" : d.action === "REJECT" ? "Rejected" : "Changes requested"} · ${d.step.name}${showApproverNames ? ` · ${d.approver.name}${d.onBehalfOf ? ` (on behalf of ${d.onBehalfOf.name})` : ""}` : d.onBehalfOf ? " · by absence cover" : ""}`,
       body: d.comment,
     })),
   ].sort((a, b) => a.at.getTime() - b.at.getTime());

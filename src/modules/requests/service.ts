@@ -5,19 +5,25 @@ import { recordAudit } from "@/lib/audit";
 import { enqueueNotification } from "@/lib/notifications";
 import { isoDate, todayInTimezone } from "@/modules/accommodation/occupancy";
 import { RequestError } from "./errors";
+import { delegatedRolesFor, type DelegatedRole } from "./delegations";
 import { REQUEST_ADMIN_ROLES } from "./access";
 import { TYPE_RULES, parseSchema, toFormStrings, validateSubmission, visibleFields, type FormData, type FormField, type FormSchema } from "./forms";
 
 type Tx = Prisma.TransactionClient;
 type Db = Tx | PrismaClient;
 
-export type Actor = { id: string; roles: Role[] };
+/** Who is acting: their own roles plus any roles held through live delegations (WF-06). */
+export type Actor = { id: string; roles: Role[]; delegated?: DelegatedRole[] };
+
+export async function withDelegations(actor: Actor, now: Date = new Date()): Promise<Actor> {
+  return { ...actor, delegated: await delegatedRolesFor(actor.id, now) };
+}
 
 export const requestInclude = {
   requestType: true,
   workflowVersion: { include: { steps: { orderBy: { order: "asc" } } } },
   requester: { select: { id: true, name: true, email: true, staffProfile: { select: { id: true, employeeId: true, firstName: true, lastName: true, department: true } } } },
-  decisions: { include: { approver: { select: { id: true, name: true } }, step: true }, orderBy: { createdAt: "asc" } },
+  decisions: { include: { approver: { select: { id: true, name: true } }, onBehalfOf: { select: { id: true, name: true } }, step: true }, orderBy: { createdAt: "asc" } },
   submissions: { orderBy: { version: "asc" } },
   allocations: { include: { bed: true } },
 } satisfies Prisma.RequestInclude;
@@ -169,13 +175,16 @@ export function currentStep(request: { currentStepOrder: number | null; workflow
 }
 
 /** Whether the actor may decide the request at its current step. */
-export function canDecide(request: Pick<RequestRecord, "status" | "requesterId" | "currentStepOrder" | "workflowVersion">, actor: Actor): { ok: true } | { ok: false; reason: string } {
+export function canDecide(request: Pick<RequestRecord, "status" | "requesterId" | "currentStepOrder" | "workflowVersion">, actor: Actor): { ok: true; onBehalfOf: DelegatedRole | null } | { ok: false; reason: string } {
   if (request.status !== "PENDING_APPROVAL") return { ok: false, reason: "This request is not awaiting approval." };
   const step = currentStep(request);
   if (!step) return { ok: false, reason: "No approval step is pending." };
   if (request.requesterId === actor.id) return { ok: false, reason: "You cannot approve your own request." };
-  if (!actor.roles.includes(step.approverRole)) return { ok: false, reason: `This step needs a ${step.approverRole.toLowerCase().replace(/_/g, " ")}.` };
-  return { ok: true };
+  if (actor.roles.includes(step.approverRole)) return { ok: true, onBehalfOf: null };
+  // Delegated authority never covers the delegator's own request (WF-06).
+  const cover = (actor.delegated ?? []).find((d) => d.role === step.approverRole && d.delegatorId !== request.requesterId);
+  if (cover) return { ok: true, onBehalfOf: cover };
+  return { ok: false, reason: `This step needs a ${step.approverRole.toLowerCase().replace(/_/g, " ")}.` };
 }
 
 export type DecideInput = { requestId: string; actor: Actor; action: DecisionAction; comment?: string | null };
@@ -206,11 +215,12 @@ export async function decideRequest(input: DecideInput) {
     });
     if (moved.count !== 1) throw new RequestError("CONFLICT", "Another approver has just decided this step. Refresh to see the result.");
 
+    const cover = permission.onBehalfOf;
     await tx.approvalDecision.create({
-      data: { requestId: request.id, stepId: step.id, approverId: input.actor.id, action: input.action, comment, submissionVersion: request.submissionVersion },
+      data: { requestId: request.id, stepId: step.id, approverId: input.actor.id, onBehalfOfId: cover?.delegatorId ?? null, delegationId: cover?.delegationId ?? null, action: input.action, comment, submissionVersion: request.submissionVersion },
     });
     await recordAudit(
-      { actorId: input.actor.id, action: "REQUEST_DECIDED", entityType: "Request", entityId: request.id, before: { status: request.status, step: step.order }, after: { action: input.action, status: nextStatus, nextStep: nextStep?.order ?? null, comment } },
+      { actorId: input.actor.id, action: "REQUEST_DECIDED", entityType: "Request", entityId: request.id, before: { status: request.status, step: step.order }, after: { action: input.action, status: nextStatus, nextStep: nextStep?.order ?? null, comment, onBehalfOf: cover?.delegatorId ?? null, delegationId: cover?.delegationId ?? null } },
       tx,
     );
 
@@ -301,7 +311,8 @@ export type RequestAccess = "requester" | "admin" | "approver" | null;
 export function requestAccessFor(request: Pick<RequestRecord, "requesterId" | "workflowVersion">, actor: Actor): RequestAccess {
   if (request.requesterId === actor.id) return "requester";
   if (actor.roles.some((r) => REQUEST_ADMIN_ROLES.includes(r))) return "admin";
-  if (request.workflowVersion.steps.some((s) => actor.roles.includes(s.approverRole))) return "approver";
+  const roles = [...actor.roles, ...(actor.delegated ?? []).map((d) => d.role)];
+  if (request.workflowVersion.steps.some((s) => roles.includes(s.approverRole))) return "approver";
   return null;
 }
 
@@ -317,17 +328,21 @@ export async function listMyRequests(requesterId: string) {
   });
 }
 
-/** Requests waiting on a step whose role the actor holds, excluding their own. */
-export async function listInbox(actor: Actor) {
+export type InboxItem = RequestRecord & { coveringFor: string | null };
+
+/** Requests waiting on a step whose role the actor holds, directly or through a live delegation, excluding their own. */
+export async function listInbox(actor: Actor): Promise<InboxItem[]> {
   const requests = await prisma.request.findMany({
     where: { status: "PENDING_APPROVAL", requesterId: { not: actor.id } },
     include: requestInclude,
     orderBy: { createdAt: "asc" },
   });
-  return requests.filter((r) => {
-    const step = currentStep(r);
-    return step !== null && actor.roles.includes(step.approverRole);
-  });
+  const out: InboxItem[] = [];
+  for (const r of requests) {
+    const p = canDecide(r, actor);
+    if (p.ok) out.push({ ...r, coveringFor: p.onBehalfOf?.delegatorName ?? null });
+  }
+  return out;
 }
 
 export type RequestListFilter = "pending" | "approved" | "closed" | "all";

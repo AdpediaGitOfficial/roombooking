@@ -2,7 +2,7 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { hasRole, requireRole } from "@/lib/auth/authorize";
 import { APPROVALS_AREA_ROLES, REQUEST_ADMIN_ROLES } from "@/modules/requests/access";
-import { listAllRequests, listInbox, type RequestListFilter, type RequestRecord } from "@/modules/requests/service";
+import { listAllRequests, listInbox, withDelegations, type RequestListFilter, type RequestRecord } from "@/modules/requests/service";
 import { RequestStatusBadge } from "@/modules/requests/components/request-view";
 
 const FILTERS: Array<[RequestListFilter | "inbox", string]> = [
@@ -13,7 +13,7 @@ const FILTERS: Array<[RequestListFilter | "inbox", string]> = [
   ["all", "All"],
 ];
 
-function Row({ r }: { r: RequestRecord }) {
+function Row({ r }: { r: RequestRecord & { coveringFor?: string | null } }) {
   const staff = r.requester.staffProfile;
   return (
     <tr data-request={r.id}>
@@ -23,7 +23,7 @@ function Row({ r }: { r: RequestRecord }) {
       </td>
       <td className="px-3 py-3">{r.requestType.name}</td>
       <td className="px-3 py-3 tabular-nums">{r.createdAt.toISOString().slice(0, 10)}</td>
-      <td className="px-3 py-3"><RequestStatusBadge request={r} /></td>
+      <td className="px-3 py-3"><RequestStatusBadge request={r} />{r.coveringFor && <div data-covering className="mt-1 text-xs text-amber-700 dark:text-amber-300">covering for {r.coveringFor}</div>}</td>
       <td className="px-3 py-3 text-right"><Link href={`/approvals/${r.id}`} className="underline">Open</Link></td>
     </tr>
   );
@@ -34,11 +34,13 @@ async function Inbox({ searchParams }: { searchParams: Promise<{ filter?: string
   const isAdmin = hasRole(user, ...REQUEST_ADMIN_ROLES);
   const { filter: raw } = await searchParams;
   const filter = (isAdmin && FILTERS.some(([f]) => f === raw) ? raw : "inbox") as RequestListFilter | "inbox";
-  const actor = { id: user.id, roles: user.roleAssignments.map((r) => r.role) };
+  const actor = await withDelegations({ id: user.id, roles: user.roleAssignments.map((r) => r.role) });
   const requests = filter === "inbox" ? await listInbox(actor) : await listAllRequests(filter);
+  const covering = [...new Set((actor.delegated ?? []).map((d) => d.delegatorName))];
 
   return (
     <>
+      <p className="mb-3 text-sm"><Link href="/approvals/delegations" className="underline" data-delegations-link>Delegation &amp; absence cover</Link>{covering.length > 0 && <span className="ml-2 text-amber-700 dark:text-amber-300">· you are currently covering for {covering.join(", ")}</span>}</p>
       {isAdmin && (
         <nav className="flex flex-wrap gap-2 text-sm">
           {FILTERS.map(([f, label]) => (

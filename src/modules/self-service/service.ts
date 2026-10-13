@@ -207,6 +207,12 @@ export function describeNotification(event: string, payload: unknown): { title: 
       return { title: "Booking declined", body: `${p.facility} on ${p.date} at ${p.startTime}${p.reason ? `: ${p.reason}` : "."}` };
     case "booking.cancelled":
       return { title: "Booking cancelled", body: `${p.facility} on ${p.date} at ${p.startTime}${p.reason ? `: ${p.reason}` : "."}` };
+    case "delegation.started":
+      return { title: "You are covering approvals", body: `For ${p.delegator}, ${p.startsAt} to ${p.endsAt}.` };
+    case "delegation.arranged":
+      return { title: "Approval cover arranged", body: `${p.delegate} covers your approvals ${p.startsAt} to ${p.endsAt}.` };
+    case "delegation.ended":
+      return { title: "Approval cover ended", body: `You no longer cover for ${p.delegator}.` };
     case "broadcast":
       return { title: p.title ?? "Announcement", body: (p.body ?? "").length > 160 ? `${(p.body ?? "").slice(0, 157)}…` : p.body ?? "" };
     case "lostfound.claim_verified":
