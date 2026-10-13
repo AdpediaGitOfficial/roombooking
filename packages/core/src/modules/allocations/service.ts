@@ -501,7 +501,7 @@ export async function transfer(input: TransferInput) {
 // ---------------------------------------------------------------------------
 
 export const allocationDetailInclude = {
-  staff: { include: { user: { select: { email: true } } } },
+  staff: { include: { user: { select: { email: true, username: true } } } },
   bed: { include: bedWithLocation },
   previous: { include: { bed: true } },
   next: { include: { bed: true }, orderBy: { createdAt: "asc" } },

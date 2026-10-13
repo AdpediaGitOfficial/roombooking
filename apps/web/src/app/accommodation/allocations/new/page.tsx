@@ -1,8 +1,10 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { prisma } from "@sam/core/lib/db";
-import { requireRole } from "@/lib/auth/authorize";
-import { ALLOCATION_OPERATE_ROLES } from "@sam/core/modules/allocations/access";
+import { requireRole, userCan } from "@/lib/auth/authorize";
+import { ALLOCATION_ADMIN_ROLES } from "@sam/core/modules/allocations/access";
+import { checkEligibility } from "@sam/core/modules/allocations/eligibility";
+import { effectivePolicy } from "@sam/core/modules/structure/service";
 import { findAvailableBeds, isIsoDate } from "@sam/core/modules/allocations/service";
 import { AllocationError } from "@sam/core/modules/allocations/errors";
 import { AllocateForm } from "@/modules/allocations/components/forms";
@@ -14,16 +16,16 @@ type Params = { staffId?: string; buildingId?: string; bedId?: string; startDate
 const input = "mt-1 block w-full rounded-md border border-zinc-300 px-3 py-2 text-sm";
 
 async function NewAllocation({ searchParams }: { searchParams: Promise<Params> }) {
-  await requireRole(ALLOCATION_OPERATE_ROLES, "/accommodation/allocations/new");
+  const user = await requireRole(ALLOCATION_ADMIN_ROLES, "/accommodation/allocations/new");
   const params = await searchParams;
 
   const [staff, buildings] = await Promise.all([
     prisma.staffProfile.findMany({
-      where: { employmentStatus: "ACTIVE" },
+      where: { employmentStatus: "ACTIVE", archivedAt: null, mergedIntoId: null, verificationStatus: "VERIFIED" },
       orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
       include: { allocations: { where: { status: { in: OCCUPYING_STATUSES } }, include: { bed: true }, take: 1 } },
     }),
-    prisma.building.findMany({ where: { status: "ACTIVE" }, include: { site: true }, orderBy: [{ site: { name: "asc" } }, { code: "asc" }] }),
+    prisma.building.findMany({ where: { status: "ACTIVE", site: { status: "ACTIVE" } }, include: { site: true }, orderBy: [{ site: { name: "asc" } }, { code: "asc" }] }),
   ]);
 
   const selectedStaff = staff.find((s) => s.id === params.staffId) ?? null;
@@ -45,6 +47,8 @@ async function NewAllocation({ searchParams }: { searchParams: Promise<Params> }
   }
 
   const selectedBed = params.bedId ? beds.find((b) => b.id === params.bedId) ?? null : null;
+  const eligibility = selectedBed && selectedStaff ? checkEligibility(selectedStaff, selectedBed.room, effectivePolicy(selectedBed.room, selectedBed.room.building, selectedBed.room.building.site).eligibility, { startDate, endDate: endDate || null }) : null;
+  const canOverride = userCan(user, "accom.eligibility_override");
   const step = selectedBed ? 4 : searched && selectedStaff ? 3 : selectedStaff ? 2 : 1;
   const nights = endDate && isIsoDate(endDate) && isIsoDate(startDate) ? Math.max(0, Math.round((Date.parse(endDate) - Date.parse(startDate)) / 86400000)) : null;
   const query = (overrides: Partial<Params>) => {
@@ -147,8 +151,8 @@ async function NewAllocation({ searchParams }: { searchParams: Promise<Params> }
               </dl>
               {selectedBed && selectedStaff ? (
                 <>
-                  <p className="alert alert-success mt-3">✓ No conflicts. Bed {selectedBed.code} is free for the whole stay.</p>
-                  <div className="mt-3"><AllocateForm bedId={selectedBed.id} staffId={selectedStaff.id} startDate={startDate} endDate={endDate} reason={params.reason ?? ""} label={`Allocate and notify ${selectedStaff.firstName}`} /></div>
+                  {eligibility && !eligibility.ok ? <p className="alert alert-danger mt-3">Bed {selectedBed.code} is free, but {selectedStaff.firstName} is not eligible for it.</p> : <p className="alert alert-success mt-3">✓ No conflicts. Bed {selectedBed.code} is free for the whole stay.</p>}
+                  <div className="mt-3"><AllocateForm bedId={selectedBed.id} staffId={selectedStaff.id} startDate={startDate} endDate={endDate} reason={params.reason ?? ""} label={`Allocate and notify ${selectedStaff.firstName}`} eligibility={eligibility ?? undefined} canOverride={canOverride} /></div>
                 </>
               ) : (
                 <p className="mt-3 text-xs text-zinc-500">{searched ? "Pick a bed from the list to continue." : "Choose the person and dates, then find available beds."}</p>

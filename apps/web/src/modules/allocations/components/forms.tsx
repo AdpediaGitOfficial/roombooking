@@ -14,27 +14,58 @@ const input = "rounded-md border border-zinc-300 px-3 py-2 text-sm";
 const button = "rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-ink disabled:opacity-60";
 const panel = "card p-4";
 
-export function AllocateForm(props: { bedId: string; staffId: string; startDate: string; endDate: string; reason: string; label?: string }) {
+export function AllocateForm(props: { bedId: string; staffId: string; startDate: string; endDate: string; reason: string; label?: string; eligibility?: { ok: boolean; reasons: string[] }; canOverride?: boolean }) {
   const [state, action, pending] = useActionState<ActionState, FormData>(allocateAction, {});
+  const blocked = props.eligibility && !props.eligibility.ok;
   return (
     <form action={action}>
+      {blocked && (
+        <div className="mb-3 rounded-md bg-amber-50 p-3 text-sm text-amber-900" data-eligibility>
+          <b>Not eligible for this room.</b>
+          <ul className="mt-1 list-disc pl-5">{props.eligibility!.reasons.map((r) => <li key={r}>{r}</li>)}</ul>
+          {props.canOverride ? (
+            <label className="mt-2 block text-xs">Override reason (flagged and reported to the approvers)<input name="eligibilityOverrideReason" className={`${input} mt-1 w-full`} /></label>
+          ) : <p className="mt-2 text-xs">Choose another bed, or ask an Accommodation Admin with the Eligibility override grant.</p>}
+        </div>
+      )}
+      <select name="stayType" defaultValue="PERMANENT" aria-label="Stay type" className={`${input} mb-3 w-full`}>
+        <option value="PERMANENT">Permanent stay</option><option value="TEMPORARY">Temporary</option><option value="VISITING">Visiting</option><option value="TRAINING">Training</option>
+      </select>
       <input type="hidden" name="bedId" value={props.bedId} />
       <input type="hidden" name="staffId" value={props.staffId} />
       <input type="hidden" name="startDate" value={props.startDate} />
       <input type="hidden" name="endDate" value={props.endDate} />
       <input type="hidden" name="reason" value={props.reason} />
-      <button type="submit" disabled={pending} className={`${button} ${props.label ? "w-full" : ""}`}>{pending ? "Allocating…" : (props.label ?? "Allocate")}</button>
+      <button type="submit" disabled={pending || (!!blocked && !props.canOverride)} className={`${button} ${props.label ? "w-full" : ""}`}>{pending ? "Allocating…" : (props.label ?? "Allocate")}</button>
       <Feedback state={state} />
     </form>
   );
 }
 
-export function CheckInForm({ allocationId }: { allocationId: string }) {
+export type ChecklistItem = { id: string; label: string };
+
+function Checklist({ items }: { items: ChecklistItem[] }) {
+  if (items.length === 0) return null;
+  return (
+    <fieldset className="mt-2">
+      <legend className="text-sm font-medium">Checklist</legend>
+      <ul className="mt-1 space-y-1">
+        {items.map((i) => <li key={i.id}><label className="flex items-start gap-2 text-sm"><input type="checkbox" name={`check_${i.id}`} className="mt-1" />{i.label}</label></li>)}
+      </ul>
+    </fieldset>
+  );
+}
+
+export function CheckInForm({ allocationId, items = [], notReady = false }: { allocationId: string; items?: ChecklistItem[]; notReady?: boolean }) {
   const [state, action, pending] = useActionState<ActionState, FormData>(checkInAction, {});
   return (
     <form action={action} className={panel}>
       <input type="hidden" name="allocationId" value={allocationId} />
       <h3 className="font-medium">Check in</h3>
+      {notReady && (
+        <p className="mt-2 rounded-md bg-yellow-50 p-3 text-sm text-yellow-900">This bed is marked as needing cleaning. <label className="mt-1 flex items-center gap-2"><input type="checkbox" name="acceptNotReady" />Hand it over as it is</label></p>
+      )}
+      <Checklist items={items} />
       <label htmlFor="checkin-notes" className="mt-2 block text-sm">Arrival notes / handover checklist</label>
       <textarea id="checkin-notes" name="notes" rows={2} className={`${input} mt-1 w-full`} placeholder="Keys handed over, room condition…" />
       <button type="submit" disabled={pending} className={`${button} mt-3`}>{pending ? "Saving…" : "Confirm arrival"}</button>
@@ -43,7 +74,7 @@ export function CheckInForm({ allocationId }: { allocationId: string }) {
   );
 }
 
-export function CheckOutForm({ allocationId, blockers, canOverride }: { allocationId: string; blockers: ClearanceBlocker[]; canOverride: boolean }) {
+export function CheckOutForm({ allocationId, blockers, canOverride, items = [] }: { allocationId: string; blockers: ClearanceBlocker[]; canOverride: boolean; items?: ChecklistItem[] }) {
   const [state, action, pending] = useActionState<ActionState, FormData>(checkOutAction, {});
   return (
     <form action={action} className={panel}>
@@ -65,6 +96,7 @@ export function CheckOutForm({ allocationId, blockers, canOverride }: { allocati
           )}
         </div>
       )}
+      <Checklist items={items} />
       <label htmlFor="checkout-notes" className="mt-2 block text-sm">Departure notes / condition</label>
       <textarea id="checkout-notes" name="notes" rows={2} className={`${input} mt-1 w-full`} />
       <button type="submit" disabled={pending} className={`${button} mt-3`}>{pending ? "Saving…" : "Confirm departure"}</button>

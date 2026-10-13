@@ -2,7 +2,10 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { canSeeSite } from "@/lib/auth/scope";
-import { hasRole, requireRole } from "@/lib/auth/authorize";
+import { hasRole, requireRole, userCan } from "@/lib/auth/authorize";
+import { prisma } from "@sam/core/lib/db";
+import { checklistFor } from "@/modules/allocations/context";
+import { ExtendStayForm, ProvisionalDecisionForm, SwapBedsForm } from "@/modules/allocations/components/extras-forms";
 import { ALLOCATION_ADMIN_ROLES, ALLOCATION_OPERATE_ROLES, ALLOCATION_VIEW_ROLES } from "@sam/core/modules/allocations/access";
 import { clearanceBlockers, getAllocation } from "@sam/core/modules/allocations/service";
 import { AllocationStatusBadge } from "@/modules/allocations/components/status-badge";
@@ -32,6 +35,15 @@ async function AllocationView({ params }: { params: Promise<{ allocationId: stri
   const canAdmin = hasRole(user, ...ALLOCATION_ADMIN_ROLES);
   const blockers = allocation.status === "CHECKED_IN" ? await clearanceBlockers(allocation.staffId) : [];
   const { staff, bed } = allocation;
+  const ctx = { siteId: bed.room.building.siteId, buildingId: bed.room.buildingId };
+  const [checkInItems, checkOutItems] = await Promise.all([checklistFor(user.organizationId, "CHECK_IN", ctx.siteId), checklistFor(user.organizationId, "CHECK_OUT", ctx.siteId)]);
+  const canExtend = userCan(user, "accom.extend", ctx) && !!allocation.endDate;
+  const canSwap = (userCan(user, "accom.bed_swap", ctx) || hasRole(user, "ACCOMMODATION_OFFICER")) && (allocation.status === "CONFIRMED" || allocation.status === "CHECKED_IN");
+  const swapCandidates = canSwap
+    ? await prisma.allocation.findMany({ where: { id: { not: allocation.id }, status: { in: ["CONFIRMED", "CHECKED_IN"] }, bed: { room: { building: { siteId: ctx.siteId } } } }, include: { staff: true, bed: true }, orderBy: { startDate: "asc" }, take: 40 })
+    : [];
+  const canDecideProvisional = allocation.provisional && !allocation.provisionalApprovedAt && userCan(user, "accom.approve", ctx) && allocation.createdById !== user.id;
+  const notReady = (bed as { readiness?: string }).readiness !== undefined && (bed as { readiness?: string }).readiness !== "READY";
 
   return (
     <>
@@ -42,9 +54,16 @@ async function AllocationView({ params }: { params: Promise<{ allocationId: stri
         <h1 className="page-title">{staff.firstName} {staff.lastName}</h1>
         <AllocationStatusBadge status={allocation.status} />
       </div>
-      <p className="mt-1 text-sm text-zinc-600">{staff.employeeId}{staff.department ? ` · ${staff.department}` : ""}{staff.user ? ` · ${staff.user.email}` : ""}</p>
+      <p className="mt-1 text-sm text-zinc-600">{staff.employeeId}{staff.department ? ` · ${staff.department}` : ""}{staff.user ? ` · ${staff.user.username}` : ""}</p>
 
+      {allocation.provisional && (
+        <div role="status" className="mt-4 rounded-md border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900" data-provisional>
+          <b>Provisional emergency stay.</b> {allocation.provisionalApprovedAt ? "Rejected by an Accommodation Admin: the resident must be moved." : `An Accommodation Admin must approve it by ${allocation.provisionalApproveBy?.toISOString().replace("T", " ").slice(0, 16)} UTC.`}
+          {canDecideProvisional && <ProvisionalDecisionForm allocationId={allocation.id} />}
+        </div>
+      )}
       <dl className="mt-6 grid gap-4 card p-4 sm:grid-cols-3">
+        <Field label="Stay type"><span className="capitalize">{allocation.stayType.toLowerCase()}</span></Field>
         <Field label="Bed">
           <Link href={`/accommodation/rooms/${bed.room.id}`} className="underline">{bed.code}</Link>
           <div className="text-xs text-zinc-500">{bed.room.building.site.name} · {bed.room.building.name} · Room {bed.room.code}</div>
@@ -79,8 +98,10 @@ async function AllocationView({ params }: { params: Promise<{ allocationId: stri
           <div className="mt-3 grid gap-4 sm:grid-cols-2">
             <RoomKeysPanel roomId={bed.room.id} staffId={allocation.staffId} canOperate={hasRole(user, ...KEY_OPERATE_ROLES)} returnPath={`/accommodation/allocations/${allocation.id}`} />
             <ResidentItemsPanel staffId={allocation.staffId} canOperate={hasRole(user, ...INVENTORY_OPERATE_ROLES)} returnPath={`/accommodation/allocations/${allocation.id}`} />
-            {allocation.status === "CONFIRMED" && <CheckInForm allocationId={allocation.id} />}
-            {allocation.status === "CHECKED_IN" && <CheckOutForm allocationId={allocation.id} blockers={blockers} canOverride={canAdmin} />}
+            {allocation.status === "CONFIRMED" && <CheckInForm allocationId={allocation.id} items={checkInItems} notReady={notReady} />}
+            {allocation.status === "CHECKED_IN" && <CheckOutForm allocationId={allocation.id} blockers={blockers} canOverride={canAdmin} items={checkOutItems} />}
+            {canExtend && <ExtendStayForm allocationId={allocation.id} currentEnd={isoDate(allocation.endDate!)} maxDays={14} />}
+            {canSwap && <SwapBedsForm allocationId={allocation.id} others={swapCandidates.map((a) => ({ id: a.id, label: `${a.staff.firstName} ${a.staff.lastName} · bed ${a.bed.code}` }))} />}
             <div className="card p-4">
               <h3 className="font-medium">Transfer</h3>
               <p className="mt-1 text-sm text-zinc-600">Move to another bed now or on a future date. The current bed stays held until the effective date.</p>

@@ -6,14 +6,20 @@ const STYLES: Record<BedState, string> = {
   VACANT: "bg-green-100 text-green-800",
   BLOCKED: "bg-red-100 text-red-800",
   RETIRED: "bg-zinc-200 text-zinc-700",
+  NEEDS_CLEANING: "bg-yellow-100 text-yellow-800",
+  MAINTENANCE: "bg-orange-100 text-orange-800",
+  DRAFT: "bg-zinc-100 text-zinc-600",
 };
 
 const LABELS: Record<BedState, string> = {
   OCCUPIED: "Occupied",
-  ALLOCATED: "Allocated · awaiting check-in",
-  VACANT: "Vacant",
+  ALLOCATED: "Reserved · awaiting check-in",
+  VACANT: "Available",
   BLOCKED: "Blocked",
-  RETIRED: "Retired",
+  RETIRED: "Archived",
+  NEEDS_CLEANING: "Needs cleaning",
+  MAINTENANCE: "Under maintenance",
+  DRAFT: "Draft",
 };
 
 export function StateBadge({ state }: { state: BedState }) {

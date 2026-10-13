@@ -2,14 +2,14 @@ import type { OccupancySummary } from "@sam/core/modules/accommodation/occupancy
 
 export function SummaryTiles({ summary }: { summary: OccupancySummary }) {
   const tiles: Array<[string, number, string?]> = [
-    ["Bed capacity", summary.capacity, summary.retired ? `${summary.retired} retired` : undefined],
+    ["Bed capacity", summary.capacity, [summary.retired ? `${summary.retired} archived` : "", summary.draft ? `${summary.draft} draft` : ""].filter(Boolean).join(" · ") || undefined],
     [
       "Occupied",
       summary.occupied,
       summary.awaitingCheckIn ? `${summary.checkedIn} checked in · ${summary.awaitingCheckIn} awaiting check-in` : undefined,
     ],
-    ["Vacant", summary.vacant, summary.upcomingArrivals ? `${summary.upcomingArrivals} arriving` : undefined],
-    ["Blocked", summary.blocked],
+    ["Available", summary.vacant, [summary.upcomingArrivals ? `${summary.upcomingArrivals} arriving` : "", summary.needsCleaning ? `${summary.needsCleaning} need cleaning` : ""].filter(Boolean).join(" · ") || undefined],
+    ["Blocked", summary.blocked, summary.maintenance ? `${summary.maintenance} under maintenance` : undefined],
   ];
   return (
     <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">

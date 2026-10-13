@@ -2,7 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { hasRole, requireRole } from "@/lib/auth/authorize";
+import type { StayType } from "@prisma/client";
+import { actorOf, hasRole, requireRole } from "@/lib/auth/authorize";
 import { guardScope } from "@/lib/auth/guards";
 import { ALLOCATION_ADMIN_ROLES, ALLOCATION_OPERATE_ROLES } from "@sam/core/modules/allocations/access";
 import { AllocationError } from "@sam/core/modules/allocations/errors";
@@ -13,6 +14,13 @@ export type ActionState = { error?: string; message?: string };
 
 function str(formData: FormData, key: string): string {
   return String(formData.get(key) ?? "").trim();
+}
+
+/** Ticks and notes from a check-in or check-out checklist: fields named check_<item id>. */
+function checklistFrom(formData: FormData): Record<string, boolean | string> | null {
+  const out: Record<string, boolean | string> = {};
+  for (const [k, v] of formData.entries()) if (k.startsWith("check_") && typeof v === "string") out[k.slice(6)] = v === "on" ? true : v;
+  return Object.keys(out).length ? out : null;
 }
 
 function revalidateAccommodation(allocationId?: string) {
@@ -31,7 +39,8 @@ async function run<T>(fn: () => Promise<T>): Promise<{ ok: true; value: T } | { 
 }
 
 export async function allocateAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
-  const user = await requireRole(ALLOCATION_OPERATE_ROLES);
+  // Admin decides, Reception executes: placing someone in a bed is the Admin's decision (document principle 5).
+  const user = await requireRole(ALLOCATION_ADMIN_ROLES);
   await guardScope(user, "accom.view", formData, [["allocationId", "allocation"], ["bedId", "bed"], ["toBedId", "bed"]]);
   const result = await run(() =>
     allocate({
@@ -41,6 +50,9 @@ export async function allocateAction(_prev: ActionState, formData: FormData): Pr
       endDate: str(formData, "endDate") || null,
       reason: str(formData, "reason") || null,
       actorId: user.id,
+      actor: actorOf(user),
+      stayType: (str(formData, "stayType") || undefined) as StayType | undefined,
+      eligibilityOverrideReason: str(formData, "eligibilityOverrideReason") || null,
     }),
   );
   if (!result.ok) return { error: result.error };
@@ -52,7 +64,7 @@ export async function checkInAction(_prev: ActionState, formData: FormData): Pro
   const user = await requireRole(ALLOCATION_OPERATE_ROLES);
   await guardScope(user, "accom.view", formData, [["allocationId", "allocation"], ["bedId", "bed"], ["toBedId", "bed"]]);
   const allocationId = str(formData, "allocationId");
-  const result = await run(() => checkIn({ allocationId, actorId: user.id, notes: str(formData, "notes") || null }));
+  const result = await run(() => checkIn({ allocationId, actorId: user.id, notes: str(formData, "notes") || null, checklist: checklistFrom(formData), acceptNotReady: formData.get("acceptNotReady") === "on" }));
   if (!result.ok) return { error: result.error };
   revalidateAccommodation(allocationId);
   return { message: "Checked in." };
@@ -69,6 +81,7 @@ export async function checkOutAction(_prev: ActionState, formData: FormData): Pr
       notes: str(formData, "notes") || null,
       overrideReason: str(formData, "overrideReason") || null,
       canOverride: hasRole(user, ...ALLOCATION_ADMIN_ROLES),
+      checklist: checklistFrom(formData),
     }),
   );
   if (!result.ok) return { error: result.error };
