@@ -1,12 +1,12 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { requireUser } from "@/lib/auth/authorize";
-import { listMyRequests } from "@sam/core/modules/requests/service";
+import { api } from "@/lib/api";
 import { RequestStatusBadge } from "@/modules/requests/components/request-view";
 
 async function RequestList() {
-  const user = await requireUser("/my/requests");
-  const requests = await listMyRequests(user.id);
+  await requireUser("/my/requests");
+  const requests = await api.requests.mine();
   if (requests.length === 0) {
     return <p className="rounded-lg border border-dashed border-zinc-300 p-6 text-center text-sm text-zinc-500">You have not made any requests yet.</p>;
   }

@@ -1,6 +1,5 @@
 import Link from "next/link";
-import type { RequestRecord } from "@sam/core/modules/requests/service";
-import { describeStatus, summarizeRequest } from "@sam/core/modules/requests/service";
+import { describeStatus, summarizeRequest, type RequestRecord } from "@sam/core/modules/requests/rules";
 
 const STATUS_STYLE: Record<string, string> = {
   PENDING_APPROVAL: "bg-amber-100 text-amber-800",

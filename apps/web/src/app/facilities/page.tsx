@@ -1,33 +1,19 @@
 import { Suspense } from "react";
 import Link from "next/link";
-import { prisma } from "@sam/core/lib/db";
 import { hasRole, requireRole } from "@/lib/auth/authorize";
 import { zonedDateTime } from "@sam/core/lib/time";
 import { FACILITY_MANAGE_ROLES, FACILITY_VIEW_ROLES } from "@sam/core/modules/facilities/access";
-import { facilityConfig, facilityReports, listFacilities } from "@sam/core/modules/facilities/service";
-import { describeHours } from "@sam/core/modules/facilities/rules";
-import { siteOptions } from "@/modules/facilities/context";
+import { describeHours, facilityConfig } from "@sam/core/modules/facilities/rules";
+import { api } from "@/lib/api";
 import { CreateFacilityForm } from "@/modules/facilities/components/forms";
 import { PageHeader } from "@/components/shell/page-header";
 
 async function Overview() {
   const user = await requireRole(FACILITY_VIEW_ROLES, "/facilities");
   const canManage = hasRole(user, ...FACILITY_MANAGE_ROLES);
-  const now = new Date();
-  const [facilities, reports, pending, sites] = await Promise.all([
-    listFacilities({ includeInactive: true }),
-    facilityReports(30, now),
-    prisma.facilityBooking.findMany({ where: { status: "PENDING_APPROVAL", startsAt: { gt: now } }, include: { facility: { include: { site: true } }, user: { select: { name: true } } }, orderBy: { startsAt: "asc" } }),
-    canManage ? siteOptions() : null,
-  ]);
-  const todayCounts = await Promise.all(facilities.map(async (f) => {
-    const today = zonedDateTime(now, f.site.timezone).date;
-    const start = new Date(now); start.setUTCHours(0, 0, 0, 0);
-    const count = await prisma.facilityBooking.count({ where: { facilityId: f.id, status: { in: ["CONFIRMED", "CHECKED_IN", "PENDING_APPROVAL"] }, endsAt: { gt: now }, startsAt: { lt: new Date(now.getTime() + 24 * 3600000) } } });
-    return [f.id, { today, count }] as const;
-  }));
-  const todayMap = new Map(todayCounts);
-  const upcoming = [...todayMap.values()].reduce((s, v) => s + v.count, 0);
+  const { facilities, reports, pending, sites: allSites, next24h } = await api.facilities.overview();
+  const sites = canManage ? allSites : null;
+  const upcoming = Object.values(next24h).reduce((s, n) => s + n, 0);
   return (
     <>
       <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -66,7 +52,7 @@ async function Overview() {
                   <td className="px-3 py-3">{f.site.name}</td>
                   <td className="px-3 py-3 text-xs">{describeHours(facilityConfig(f).hours)}</td>
                   <td className="px-3 py-3 tabular-nums">{f.capacity}</td>
-                  <td className="px-3 py-3 tabular-nums">{todayMap.get(f.id)?.count ?? 0}</td>
+                  <td className="px-3 py-3 tabular-nums">{next24h[f.id] ?? 0}</td>
                   <td className="px-3 py-3 text-xs">{f.status === "ACTIVE" ? "Active" : "Inactive"}{f.requiresApproval ? " · approval" : ""}</td>
                 </tr>
               ))}

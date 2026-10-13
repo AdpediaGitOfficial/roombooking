@@ -2,11 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import type { DecisionAction, Role } from "@prisma/client";
+import { ApiError } from "@sam/contract/index";
+import { api } from "@/lib/api";
 import { requireRole, requireUser } from "@/lib/auth/authorize";
 import { APPROVALS_AREA_ROLES } from "@sam/core/modules/requests/access";
-import { RequestError } from "@sam/core/modules/requests/errors";
-import { decideRequest, reassignStep, resubmitRequest, submitRequest, withDelegations, withdrawRequest } from "@sam/core/modules/requests/service";
 
 export type FormState = { error?: string; fieldErrors?: Record<string, string>; values?: Record<string, string> };
 export type ActionState = { error?: string; message?: string };
@@ -33,20 +32,14 @@ function revalidateRequests(id?: string) {
 }
 
 export async function submitRequestAction(_prev: FormState, formData: FormData): Promise<FormState> {
-  const user = await requireUser("/my/requests/new");
+  await requireUser("/my/requests/new");
   const raw = fieldValues(formData);
   let id: string;
   try {
-    const { request } = await submitRequest({
-      requesterId: user.id,
-      organizationId: user.organizationId,
-      typeCode: String(formData.get("typeCode") ?? ""),
-      idempotencyKey: String(formData.get("idempotencyKey") ?? ""),
-      raw,
-    });
+    const { request } = await api.requests.submit({ typeCode: String(formData.get("typeCode") ?? ""), idempotencyKey: String(formData.get("idempotencyKey") ?? ""), fields: raw });
     id = request.id;
   } catch (error) {
-    if (error instanceof RequestError) return { error: error.message, fieldErrors: error.fieldErrors, values: raw };
+    if (error instanceof ApiError && error.status < 500) return { error: error.message, fieldErrors: error.fieldErrors, values: raw };
     throw error;
   }
   revalidateRequests(id);
@@ -54,13 +47,13 @@ export async function submitRequestAction(_prev: FormState, formData: FormData):
 }
 
 export async function resubmitRequestAction(_prev: FormState, formData: FormData): Promise<FormState> {
-  const user = await requireUser("/my/requests");
+  await requireUser("/my/requests");
   const requestId = String(formData.get("requestId") ?? "");
   const raw = fieldValues(formData);
   try {
-    await resubmitRequest({ requestId, requesterId: user.id, raw });
+    await api.requests.resubmit({ id: requestId, fields: raw });
   } catch (error) {
-    if (error instanceof RequestError) return { error: error.message, fieldErrors: error.fieldErrors, values: raw };
+    if (error instanceof ApiError && error.status < 500) return { error: error.message, fieldErrors: error.fieldErrors, values: raw };
     throw error;
   }
   revalidateRequests(requestId);
@@ -68,12 +61,12 @@ export async function resubmitRequestAction(_prev: FormState, formData: FormData
 }
 
 export async function withdrawRequestAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
-  const user = await requireUser("/my/requests");
+  await requireUser("/my/requests");
   const requestId = String(formData.get("requestId") ?? "");
   try {
-    await withdrawRequest({ requestId, requesterId: user.id, reason: String(formData.get("reason") ?? "") || null });
+    await api.requests.withdraw({ id: requestId, reason: String(formData.get("reason") ?? "") || undefined });
   } catch (error) {
-    if (error instanceof RequestError) return { error: error.message };
+    if (error instanceof ApiError && error.status < 500) return { error: error.message };
     throw error;
   }
   revalidateRequests(requestId);
@@ -81,14 +74,14 @@ export async function withdrawRequestAction(_prev: ActionState, formData: FormDa
 }
 
 export async function decideRequestAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
-  const user = await requireRole(APPROVALS_AREA_ROLES, "/approvals");
+  await requireRole(APPROVALS_AREA_ROLES, "/approvals");
   const requestId = String(formData.get("requestId") ?? "");
-  const action = String(formData.get("action") ?? "") as DecisionAction;
-  if (!["APPROVE", "REJECT", "REQUEST_CHANGES"].includes(action)) return { error: "Choose a decision." };
+  const action = String(formData.get("action") ?? "");
+  if (action !== "APPROVE" && action !== "REJECT" && action !== "REQUEST_CHANGES") return { error: "Choose a decision." };
   try {
-    await decideRequest({ requestId, actor: await withDelegations({ id: user.id, roles: user.roleAssignments.map((r) => r.role) }), action, comment: String(formData.get("comment") ?? "") });
+    await api.approvals.decide({ id: requestId, action, comment: String(formData.get("comment") ?? "") });
   } catch (error) {
-    if (error instanceof RequestError) return { error: error.message };
+    if (error instanceof ApiError && error.status < 500) return { error: error.message };
     throw error;
   }
   revalidateRequests(requestId);
@@ -97,12 +90,12 @@ export async function decideRequestAction(_prev: ActionState, formData: FormData
 }
 
 export async function reassignStepAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
-  const user = await requireRole(APPROVALS_AREA_ROLES, "/approvals");
+  await requireRole(APPROVALS_AREA_ROLES, "/approvals");
   const requestId = String(formData.get("requestId") ?? "");
   try {
-    await reassignStep({ requestId, actor: { id: user.id, roles: user.roleAssignments.map((r) => r.role) }, role: String(formData.get("role") ?? "") as Role, reason: String(formData.get("reason") ?? "") });
+    await api.approvals.reassign({ id: requestId, role: String(formData.get("role") ?? "") as Parameters<typeof api.approvals.reassign>[0]["role"], reason: String(formData.get("reason") ?? "") });
   } catch (error) {
-    if (error instanceof RequestError) return { error: error.message };
+    if (error instanceof ApiError && error.status < 500) return { error: error.message };
     throw error;
   }
   revalidateRequests(requestId);

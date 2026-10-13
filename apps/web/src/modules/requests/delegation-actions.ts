@@ -1,12 +1,12 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import type { Role } from "@prisma/client";
-import { hasRole, requireRole } from "@/lib/auth/authorize";
-import { APPROVALS_AREA_ROLES, REQUEST_ADMIN_ROLES } from "@sam/core/modules/requests/access";
-import { RequestError } from "@sam/core/modules/requests/errors";
-import { createDelegation, revokeDelegation } from "@sam/core/modules/requests/delegations";
+import { ApiError } from "@sam/contract/index";
+import { api } from "@/lib/api";
+import { requireRole } from "@/lib/auth/authorize";
+import { APPROVALS_AREA_ROLES } from "@sam/core/modules/requests/access";
 
+type Role = NonNullable<Parameters<typeof api.delegations.create>[0]["roles"]>[number];
 export type DelegationState = { error?: string; message?: string; fieldErrors?: Record<string, string>; values?: Record<string, string> };
 const str = (fd: FormData, k: string) => { const v = fd.get(k); return typeof v === "string" ? v.trim() : ""; };
 
@@ -18,12 +18,14 @@ function revalidate() {
 
 export async function createDelegationAction(_prev: DelegationState, formData: FormData): Promise<DelegationState> {
   const user = await requireRole(APPROVALS_AREA_ROLES, "/approvals/delegations");
-  const isAdmin = hasRole(user, ...REQUEST_ADMIN_ROLES);
   const values: Record<string, string> = { delegatorId: str(formData, "delegatorId") || user.id, delegateId: str(formData, "delegateId"), startsAt: str(formData, "startsAt"), endsAt: str(formData, "endsAt"), reason: str(formData, "reason"), roles: formData.getAll("roles").filter((r): r is string => typeof r === "string").join(",") };
   try {
-    await createDelegation({ delegatorId: values.delegatorId, delegateId: values.delegateId, roles: values.roles ? (values.roles.split(",") as Role[]) : [], startsAt: values.startsAt, endsAt: values.endsAt, reason: values.reason, actor: { id: user.id, isAdmin } });
+    await api.delegations.create({
+      delegatorId: values.delegatorId, delegateId: values.delegateId, roles: values.roles ? (values.roles.split(",") as Role[]) : [],
+      startsAt: values.startsAt, endsAt: values.endsAt, reason: values.reason || undefined,
+    });
   } catch (error) {
-    if (error instanceof RequestError) return { error: error.message, fieldErrors: error.fieldErrors, values };
+    if (error instanceof ApiError && error.status < 500) return { error: error.message, fieldErrors: error.fieldErrors, values };
     throw error;
   }
   revalidate();
@@ -31,11 +33,11 @@ export async function createDelegationAction(_prev: DelegationState, formData: F
 }
 
 export async function revokeDelegationAction(_prev: DelegationState, formData: FormData): Promise<DelegationState> {
-  const user = await requireRole(APPROVALS_AREA_ROLES, "/approvals/delegations");
+  await requireRole(APPROVALS_AREA_ROLES, "/approvals/delegations");
   try {
-    await revokeDelegation({ delegationId: str(formData, "delegationId"), actor: { id: user.id, isAdmin: hasRole(user, ...REQUEST_ADMIN_ROLES) }, reason: str(formData, "reason") || null });
+    await api.delegations.revoke({ id: str(formData, "delegationId"), reason: str(formData, "reason") || undefined });
   } catch (error) {
-    if (error instanceof RequestError) return { error: error.message };
+    if (error instanceof ApiError && error.status < 500) return { error: error.message };
     throw error;
   }
   revalidate();

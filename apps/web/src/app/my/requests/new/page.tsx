@@ -1,11 +1,11 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { requireUser } from "@/lib/auth/authorize";
-import { listRequestTypes } from "@sam/core/modules/requests/service";
+import { api } from "@/lib/api";
 
 async function TypeList() {
-  const user = await requireUser("/my/requests/new");
-  const types = await listRequestTypes(user.organizationId);
+  await requireUser("/my/requests/new");
+  const types = await api.requests.types();
   return (
     <ul className="divide-y divide-zinc-200 card">
       {types.map((t) => (

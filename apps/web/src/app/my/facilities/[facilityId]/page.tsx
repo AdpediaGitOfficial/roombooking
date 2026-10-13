@@ -1,10 +1,9 @@
 import { Suspense } from "react";
 import Link from "next/link";
-import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth/authorize";
-import { addDaysIso, zonedDateTime } from "@sam/core/lib/time";
-import { availabilityForDay, facilityConfig, getBooking, getFacility } from "@sam/core/modules/facilities/service";
-import { describeHours } from "@sam/core/modules/facilities/rules";
+import { addDaysIso } from "@sam/core/lib/time";
+import { describeHours, facilityConfig } from "@sam/core/modules/facilities/rules";
+import { api, orNotFound } from "@/lib/api";
 import { DayNav, SlotGrid, bookingWhen } from "@/modules/facilities/components/views";
 import { BookingForm } from "@/modules/facilities/components/forms";
 
@@ -14,23 +13,17 @@ type Search = Promise<{ date?: string; amend?: string }>;
 async function Content({ params, searchParams }: { params: Params; searchParams: Search }) {
   const { facilityId } = await params;
   const { date: rawDate, amend } = await searchParams;
-  const user = await requireUser(`/my/facilities/${facilityId}`);
-  const facility = await getFacility(facilityId);
-  if (!facility || facility.status !== "ACTIVE") notFound();
-  const now = new Date();
-  const tz = facility.site.timezone;
-  const today = zonedDateTime(now, tz).date;
-  const date = rawDate && /^\d{4}-\d{2}-\d{2}$/.test(rawDate) && rawDate >= today ? rawDate : today;
+  await requireUser(`/my/facilities/${facilityId}`);
+  const { facility, today, date, slots, amending } = await orNotFound(api.facilities.getMine({ id: facilityId, date: rawDate, amend }));
   const { hours, rules } = facilityConfig(facility);
-  const slots = await availabilityForDay(facility, date, now);
-  const amending = amend ? await getBooking(amend) : null;
-  const amendProps = amending && amending.userId === user.id && ["CONFIRMED", "PENDING_APPROVAL"].includes(amending.status) && amending.facilityId === facility.id
+  const amendProps = amending
     ? { bookingId: amending.id, startTime: bookingWhen(amending).start, durationMinutes: (amending.endsAt.getTime() - amending.startsAt.getTime()) / 60000, headcount: amending.headcount }
     : undefined;
   const base = `/my/facilities/${facility.id}`;
   const lastDay = addDaysIso(today, rules.advanceDays);
   return (
     <>
+      <h1 className="page-title">{facility.name}</h1>
       <p className="mt-1 text-sm text-zinc-600">{facility.site.name}{facility.location ? ` · ${facility.location}` : ""} · holds {facility.capacity}</p>
       {facility.description && <p className="mt-2 text-sm">{facility.description}</p>}
       <dl className="mt-3 grid grid-cols-2 gap-2 text-xs text-zinc-600">
@@ -58,15 +51,9 @@ export default function FacilityPage({ params, searchParams }: PageProps<"/my/fa
   return (
     <main>
       <Suspense fallback={<p className="text-sm text-zinc-500">Loading…</p>}>
-        <Title params={params as Params} />
         <Content params={params as Params} searchParams={searchParams as Search} />
       </Suspense>
     </main>
   );
 }
 
-async function Title({ params }: { params: Params }) {
-  const { facilityId } = await params;
-  const facility = await getFacility(facilityId);
-  return <h1 className="page-title">{facility?.name ?? "Facility"}</h1>;
-}

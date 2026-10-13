@@ -1,8 +1,8 @@
 import { Suspense } from "react";
 import Link from "next/link";
-import { notFound } from "next/navigation";
 import { requireRole } from "@/lib/auth/authorize";
-import { APPROVER_ROLES, FORM_BUILDER_ROLES, currentOf, draftOf, getType } from "@sam/core/modules/requests/builder";
+import { APPROVER_ROLES, FORM_BUILDER_ROLES, currentOf, draftOf } from "@sam/core/modules/requests/builder-rules";
+import { api, orNotFound } from "@/lib/api";
 import { parseSchema } from "@sam/core/modules/requests/forms";
 import { CreateDraftButton, FormBuilder, TypeSettingsForm } from "@/modules/requests/components/form-builder";
 import { FieldList } from "@/modules/requests/components/dynamic-form";
@@ -12,9 +12,8 @@ const when = (d: Date | null) => (d ? d.toISOString().slice(0, 16).replace("T", 
 
 async function Content({ params }: { params: Params }) {
   const { typeId } = await params;
-  const user = await requireRole(FORM_BUILDER_ROLES, `/admin/forms/${typeId}`);
-  const type = await getType(typeId);
-  if (!type || type.organizationId !== user.organizationId) notFound();
+  await requireRole(FORM_BUILDER_ROLES, `/admin/forms/${typeId}`);
+  const type = await orNotFound(api.forms.get({ id: typeId }));
   const current = currentOf(type);
   const draft = draftOf(type);
   return (

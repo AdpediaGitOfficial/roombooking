@@ -1,23 +1,19 @@
 import { Suspense } from "react";
 import Link from "next/link";
-import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth/authorize";
-import { fieldsWithOptions, getRequest, resolveFieldOptions } from "@sam/core/modules/requests/service";
-import { parseSchema, toFormStrings, type FormData } from "@sam/core/modules/requests/forms";
+import { toFormStrings, type FormData } from "@sam/core/modules/requests/forms";
+import { api, orNotFound } from "@/lib/api";
 import { RequestDetails, RequestHistory, RequestStatusBadge, RequestSteps } from "@/modules/requests/components/request-view";
 import { DynamicForm } from "@/modules/requests/components/dynamic-form";
 import { WithdrawForm } from "@/modules/requests/components/forms";
 
 async function RequestContent({ params }: { params: Promise<{ requestId: string }> }) {
   const { requestId } = await params;
-  const user = await requireUser(`/my/requests/${requestId}`);
-  const request = await getRequest(requestId);
-  // Residents only ever see their own requests (SRS 3.1).
-  if (!request || request.requesterId !== user.id) notFound();
+  await requireUser(`/my/requests/${requestId}`);
+  // Residents only ever see their own requests (SRS 3.1); the API answers 404 for anyone else's.
+  const { request, fields } = await orNotFound(api.requests.getMine({ id: requestId }));
 
-  const schema = parseSchema(request.workflowVersion.formSchema);
   const canResubmit = request.status === "CHANGES_REQUESTED" || request.status === "EXPIRED";
-  const fields = canResubmit ? fieldsWithOptions(schema, await resolveFieldOptions(schema)) : [];
   const lastReturn = request.decisions.filter((d) => d.action === "REQUEST_CHANGES").at(-1);
 
   return (
