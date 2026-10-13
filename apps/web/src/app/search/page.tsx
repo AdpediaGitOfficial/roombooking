@@ -1,30 +1,16 @@
 import { Suspense } from "react";
 import Link from "next/link";
-import { prisma } from "@sam/core/lib/db";
-import { hasRole, requireUser } from "@/lib/auth/authorize";
+import { api } from "@/lib/api";
+import { requireUser } from "@/lib/auth/authorize";
 import { AppShell } from "@/components/shell/app-shell";
 import { PageHeader } from "@/components/shell/page-header";
-import { ALLOCATION_VIEW_ROLES } from "@sam/core/modules/allocations/access";
-import { ACCOMMODATION_VIEW_ROLES } from "@sam/core/modules/accommodation/access";
-import { MAINTENANCE_AREA_ROLES } from "@sam/core/modules/maintenance/access";
 import { WorkOrderStatusBadge } from "@/modules/maintenance/components/views";
 
 async function Results({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
-  const user = await requireUser("/search");
+  await requireUser("/search");
   const q = ((await searchParams).q ?? "").trim();
   if (q.length < 2) return <p className="text-sm text-zinc-500">Type at least two characters: a name, employee ID, bed or room code, or ticket number.</p>;
-  const contains = { contains: q, mode: "insensitive" as const };
-  const [staff, beds, tickets] = await Promise.all([
-    hasRole(user, ...ALLOCATION_VIEW_ROLES)
-      ? prisma.staffProfile.findMany({ where: { OR: [{ firstName: contains }, { lastName: contains }, { employeeId: contains }] }, take: 10, orderBy: { lastName: "asc" }, include: { allocations: { where: { status: { in: ["CONFIRMED", "CHECKED_IN"] } }, include: { bed: true }, take: 1 } } })
-      : Promise.resolve([]),
-    hasRole(user, ...ACCOMMODATION_VIEW_ROLES)
-      ? prisma.bed.findMany({ where: { OR: [{ code: contains }, { room: { code: contains } }] }, take: 10, orderBy: { code: "asc" }, include: { room: { include: { building: true } } } })
-      : Promise.resolve([]),
-    hasRole(user, ...MAINTENANCE_AREA_ROLES)
-      ? prisma.workOrder.findMany({ where: { OR: [{ ticketNumber: contains }, { category: contains }, { description: contains }] }, take: 10, orderBy: { createdAt: "desc" } })
-      : Promise.resolve([]),
-  ]);
+  const { staff, beds, tickets } = await api.search.all({ q });
   const total = staff.length + beds.length + tickets.length;
   if (total === 0) return <p className="text-sm text-zinc-500">Nothing matches “{q}”.</p>;
   return (

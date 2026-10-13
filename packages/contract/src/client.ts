@@ -3,6 +3,7 @@ import type { Contract, FileInput, FileResult, InputOf, OpDef, OutputOf } from "
 
 type OpFn<D> = D extends OpDef<never, never, never>
   ? never
+  // eslint-disable-next-line @typescript-eslint/no-empty-object-type
   : {} extends InputOf<D>
     ? (input?: InputOf<D>) => Promise<OutputOf<D>>
     : (input: InputOf<D>) => Promise<OutputOf<D>>;

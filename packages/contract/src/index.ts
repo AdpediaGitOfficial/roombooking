@@ -1,8 +1,11 @@
 import { auth } from "./ops/auth";
+import { me, searchOps } from "./ops/me";
 
 /** Every operation the API offers, grouped by module. */
 export const contract = {
   auth,
+  me,
+  search: searchOps,
 };
 
 export type ApiContract = typeof contract;

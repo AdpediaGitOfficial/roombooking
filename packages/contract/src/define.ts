@@ -65,6 +65,9 @@ export function fileOp<I extends z.ZodType, const A extends Access = "authentica
 
 export type Contract = Record<string, Record<string, OpDef<z.ZodType, unknown, Access>>>;
 
+/** The (awaited) result type of a service function, for declaring an operation's output. */
+export type Ret<F> = F extends (...args: never[]) => infer R ? Awaited<R> : never;
+
 /** What a caller passes to an operation. */
 export type InputOf<D> = D extends OpDef<infer I, unknown, Access> ? z.input<I> : never;
 /** What a handler receives after validation. */

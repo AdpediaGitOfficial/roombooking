@@ -6,6 +6,7 @@ import { prisma } from "../../lib/db";
 import { recordAudit } from "../../lib/audit";
 import { hashPassword, validatePasswordStrength, verifyPassword } from "../../lib/auth/password";
 import { revokeOtherUserSessions } from "../../lib/auth/session-store";
+import { normalisePhone } from "../notifications/whatsapp";
 import { OCCUPYING_STATUSES, classifyBed, isoDate, summarize, todayInTimezone } from "../accommodation/occupancy";
 
 export class SelfServiceError extends Error {
@@ -191,49 +192,56 @@ export async function markNotificationRead(userId: string, notificationId: strin
   return result.count;
 }
 
-/** Human-readable text for an outbox event. */
-export function describeNotification(event: string, payload: unknown): { title: string; body: string } {
-  const p = (payload ?? {}) as Record<string, string | null | undefined>;
-  switch (event) {
-    case "allocation.confirmed":
-      return { title: "Accommodation confirmed", body: `Bed ${p.bed} in ${p.building}, room ${p.room}, from ${p.startDate}${p.endDate ? ` to ${p.endDate}` : ""}.` };
-    case "allocation.checked_out":
-      return { title: "Checked out", body: `Your stay in bed ${p.bed} ended on ${p.endDate}.` };
-    case "booking.confirmed":
-      return { title: "Booking confirmed", body: `${p.facility} on ${p.date}, ${p.startTime}–${p.endTime}.` };
-    case "booking.pending":
-      return { title: "Booking awaiting approval", body: `${p.facility} on ${p.date} at ${p.startTime}.` };
-    case "booking.rejected":
-      return { title: "Booking declined", body: `${p.facility} on ${p.date} at ${p.startTime}${p.reason ? `: ${p.reason}` : "."}` };
-    case "booking.cancelled":
-      return { title: "Booking cancelled", body: `${p.facility} on ${p.date} at ${p.startTime}${p.reason ? `: ${p.reason}` : "."}` };
-    case "request.reminder":
-      return { title: "Approval waiting", body: `${p.type} at "${p.step}" for ${p.days} day(s).` };
-    case "request.escalated":
-      return { title: "Request escalated to you", body: `${p.type} at "${p.step}" after ${p.days} day(s).` };
-    case "request.escalated_requester":
-      return { title: "Request escalated", body: `Your ${p.type} has been escalated to a senior approver.` };
-    case "request.reassigned":
-      return { title: "Approval step reassigned to you", body: `${p.type} · ${p.step}${p.reason ? `: ${p.reason}` : ""}` };
-    case "request.expired":
-      return { title: "Request expired", body: `Your ${p.type} was not decided in time. You can resubmit it.` };
-    case "delegation.started":
-      return { title: "You are covering approvals", body: `For ${p.delegator}, ${p.startsAt} to ${p.endsAt}.` };
-    case "delegation.arranged":
-      return { title: "Approval cover arranged", body: `${p.delegate} covers your approvals ${p.startsAt} to ${p.endsAt}.` };
-    case "delegation.ended":
-      return { title: "Approval cover ended", body: `You no longer cover for ${p.delegator}.` };
-    case "broadcast":
-      return { title: p.title ?? "Announcement", body: (p.body ?? "").length > 160 ? `${(p.body ?? "").slice(0, 157)}…` : p.body ?? "" };
-    case "lostfound.claim_verified":
-      return { title: "Lost and found claim verified", body: `${p.reference}: ${p.description}. Collect it from the accommodation office${p.storageLocation ? ` (${p.storageLocation})` : ""} with your ID.` };
-    case "lostfound.claim_rejected":
-      return { title: "Lost and found claim not verified", body: `${p.reference}${p.reason ? `: ${p.reason}` : "."}` };
-    case "lostfound.returned":
-      return { title: "Found item handed over", body: `${p.reference}: ${p.description}.` };
-    case "allocation.cancelled":
-      return { title: "Allocation cancelled", body: `Bed ${p.bed} is no longer allocated to you${p.reason ? `: ${p.reason}` : "."}` };
-    default:
-      return { title: event.replace(/[._]/g, " "), body: "" };
-  }
+export { describeNotification } from "./rules";
+
+// ---------------------------------------------------------------------------
+// Staff record, preferences and the home page
+// ---------------------------------------------------------------------------
+
+/** The resident's own staff record, or null when no record is linked to the account. */
+export async function getStaffByUser(userId: string) {
+  return prisma.staffProfile.findUnique({ where: { userId } });
+}
+
+/** Email copies of in-app notifications (COM-01). */
+export async function setEmailPreference(userId: string, enabled: boolean) {
+  await prisma.user.update({ where: { id: userId }, data: { emailNotifications: enabled } });
+  await recordAudit({ actorId: userId, action: "EMAIL_PREFERENCE_CHANGED", entityType: "User", entityId: userId, after: { emailNotifications: enabled } });
+  return { enabled };
+}
+
+/**
+ * WhatsApp number, switch and explicit consent (COM-02). Messages are only
+ * sent when the number, the switch and the consent timestamp are all present.
+ */
+export async function setWhatsAppPreference(userId: string, input: { number: string; enabled: boolean; consent: boolean }) {
+  const raw = input.number.trim();
+  const number = raw ? normalisePhone(raw) : null;
+  if (raw && !number) throw new SelfServiceError("Enter the number in international format, e.g. +971 50 123 4567.");
+  if (input.enabled && !number) throw new SelfServiceError("Enter your WhatsApp number to switch messages on.");
+  if (input.enabled && !input.consent) throw new SelfServiceError("Tick the consent box to receive WhatsApp messages.");
+  const before = await prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { whatsappNumber: true, whatsappNotifications: true, whatsappConsentAt: true } });
+  const consentAt = input.enabled ? (before.whatsappConsentAt && before.whatsappNumber === number ? before.whatsappConsentAt : new Date()) : null;
+  await prisma.user.update({ where: { id: userId }, data: { whatsappNumber: number, whatsappNotifications: input.enabled, whatsappConsentAt: consentAt } });
+  await recordAudit({
+    actorId: userId,
+    action: "WHATSAPP_PREFERENCE_CHANGED",
+    entityType: "User",
+    entityId: userId,
+    before: { number: before.whatsappNumber, enabled: before.whatsappNotifications, consentAt: before.whatsappConsentAt?.toISOString() ?? null },
+    after: { number, enabled: input.enabled, consentAt: consentAt?.toISOString() ?? null },
+  });
+  return { number, enabled: input.enabled };
+}
+
+/** Everything the resident home screen shows, in one round trip. */
+export async function getHome(userId: string) {
+  const staff = await getStaffByUser(userId);
+  const [stay, notifications, returnedRequests, ticketsNeedingMe] = await Promise.all([
+    staff ? getMyStay(staff.id) : Promise.resolve(null),
+    listMyNotifications(userId),
+    prisma.request.findMany({ where: { requesterId: userId, status: "CHANGES_REQUESTED" }, include: { requestType: true } }),
+    prisma.workOrder.findMany({ where: { requesterId: userId, status: { in: ["RESOLVED", "WAITING_STAFF"] } }, orderBy: { updatedAt: "desc" } }),
+  ]);
+  return { staff, stay, notifications, returnedRequests, ticketsNeedingMe };
 }

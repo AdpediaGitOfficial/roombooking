@@ -301,13 +301,13 @@ describe("typed client", () => {
     await live.listen({ port: 0, host: "127.0.0.1" });
     const address = live.server.address();
     const baseUrl = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
-    let token: string | undefined;
-    const api = createClient(realContract, { baseUrl, token: () => token });
+    const holder: { token?: string } = {};
+    const api = createClient(realContract, { baseUrl, token: () => holder.token });
 
     await expect(api.auth.me()).rejects.toMatchObject({ status: 401, code: "UNAUTHENTICATED" });
     const session = await api.auth.login({ email: "api-staff@example.com", password: PASSWORD });
     expect(session.expiresAt).toBeInstanceOf(Date);
-    token = session.token;
+    holder.token = session.token;
     const me = await api.auth.me();
     expect(me.email).toBe("api-staff@example.com");
     expect(me.lastLoginAt === null || me.lastLoginAt instanceof Date).toBe(true);

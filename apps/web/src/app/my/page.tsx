@@ -1,19 +1,14 @@
 import { Suspense } from "react";
-import { requireResident } from "@/modules/self-service/context";
-import { describeNotification, getMyStay, listMyNotifications } from "@sam/core/modules/self-service/service";
-import { prisma } from "@sam/core/lib/db";
+import { requireUser } from "@/lib/auth/authorize";
+import { api } from "@/lib/api";
+import { describeNotification } from "@sam/core/modules/self-service/rules";
 import Link from "next/link";
 import { markReadAction } from "@/modules/self-service/actions";
 import { isoDate } from "@sam/core/modules/accommodation/occupancy";
 
 async function HomeContent() {
-  const { user, staff } = await requireResident("/my");
-  const [stay, notifications, returned] = await Promise.all([
-    staff ? getMyStay(staff.id) : null,
-    listMyNotifications(user.id),
-    prisma.request.findMany({ where: { requesterId: user.id, status: "CHANGES_REQUESTED" }, include: { requestType: true } }),
-  ]);
-  const ticketsNeedingMe = await prisma.workOrder.findMany({ where: { requesterId: user.id, status: { in: ["RESOLVED", "WAITING_STAFF"] } }, orderBy: { updatedAt: "desc" } });
+  const user = await requireUser("/my");
+  const { staff, stay, notifications, returnedRequests: returned, ticketsNeedingMe } = await api.me.home();
   const firstName = staff?.firstName ?? user.name.split(" ")[0];
   const unread = notifications.filter((n) => !n.readAt);
 

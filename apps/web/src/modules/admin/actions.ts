@@ -7,7 +7,6 @@ import { requireRole, requireUser } from "@/lib/auth/authorize";
 import { getCurrentUser, setSessionCookie } from "@/lib/auth/session";
 import { api } from "@/lib/api";
 import { ApiError } from "@sam/contract/index";
-import { recordAudit } from "@sam/core/lib/audit";
 import { USER_ADMIN_ROLES } from "@sam/core/modules/admin/access";
 import { AdminError } from "@sam/core/modules/admin/errors";
 import { addRole, createUser, issueToken, removeRole, setUserStatus, signOutEverywhere, updateUser, type RoleGrant } from "@sam/core/modules/admin/users-service";
