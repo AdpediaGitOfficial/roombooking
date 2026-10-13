@@ -4,10 +4,10 @@ type BedResult = Prisma.BedGetPayload<{ include: { room: { include: { building: 
 
 export function BedResultList({ beds, render }: { beds: BedResult[]; render: (bed: BedResult) => React.ReactNode }) {
   if (beds.length === 0) {
-    return <p className="rounded-lg border border-dashed border-zinc-300 p-6 text-center text-sm text-zinc-500 dark:border-zinc-700">No beds are available for those criteria.</p>;
+    return <p className="rounded-lg border border-dashed border-zinc-300 p-6 text-center text-sm text-zinc-500">No beds are available for those criteria.</p>;
   }
   return (
-    <ul className="divide-y divide-zinc-200 rounded-lg border border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
+    <ul className="divide-y divide-zinc-200 card">
       {beds.map((bed) => (
         <li key={bed.id} data-bed={bed.code} className="flex flex-wrap items-center justify-between gap-3 p-4">
           <div>

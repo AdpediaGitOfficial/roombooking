@@ -45,8 +45,8 @@ async function Content({ searchParams }: { searchParams: Search }) {
 export default function FacilitiesReportPage({ searchParams }: PageProps<"/reports/facilities">) {
   return (
     <main>
-      <h1 className="text-2xl font-semibold">Facility use</h1>
-      <p className="mt-1 mb-6 text-sm text-zinc-600 dark:text-zinc-400">Bookings, attendance, cancellations, no-shows and utilisation by facility.</p>
+      <h1 className="page-title">Facility use</h1>
+      <p className="mt-1 mb-6 text-sm text-zinc-600">Bookings, attendance, cancellations, no-shows and utilisation by facility.</p>
       <Suspense fallback={<p className="text-sm text-zinc-500">Loading…</p>}><Content searchParams={searchParams as Search} /></Suspense>
     </main>
   );

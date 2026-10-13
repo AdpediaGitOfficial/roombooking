@@ -14,7 +14,7 @@ export function SummaryTiles({ summary }: { summary: OccupancySummary }) {
   return (
     <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
       {tiles.map(([label, value, note]) => (
-        <div key={label} className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+        <div key={label} className="card p-4">
           <dt className="text-xs uppercase tracking-wide text-zinc-500">{label}</dt>
           <dd className="mt-1 text-2xl font-semibold tabular-nums">{value}</dd>
           {note && <dd className="mt-1 text-xs text-zinc-500">{note}</dd>}

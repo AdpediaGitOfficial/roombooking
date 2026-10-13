@@ -20,14 +20,14 @@ async function Content({ params }: { params: Params }) {
   return (
     <>
       <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-2xl font-semibold">{type.name}</h1>
-        <span data-type-status={type.status} className="rounded-full border border-zinc-300 px-2 py-0.5 text-xs dark:border-zinc-700">{type.status === "ACTIVE" ? "Active" : "Inactive"}</span>
+        <h1 className="page-title">{type.name}</h1>
+        <span data-type-status={type.status} className="rounded-full border border-zinc-300 px-2 py-0.5 text-xs">{type.status === "ACTIVE" ? "Active" : "Inactive"}</span>
       </div>
-      <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">{type.code}{type.description ? ` · ${type.description}` : ""} · {type._count.requests} request{type._count.requests === 1 ? "" : "s"} so far</p>
+      <p className="mt-1 text-sm text-zinc-600">{type.code}{type.description ? ` · ${type.description}` : ""} · {type._count.requests} request{type._count.requests === 1 ? "" : "s"} so far</p>
 
       <section className="mt-6">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-lg font-semibold">{draft ? `Draft (version ${draft.version})` : "Draft"}</h2>
+          <h2 className="section-title">{draft ? `Draft (version ${draft.version})` : "Draft"}</h2>
           {!draft && <CreateDraftButton typeId={type.id} label={current ? "Start a new version" : "Start editing"} />}
         </div>
         {draft ? (
@@ -39,11 +39,11 @@ async function Content({ params }: { params: Params }) {
 
       {current && (
         <section className="mt-8" data-current-version>
-          <h2 className="text-lg font-semibold">Published version {current.version}</h2>
+          <h2 className="section-title">Published version {current.version}</h2>
           <p className="mt-1 text-xs text-zinc-500">Published {when(current.publishedAt)}{current.publishedBy ? ` by ${current.publishedBy.name}` : ""}{current.changeNote ? ` · ${current.changeNote}` : ""}. Residents submit against this version.</p>
           <div className="mt-3 grid gap-4 lg:grid-cols-[2fr_1fr]">
-            <div className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800"><FieldList fields={parseSchema(current.formSchema).fields} values={{}} errors={{}} preview /></div>
-            <div className="rounded-lg border border-zinc-200 p-4 text-sm dark:border-zinc-800">
+            <div className="card p-4"><FieldList fields={parseSchema(current.formSchema).fields} values={{}} errors={{}} preview /></div>
+            <div className="card p-4 text-sm">
               <h3 className="font-medium">Approval route</h3>
               {current.steps.length === 0 ? <p className="mt-1 text-zinc-500">Approved on submission.</p> : (
                 <ol className="mt-1 list-decimal space-y-1 pl-5">{current.steps.map((s) => <li key={s.id}>{s.name} <span className="text-xs text-zinc-500">· {s.approverRole.toLowerCase().replaceAll("_", " ")}{s.requireComment ? " · comment required" : ""}</span></li>)}</ol>
@@ -54,11 +54,11 @@ async function Content({ params }: { params: Params }) {
       )}
 
       <section className="mt-8">
-        <h2 className="text-lg font-semibold">Versions</h2>
-        <div className="mt-2 overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-800">
+        <h2 className="section-title">Versions</h2>
+        <div className="mt-2 overflow-x-auto card">
           <table className="w-full text-sm">
-            <thead className="bg-zinc-50 text-left text-xs uppercase tracking-wide text-zinc-500 dark:bg-zinc-900"><tr><th className="px-3 py-2">Version</th><th className="px-3 py-2">State</th><th className="px-3 py-2">Fields / steps</th><th className="px-3 py-2">Published</th><th className="px-3 py-2">Note</th><th className="px-3 py-2 text-right">Requests</th></tr></thead>
-            <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
+            <thead className="bg-zinc-50 text-left text-xs uppercase tracking-wide text-zinc-500"><tr><th className="px-3 py-2">Version</th><th className="px-3 py-2">State</th><th className="px-3 py-2">Fields / steps</th><th className="px-3 py-2">Published</th><th className="px-3 py-2">Note</th><th className="px-3 py-2 text-right">Requests</th></tr></thead>
+            <tbody className="divide-y divide-zinc-200">
               {type.versions.map((v) => (
                 <tr key={v.id} data-version={v.version} data-version-state={v.isCurrent ? "current" : v.publishedAt ? "superseded" : "draft"}>
                   <td className="px-3 py-2">v{v.version}</td>

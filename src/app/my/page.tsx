@@ -19,12 +19,12 @@ async function HomeContent() {
 
   return (
     <>
-      <h1 className="text-2xl font-semibold">Hello, {firstName}</h1>
-      <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">{stay ? `Today is ${stay.today}` : "Welcome"}</p>
+      <h1 className="page-title">Hello, {firstName}</h1>
+      <p className="mt-1 text-sm text-zinc-600">{stay ? `Today is ${stay.today}` : "Welcome"}</p>
 
       <section className="mt-6">
         {staff ? <StayCard allocation={stay?.current ?? null} compact /> : (
-          <div className="rounded-lg border border-dashed border-zinc-300 p-4 text-sm text-zinc-600 dark:border-zinc-700 dark:text-zinc-400">
+          <div className="rounded-lg border border-dashed border-zinc-300 p-4 text-sm text-zinc-600">
             Your account is not linked to a staff record yet. Contact the accommodation office.
           </div>
         )}
@@ -32,22 +32,22 @@ async function HomeContent() {
 
       {((stay && stay.pendingActions.length > 0) || returned.length > 0 || ticketsNeedingMe.length > 0) && (
         <section className="mt-6">
-          <h2 className="text-lg font-semibold">To do</h2>
+          <h2 className="section-title">To do</h2>
           <ul className="mt-2 space-y-2">
             {ticketsNeedingMe.map((t) => (
-              <li key={t.id} data-action="TICKET" className="rounded-lg bg-orange-50 p-3 text-sm text-orange-900 dark:bg-orange-950 dark:text-orange-200">
+              <li key={t.id} data-action="TICKET" className="rounded-lg bg-orange-50 p-3 text-sm text-orange-900">
                 <div className="text-xs uppercase tracking-wide">maintenance · {t.ticketNumber}</div>
                 <div className="mt-0.5"><Link href={`/my/maintenance/${t.id}`} className="underline">{t.category}</Link> {t.status === "RESOLVED" ? "was marked resolved. Please confirm or reopen." : "needs a reply from you."}</div>
               </li>
             ))}
             {returned.map((r) => (
-              <li key={r.id} data-action="REQUEST" className="rounded-lg bg-orange-50 p-3 text-sm text-orange-900 dark:bg-orange-950 dark:text-orange-200">
+              <li key={r.id} data-action="REQUEST" className="rounded-lg bg-orange-50 p-3 text-sm text-orange-900">
                 <div className="text-xs uppercase tracking-wide">request returned</div>
                 <div className="mt-0.5"><Link href={`/my/requests/${r.id}`} className="underline">{r.requestType.name}</Link> needs changes before it can be approved.</div>
               </li>
             ))}
             {(stay?.pendingActions ?? []).map((a) => (
-              <li key={`${a.kind}-${a.date}`} data-action={a.kind} className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-950 dark:text-amber-200">
+              <li key={`${a.kind}-${a.date}`} data-action={a.kind} className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
                 <div className="text-xs uppercase tracking-wide">{a.kind.toLowerCase()} · {a.date}</div>
                 <div className="mt-0.5">{a.text}</div>
               </li>
@@ -58,18 +58,18 @@ async function HomeContent() {
 
       <section className="mt-6" data-shortcuts>
         <div className="grid grid-cols-2 gap-2 text-sm">
-          <Link href="/my/facilities" className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800"><div className="font-medium">Facilities</div><div className="text-xs text-zinc-500">Book the gym or hall</div></Link>
-          <Link href="/my/lost-found" className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800"><div className="font-medium">Lost &amp; found</div><div className="text-xs text-zinc-500">Found items and your claims</div></Link>
-          <Link href="/my/announcements" className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800"><div className="font-medium">Announcements</div><div className="text-xs text-zinc-500">Messages from the office</div></Link>
+          <Link href="/my/facilities" className="card p-3"><div className="font-medium">Facilities</div><div className="text-xs text-zinc-500">Book the gym or hall</div></Link>
+          <Link href="/my/lost-found" className="card p-3"><div className="font-medium">Lost &amp; found</div><div className="text-xs text-zinc-500">Found items and your claims</div></Link>
+          <Link href="/my/announcements" className="card p-3"><div className="font-medium">Announcements</div><div className="text-xs text-zinc-500">Messages from the office</div></Link>
         </div>
       </section>
 
       <section className="mt-6">
-        <h2 className="text-lg font-semibold">Notifications{unread.length > 0 && <span className="ml-2 rounded-full bg-zinc-900 px-2 py-0.5 text-xs text-white dark:bg-zinc-100 dark:text-zinc-900">{unread.length} new</span>}</h2>
+        <h2 className="section-title">Notifications{unread.length > 0 && <span className="ml-2 rounded-full bg-primary px-2 py-0.5 text-xs text-primary-ink">{unread.length} new</span>}</h2>
         {notifications.length === 0 ? (
           <p className="mt-2 text-sm text-zinc-500">Nothing yet.</p>
         ) : (
-          <ul className="mt-2 divide-y divide-zinc-200 rounded-lg border border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
+          <ul className="mt-2 divide-y divide-zinc-200 card">
             {notifications.map((n) => {
               const { title, body } = describeNotification(n.event, n.payload);
               return (
@@ -83,7 +83,7 @@ async function HomeContent() {
                     {!n.readAt && (
                       <form action={markReadAction}>
                         <input type="hidden" name="notificationId" value={n.id} />
-                        <button type="submit" className="rounded-md border border-zinc-300 px-2 py-1 text-xs dark:border-zinc-700">Mark read</button>
+                        <button type="submit" className="rounded-md border border-zinc-300 px-2 py-1 text-xs">Mark read</button>
                       </form>
                     )}
                   </div>

@@ -33,16 +33,16 @@ async function AllocationView({ params }: { params: Promise<{ allocationId: stri
 
   return (
     <>
-      <p className="text-sm text-zinc-600 dark:text-zinc-400">
+      <p className="text-sm text-zinc-600">
         <Link href="/accommodation/allocations" className="underline">Allocations</Link>
       </p>
       <div className="mt-1 flex flex-wrap items-center gap-3">
-        <h1 className="text-2xl font-semibold">{staff.firstName} {staff.lastName}</h1>
+        <h1 className="page-title">{staff.firstName} {staff.lastName}</h1>
         <AllocationStatusBadge status={allocation.status} />
       </div>
-      <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">{staff.employeeId}{staff.department ? ` · ${staff.department}` : ""}{staff.user ? ` · ${staff.user.email}` : ""}</p>
+      <p className="mt-1 text-sm text-zinc-600">{staff.employeeId}{staff.department ? ` · ${staff.department}` : ""}{staff.user ? ` · ${staff.user.email}` : ""}</p>
 
-      <dl className="mt-6 grid gap-4 rounded-lg border border-zinc-200 p-4 sm:grid-cols-3 dark:border-zinc-800">
+      <dl className="mt-6 grid gap-4 card p-4 sm:grid-cols-3">
         <Field label="Bed">
           <Link href={`/accommodation/rooms/${bed.room.id}`} className="underline">{bed.code}</Link>
           <div className="text-xs text-zinc-500">{bed.room.building.site.name} · {bed.room.building.name} · Room {bed.room.code}</div>
@@ -73,16 +73,16 @@ async function AllocationView({ params }: { params: Promise<{ allocationId: stri
 
       {canOperate && (allocation.status === "CONFIRMED" || allocation.status === "CHECKED_IN") && (
         <section className="mt-6">
-          <h2 className="text-lg font-semibold">Actions</h2>
+          <h2 className="section-title">Actions</h2>
           <div className="mt-3 grid gap-4 sm:grid-cols-2">
             <RoomKeysPanel roomId={bed.room.id} staffId={allocation.staffId} canOperate={hasRole(user, ...KEY_OPERATE_ROLES)} returnPath={`/accommodation/allocations/${allocation.id}`} />
             <ResidentItemsPanel staffId={allocation.staffId} canOperate={hasRole(user, ...INVENTORY_OPERATE_ROLES)} returnPath={`/accommodation/allocations/${allocation.id}`} />
             {allocation.status === "CONFIRMED" && <CheckInForm allocationId={allocation.id} />}
             {allocation.status === "CHECKED_IN" && <CheckOutForm allocationId={allocation.id} blockers={blockers} canOverride={canAdmin} />}
-            <div className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+            <div className="card p-4">
               <h3 className="font-medium">Transfer</h3>
-              <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">Move to another bed now or on a future date. The current bed stays held until the effective date.</p>
-              <Link href={`/accommodation/allocations/${allocation.id}/transfer`} className="mt-3 inline-block rounded-md border border-zinc-300 px-3 py-2 text-sm font-medium dark:border-zinc-700">
+              <p className="mt-1 text-sm text-zinc-600">Move to another bed now or on a future date. The current bed stays held until the effective date.</p>
+              <Link href={`/accommodation/allocations/${allocation.id}/transfer`} className="mt-3 inline-block rounded-md border border-zinc-300 px-3 py-2 text-sm font-medium">
                 Choose a new bed
               </Link>
             </div>

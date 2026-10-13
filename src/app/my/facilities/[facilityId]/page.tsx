@@ -31,16 +31,16 @@ async function Content({ params, searchParams }: { params: Params; searchParams:
   const lastDay = addDaysIso(today, rules.advanceDays);
   return (
     <>
-      <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">{facility.site.name}{facility.location ? ` · ${facility.location}` : ""} · holds {facility.capacity}</p>
+      <p className="mt-1 text-sm text-zinc-600">{facility.site.name}{facility.location ? ` · ${facility.location}` : ""} · holds {facility.capacity}</p>
       {facility.description && <p className="mt-2 text-sm">{facility.description}</p>}
-      <dl className="mt-3 grid grid-cols-2 gap-2 text-xs text-zinc-600 dark:text-zinc-400">
+      <dl className="mt-3 grid grid-cols-2 gap-2 text-xs text-zinc-600">
         <div><dt className="uppercase tracking-wide text-zinc-500">Open</dt><dd>{describeHours(hours)}</dd></div>
         <div><dt className="uppercase tracking-wide text-zinc-500">Rules</dt><dd>{rules.minDurationMinutes}–{rules.maxDurationMinutes} min · up to {rules.advanceDays} days ahead{rules.maxPerDayPerUser ? ` · ${rules.maxPerDayPerUser}/day` : ""}{rules.cancellationCutoffMinutes ? ` · cancel ≥ ${rules.cancellationCutoffMinutes} min before` : ""}{facility.requiresApproval ? " · needs approval" : ""}</dd></div>
       </dl>
       <section className="mt-5">
         <DayNav base={base} date={date} prev={addDaysIso(date, -1) >= today ? addDaysIso(date, -1) : today} next={addDaysIso(date, 1) <= lastDay ? addDaysIso(date, 1) : date} today={today} />
         <div className="mt-3"><SlotGrid slots={slots} capacity={facility.capacity} date={date} closed={slots.length === 0} /></div>
-        {date > lastDay && <p className="mt-2 text-sm text-amber-700 dark:text-amber-300">Bookings open {rules.advanceDays} days ahead; this day is not bookable yet.</p>}
+        {date > lastDay && <p className="mt-2 text-sm text-amber-700">Bookings open {rules.advanceDays} days ahead; this day is not bookable yet.</p>}
       </section>
       <section className="mt-5">
         {slots.length > 0 && date <= lastDay && (
@@ -68,5 +68,5 @@ export default function FacilityPage({ params, searchParams }: PageProps<"/my/fa
 async function Title({ params }: { params: Params }) {
   const { facilityId } = await params;
   const facility = await getFacility(facilityId);
-  return <h1 className="text-2xl font-semibold">{facility?.name ?? "Facility"}</h1>;
+  return <h1 className="page-title">{facility?.name ?? "Facility"}</h1>;
 }

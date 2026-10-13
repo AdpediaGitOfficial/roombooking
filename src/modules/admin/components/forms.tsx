@@ -6,16 +6,16 @@ import { ROLE_DESCRIPTIONS } from "../access";
 import { acceptInviteAction, addRoleAction, createUserAction, removeRoleAction, signOutEverywhereAction, statusAction, tokenAction, updateUserAction, type ActionState, type FormState } from "../actions";
 
 function Feedback({ state }: { state: ActionState | FormState }) {
-  if (state.error) return <p role="alert" className="mt-2 text-sm text-red-700 dark:text-red-300">{state.error}</p>;
-  if ("message" in state && state.message) return <p role="status" className="mt-2 text-sm text-green-700 dark:text-green-300">{state.message}</p>;
-  if ("values" in state && state.values?.message) return <p role="status" className="mt-2 text-sm text-green-700 dark:text-green-300">{state.values.message}</p>;
+  if (state.error) return <p role="alert" className="mt-2 text-sm text-red-700">{state.error}</p>;
+  if ("message" in state && state.message) return <p role="status" className="mt-2 text-sm text-green-700">{state.message}</p>;
+  if ("values" in state && state.values?.message) return <p role="status" className="mt-2 text-sm text-green-700">{state.values.message}</p>;
   return null;
 }
-const input = "mt-1 block w-full rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900";
-const primary = "rounded-md bg-zinc-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-60 dark:bg-zinc-100 dark:text-zinc-900";
-const secondary = "rounded-md border border-zinc-300 px-3 py-2 text-sm font-medium disabled:opacity-60 dark:border-zinc-700";
-const danger = "rounded-md border border-red-300 px-3 py-2 text-sm font-medium text-red-700 disabled:opacity-60 dark:border-red-800 dark:text-red-300";
-const panel = "rounded-lg border border-zinc-200 p-4 dark:border-zinc-800";
+const input = "mt-1 block w-full rounded-md border border-zinc-300 px-3 py-2 text-sm";
+const primary = "rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-ink disabled:opacity-60";
+const secondary = "rounded-md border border-zinc-300 px-3 py-2 text-sm font-medium disabled:opacity-60";
+const danger = "rounded-md border border-red-300 px-3 py-2 text-sm font-medium text-red-700 disabled:opacity-60";
+const panel = "card p-4";
 
 type Opt = { id: string; name: string };
 export type ScopeOptions = { sites: Opt[]; buildings: Opt[]; vendors: Opt[] };
@@ -39,16 +39,16 @@ export function CreateUserForm({ options, staff, roles }: { options: ScopeOption
   return (
     <form key={state.values ? JSON.stringify(state.values) : "initial"} action={action} noValidate className="space-y-5">
       <div className="grid gap-4 sm:grid-cols-2">
-        <label className="block text-sm">Full name *<input name="name" defaultValue={v.name ?? ""} className={input} />{e.name && <span role="alert" className="text-xs text-red-700 dark:text-red-300">{e.name}</span>}</label>
-        <label className="block text-sm">Email *<input name="email" type="email" defaultValue={v.email ?? ""} className={input} />{e.email && <span role="alert" className="text-xs text-red-700 dark:text-red-300">{e.email}</span>}</label>
-        <label className="block text-sm">Link to staff record<select name="staffProfileId" defaultValue={v.staffProfileId ?? ""} className={input}><option value="">None</option>{staff.map((s) => <option key={s.id} value={s.id}>{s.lastName}, {s.firstName} ({s.employeeId})</option>)}</select>{e.staffProfileId && <span role="alert" className="text-xs text-red-700 dark:text-red-300">{e.staffProfileId}</span>}</label>
-        <label className="block text-sm">Vendor (contractor accounts)<select name="vendorId" defaultValue={v.vendorId ?? ""} className={input}><option value="">None</option>{options.vendors.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}</select>{e.vendorId && <span role="alert" className="text-xs text-red-700 dark:text-red-300">{e.vendorId}</span>}</label>
+        <label className="block text-sm">Full name *<input name="name" defaultValue={v.name ?? ""} className={input} />{e.name && <span role="alert" className="text-xs text-red-700">{e.name}</span>}</label>
+        <label className="block text-sm">Email *<input name="email" type="email" defaultValue={v.email ?? ""} className={input} />{e.email && <span role="alert" className="text-xs text-red-700">{e.email}</span>}</label>
+        <label className="block text-sm">Link to staff record<select name="staffProfileId" defaultValue={v.staffProfileId ?? ""} className={input}><option value="">None</option>{staff.map((s) => <option key={s.id} value={s.id}>{s.lastName}, {s.firstName} ({s.employeeId})</option>)}</select>{e.staffProfileId && <span role="alert" className="text-xs text-red-700">{e.staffProfileId}</span>}</label>
+        <label className="block text-sm">Vendor (contractor accounts)<select name="vendorId" defaultValue={v.vendorId ?? ""} className={input}><option value="">None</option>{options.vendors.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}</select>{e.vendorId && <span role="alert" className="text-xs text-red-700">{e.vendorId}</span>}</label>
         {vendorRole && <label className="block text-sm">Access expires<input type="date" name="accessExpiresAt" defaultValue={v.accessExpiresAt ?? ""} className={input} /><span className="text-xs text-zinc-500">Contractor sessions end at this date.</span></label>}
       </div>
       <fieldset>
         <legend className="text-sm font-medium">Roles *</legend>
-        {e.roles && <p role="alert" className="text-xs text-red-700 dark:text-red-300">{e.roles}</p>}
-        <ul className="mt-2 divide-y divide-zinc-200 rounded-lg border border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
+        {e.roles && <p role="alert" className="text-xs text-red-700">{e.roles}</p>}
+        <ul className="mt-2 divide-y divide-zinc-200 card">
           {roles.map((role) => (
             <li key={role} className="grid gap-2 p-3 sm:grid-cols-[1fr_220px]">
               <label className="flex items-start gap-3 text-sm">
@@ -60,7 +60,7 @@ export function CreateUserForm({ options, staff, roles }: { options: ScopeOption
           ))}
         </ul>
       </fieldset>
-      {state.error && <p role="alert" className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">{state.error}</p>}
+      {state.error && <p role="alert" className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{state.error}</p>}
       <button type="submit" disabled={pending} className={primary}>{pending ? "Creating…" : "Create and generate invite link"}</button>
     </form>
   );
@@ -74,10 +74,10 @@ export function EditUserForm(props: { userId: string; name: string; email: strin
       <input type="hidden" name="userId" value={props.userId} />
       <h3 className="font-medium">Details</h3>
       <div className="mt-2 grid gap-3 sm:grid-cols-2">
-        <label className="block text-sm">Full name<input name="name" defaultValue={props.name} className={input} />{e.name && <span role="alert" className="text-xs text-red-700 dark:text-red-300">{e.name}</span>}</label>
-        <label className="block text-sm">Email<input name="email" type="email" defaultValue={props.email} className={input} />{e.email && <span role="alert" className="text-xs text-red-700 dark:text-red-300">{e.email}</span>}</label>
-        <label className="block text-sm">Staff record<select name="staffProfileId" defaultValue={props.staffProfileId} className={input}><option value="">None</option>{props.staff.map((s) => <option key={s.id} value={s.id}>{s.lastName}, {s.firstName} ({s.employeeId})</option>)}</select>{e.staffProfileId && <span role="alert" className="text-xs text-red-700 dark:text-red-300">{e.staffProfileId}</span>}</label>
-        <label className="block text-sm">Vendor<select name="vendorId" defaultValue={props.vendorId} className={input}><option value="">None</option>{props.options.vendors.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}</select>{e.vendorId && <span role="alert" className="text-xs text-red-700 dark:text-red-300">{e.vendorId}</span>}</label>
+        <label className="block text-sm">Full name<input name="name" defaultValue={props.name} className={input} />{e.name && <span role="alert" className="text-xs text-red-700">{e.name}</span>}</label>
+        <label className="block text-sm">Email<input name="email" type="email" defaultValue={props.email} className={input} />{e.email && <span role="alert" className="text-xs text-red-700">{e.email}</span>}</label>
+        <label className="block text-sm">Staff record<select name="staffProfileId" defaultValue={props.staffProfileId} className={input}><option value="">None</option>{props.staff.map((s) => <option key={s.id} value={s.id}>{s.lastName}, {s.firstName} ({s.employeeId})</option>)}</select>{e.staffProfileId && <span role="alert" className="text-xs text-red-700">{e.staffProfileId}</span>}</label>
+        <label className="block text-sm">Vendor<select name="vendorId" defaultValue={props.vendorId} className={input}><option value="">None</option>{props.options.vendors.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}</select>{e.vendorId && <span role="alert" className="text-xs text-red-700">{e.vendorId}</span>}</label>
         {(props.isVendor || props.accessExpiresAt) && <label className="block text-sm">Access expires<input type="date" name="accessExpiresAt" defaultValue={props.accessExpiresAt} className={input} /></label>}
       </div>
       <button type="submit" disabled={pending} className={`${secondary} mt-3`}>{pending ? "Saving…" : "Save details"}</button>
@@ -105,8 +105,8 @@ export function RemoveRoleButton({ userId, assignmentId }: { userId: string; ass
     <form action={action} className="inline">
       <input type="hidden" name="userId" value={userId} />
       <input type="hidden" name="assignmentId" value={assignmentId} />
-      <button type="submit" disabled={pending} className="text-xs text-red-700 underline disabled:opacity-60 dark:text-red-300">Remove</button>
-      {state.error && <span role="alert" className="ml-2 text-xs text-red-700 dark:text-red-300">{state.error}</span>}
+      <button type="submit" disabled={pending} className="text-xs text-red-700 underline disabled:opacity-60">Remove</button>
+      {state.error && <span role="alert" className="ml-2 text-xs text-red-700">{state.error}</span>}
     </form>
   );
 }
@@ -154,7 +154,7 @@ export function SignOutEverywhereForm({ userId, sessions }: { userId: string; se
     <form action={action} className={panel}>
       <input type="hidden" name="userId" value={userId} />
       <h3 className="font-medium">Sessions</h3>
-      <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400" data-sessions={sessions}>{sessions} active session{sessions === 1 ? "" : "s"}.</p>
+      <p className="mt-1 text-sm text-zinc-600" data-sessions={sessions}>{sessions} active session{sessions === 1 ? "" : "s"}.</p>
       <button type="submit" disabled={pending || sessions === 0} className={`${secondary} mt-3`}>{pending ? "Working…" : "Sign out everywhere"}</button>
       <Feedback state={state} />
     </form>
@@ -168,13 +168,13 @@ export function AcceptInviteForm({ token }: { token: string }) {
     <form action={action} noValidate>
       <input type="hidden" name="token" value={token} />
       <label htmlFor="password" className="block text-sm font-medium">Choose a password</label>
-      <input id="password" name="password" type="password" autoComplete="new-password" required minLength={10} className="mt-1 block w-full rounded-md border border-zinc-300 px-3 py-3 text-base dark:border-zinc-700 dark:bg-zinc-900" />
+      <input id="password" name="password" type="password" autoComplete="new-password" required minLength={10} className="mt-1 block w-full rounded-md border border-zinc-300 px-3 py-3 text-base" />
       <p className="mt-1 text-xs text-zinc-500">At least 10 characters with letters and numbers.</p>
-      {e.password && <p role="alert" className="mt-1 text-sm text-red-700 dark:text-red-300">{e.password}</p>}
+      {e.password && <p role="alert" className="mt-1 text-sm text-red-700">{e.password}</p>}
       <label htmlFor="confirmPassword" className="mt-4 block text-sm font-medium">Confirm password</label>
-      <input id="confirmPassword" name="confirmPassword" type="password" autoComplete="new-password" required className="mt-1 block w-full rounded-md border border-zinc-300 px-3 py-3 text-base dark:border-zinc-700 dark:bg-zinc-900" />
-      {state.error && <p role="alert" className="mt-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">{state.error}</p>}
-      <button type="submit" disabled={pending} className="mt-6 w-full rounded-md bg-zinc-900 px-4 py-3 text-base font-medium text-white disabled:opacity-60 dark:bg-zinc-100 dark:text-zinc-900">{pending ? "Saving…" : "Set password and sign in"}</button>
+      <input id="confirmPassword" name="confirmPassword" type="password" autoComplete="new-password" required className="mt-1 block w-full rounded-md border border-zinc-300 px-3 py-3 text-base" />
+      {state.error && <p role="alert" className="mt-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{state.error}</p>}
+      <button type="submit" disabled={pending} className="mt-6 w-full rounded-md bg-primary px-4 py-3 text-base font-medium text-primary-ink disabled:opacity-60">{pending ? "Saving…" : "Set password and sign in"}</button>
     </form>
   );
 }

@@ -29,10 +29,10 @@ async function ApprovalContent({ params }: { params: Promise<{ requestId: string
   return (
     <>
       <div className="mt-1 flex flex-wrap items-center gap-3">
-        <h1 className="text-2xl font-semibold">{request.requestType.name}</h1>
+        <h1 className="page-title">{request.requestType.name}</h1>
         <RequestStatusBadge request={request} />
       </div>
-      <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+      <p className="mt-1 text-sm text-zinc-600">
         {staff ? `${staff.firstName} ${staff.lastName} · ${staff.employeeId}${staff.department ? ` · ${staff.department}` : ""}` : request.requester.name}
         {" · submitted "}{request.createdAt.toISOString().slice(0, 10)}
       </p>
@@ -40,30 +40,30 @@ async function ApprovalContent({ params }: { params: Promise<{ requestId: string
 
       <div className="mt-6 grid gap-6 md:grid-cols-2">
         <section>
-          <h2 className="text-lg font-semibold">Request</h2>
+          <h2 className="section-title">Request</h2>
           <div className="mt-2"><RequestDetails request={request} /></div>
           {currentAllocation && (
-            <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-400">
+            <p className="mt-3 text-sm text-zinc-600">
               Current accommodation: bed {currentAllocation.bed.code}, {currentAllocation.bed.room.building.name} room {currentAllocation.bed.room.code}, since {isoDate(currentAllocation.startDate)}
               {currentAllocation.endDate ? ` until ${isoDate(currentAllocation.endDate)}` : ""}.
             </p>
           )}
           {request.fulfilmentNote && (request.status === "APPROVED" || request.status === "FULFILLED") && (
-            <p className="mt-3 rounded-lg bg-green-50 p-3 text-sm text-green-900 dark:bg-green-950 dark:text-green-200">{request.fulfilmentNote}</p>
+            <p className="mt-3 rounded-lg bg-green-50 p-3 text-sm text-green-900">{request.fulfilmentNote}</p>
           )}
           {request.requestType.code === "ROOM_CHANGE" && request.status === "APPROVED" && currentAllocation && (
-            <Link href={`/accommodation/allocations/${currentAllocation.id}/transfer?requestId=${request.id}&reason=${encodeURIComponent(`Room change request ${request.id.slice(-8).toUpperCase()}`)}`} className="mt-3 inline-block rounded-md bg-zinc-900 px-3 py-2 text-sm font-medium text-white dark:bg-zinc-100 dark:text-zinc-900">
+            <Link href={`/accommodation/allocations/${currentAllocation.id}/transfer?requestId=${request.id}&reason=${encodeURIComponent(`Room change request ${request.id.slice(-8).toUpperCase()}`)}`} className="mt-3 inline-block rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-ink">
               Complete the move
             </Link>
           )}
           {request.allocations.length > 0 && (
-            <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-400">
+            <p className="mt-3 text-sm text-zinc-600">
               Linked allocation: {request.allocations.map((a) => <Link key={a.id} href={`/accommodation/allocations/${a.id}`} className="underline">bed {a.bed.code}</Link>)}
             </p>
           )}
         </section>
         <section>
-          <h2 className="text-lg font-semibold">History</h2>
+          <h2 className="section-title">History</h2>
           <RequestHistory request={request} showApproverNames />
         </section>
       </div>
@@ -71,13 +71,13 @@ async function ApprovalContent({ params }: { params: Promise<{ requestId: string
       <section className="mt-6">
         {decision.ok && step ? (
           <>
-            {decision.onBehalfOf && <p data-on-behalf className="mb-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-950 dark:text-amber-200">You are deciding this step on behalf of {decision.onBehalfOf.delegatorName}; the decision will record both names.</p>}
+            {decision.onBehalfOf && <p data-on-behalf className="mb-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">You are deciding this step on behalf of {decision.onBehalfOf.delegatorName}; the decision will record both names.</p>}
             <DecisionForm requestId={request.id} requireComment={step.requireComment} stepName={step.name} />
           </>
         ) : request.status === "PENDING_APPROVAL" ? (
           <p className="text-sm text-zinc-500">{decision.ok ? "" : decision.reason}</p>
         ) : null}
-        {request.status === "PENDING_APPROVAL" && request.escalationNote && <p data-escalation className="mt-3 text-xs text-amber-700 dark:text-amber-300">{request.escalatedAt ? "Escalated" : "Reassigned"}: {request.escalationNote}{request.stepStartedAt ? ` · step started ${request.stepStartedAt.toISOString().slice(0, 10)}` : ""}</p>}
+        {request.status === "PENDING_APPROVAL" && request.escalationNote && <p data-escalation className="mt-3 text-xs text-amber-700">{request.escalatedAt ? "Escalated" : "Reassigned"}: {request.escalationNote}{request.stepStartedAt ? ` · step started ${request.stepStartedAt.toISOString().slice(0, 10)}` : ""}</p>}
         {request.status === "PENDING_APPROVAL" && access === "admin" && step && <div className="mt-4"><ReassignForm requestId={request.id} currentRole={effectiveStepRole(request) ?? step.approverRole} roles={APPROVER_ROLES} /></div>}
       </section>
     </>

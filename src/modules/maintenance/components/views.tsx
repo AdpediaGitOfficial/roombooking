@@ -2,17 +2,17 @@ import type { WorkOrderPriority, WorkOrderStatus } from "@prisma/client";
 import { describeStatus, isOverdue, type WorkOrderRecord } from "../service";
 
 const STATUS_STYLE: Partial<Record<WorkOrderStatus, string>> = {
-  NEW: "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-200",
-  TRIAGED: "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-200",
-  ASSIGNED: "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-200",
-  IN_PROGRESS: "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-200",
-  WAITING_STAFF: "bg-orange-100 text-orange-800 dark:bg-orange-950 dark:text-orange-200",
-  WAITING_PARTS: "bg-orange-100 text-orange-800 dark:bg-orange-950 dark:text-orange-200",
-  WAITING_ACCESS: "bg-orange-100 text-orange-800 dark:bg-orange-950 dark:text-orange-200",
-  RESOLVED: "bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-200",
-  CLOSED: "bg-zinc-200 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",
-  REOPENED: "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-200",
-  CANCELLED: "bg-zinc-200 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",
+  NEW: "bg-amber-100 text-amber-800",
+  TRIAGED: "bg-amber-100 text-amber-800",
+  ASSIGNED: "bg-blue-100 text-blue-800",
+  IN_PROGRESS: "bg-blue-100 text-blue-800",
+  WAITING_STAFF: "bg-orange-100 text-orange-800",
+  WAITING_PARTS: "bg-orange-100 text-orange-800",
+  WAITING_ACCESS: "bg-orange-100 text-orange-800",
+  RESOLVED: "bg-green-100 text-green-800",
+  CLOSED: "bg-zinc-200 text-zinc-700",
+  REOPENED: "bg-red-100 text-red-800",
+  CANCELLED: "bg-zinc-200 text-zinc-700",
 };
 
 export function WorkOrderStatusBadge({ status }: { status: WorkOrderStatus }) {
@@ -20,10 +20,10 @@ export function WorkOrderStatusBadge({ status }: { status: WorkOrderStatus }) {
 }
 
 const PRIORITY_STYLE: Record<WorkOrderPriority, string> = {
-  LOW: "text-zinc-600 dark:text-zinc-400",
-  MEDIUM: "text-zinc-800 dark:text-zinc-200",
-  HIGH: "text-orange-700 dark:text-orange-300 font-medium",
-  URGENT: "text-red-700 dark:text-red-300 font-semibold",
+  LOW: "text-zinc-600",
+  MEDIUM: "text-zinc-800",
+  HIGH: "text-orange-700 font-medium",
+  URGENT: "text-red-700 font-semibold",
 };
 
 export function PriorityLabel({ priority }: { priority: WorkOrderPriority }) {
@@ -36,7 +36,7 @@ export function SlaLabel({ wo, now }: { wo: Pick<WorkOrderRecord, "status" | "sl
   const hours = Math.round((wo.slaDueAt.getTime() - now.getTime()) / 3600000);
   if (!["NEW", "TRIAGED", "ASSIGNED", "IN_PROGRESS", "WAITING_STAFF", "WAITING_PARTS", "WAITING_ACCESS", "REOPENED"].includes(wo.status)) return null;
   return (
-    <span data-overdue={overdue ? "true" : "false"} className={`text-xs ${overdue ? "font-medium text-red-700 dark:text-red-300" : "text-zinc-500"}`}>
+    <span data-overdue={overdue ? "true" : "false"} className={`text-xs ${overdue ? "font-medium text-red-700" : "text-zinc-500"}`}>
       {overdue ? `Overdue by ${Math.abs(hours)} h` : `Due in ${hours} h`}
     </span>
   );
@@ -52,7 +52,7 @@ export function NoteList({ notes, photos }: { notes: WorkOrderRecord["notes"]; p
   return (
     <ol className="space-y-2">
       {items.map((i) => (
-        <li key={`${i.kind}-${i.id}`} data-note={i.kind} data-internal={i.internal ? "true" : "false"} className={`rounded-lg border p-3 text-sm ${i.internal ? "border-dashed border-zinc-400 dark:border-zinc-600" : "border-zinc-200 dark:border-zinc-800"}`}>
+        <li key={`${i.kind}-${i.id}`} data-note={i.kind} data-internal={i.internal ? "true" : "false"} className={`rounded-lg border p-3 text-sm ${i.internal ? "border-dashed border-zinc-400" : "border-zinc-200"}`}>
           <div className="flex justify-between gap-3">
             <span className="font-medium">{i.title}{i.internal ? " · internal" : ""}</span>
             <span className="text-xs text-zinc-500 tabular-nums">{i.at.toISOString().replace("T", " ").slice(0, 16)}</span>

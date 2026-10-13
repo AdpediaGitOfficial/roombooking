@@ -52,7 +52,7 @@ async function Content({ searchParams }: { searchParams: Search }) {
                   <td className={td}><Link href={`/keys/${x.keyId}`} className="underline">{x.code}</Link>{x.label && <div className="text-xs text-zinc-500">{x.label}</div>}</td>
                   <td className={td}>{x.site} · {x.location}</td><td className={td}>{x.holder}</td>
                   <td className={`${td} text-xs tabular-nums`}>{x.issuedAt.toISOString().slice(0, 10)}</td>
-                  <td className={`${td} tabular-nums ${x.overdue ? "font-medium text-red-700 dark:text-red-300" : ""}`}>{x.expectedReturnAt?.toISOString().slice(0, 10) ?? "at check-out"}{x.overdue ? " · overdue" : ""}</td>
+                  <td className={`${td} tabular-nums ${x.overdue ? "font-medium text-red-700" : ""}`}>{x.expectedReturnAt?.toISOString().slice(0, 10) ?? "at check-out"}{x.overdue ? " · overdue" : ""}</td>
                 </tr>
               ))}
               {r.outstanding.length === 0 && <tr><td colSpan={5} className="px-3 py-6 text-center text-zinc-500">No keys are out.</td></tr>}
@@ -68,8 +68,8 @@ async function Content({ searchParams }: { searchParams: Search }) {
 export default function KeysReportPage({ searchParams }: PageProps<"/reports/keys">) {
   return (
     <main>
-      <h1 className="text-2xl font-semibold">Keys</h1>
-      <p className="mt-1 mb-6 text-sm text-zinc-600 dark:text-zinc-400">Issued, outstanding, overdue, lost and damaged keys.</p>
+      <h1 className="page-title">Keys</h1>
+      <p className="mt-1 mb-6 text-sm text-zinc-600">Issued, outstanding, overdue, lost and damaged keys.</p>
       <Suspense fallback={<p className="text-sm text-zinc-500">Loading…</p>}><Content searchParams={searchParams as Search} /></Suspense>
     </main>
   );

@@ -14,8 +14,8 @@ async function Content() {
 export default function NewTicketPage() {
   return (
     <main className="max-w-xl">
-      <h1 className="text-2xl font-semibold">Raise a ticket</h1>
-      <p className="mt-1 mb-6 text-sm text-zinc-600 dark:text-zinc-400">For issues reported by phone, inspection or in common areas.</p>
+      <h1 className="page-title">Raise a ticket</h1>
+      <p className="mt-1 mb-6 text-sm text-zinc-600">For issues reported by phone, inspection or in common areas.</p>
       <Suspense fallback={<p className="text-sm text-zinc-500">Loading…</p>}>
         <Content />
       </Suspense>

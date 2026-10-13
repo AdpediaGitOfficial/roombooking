@@ -9,12 +9,12 @@ async function Content() {
   const types = await listTypes(user.organizationId);
   return (
     <>
-      <div className="overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-800">
+      <div className="overflow-x-auto card">
         <table className="w-full text-sm">
-          <thead className="bg-zinc-50 text-left text-xs uppercase tracking-wide text-zinc-500 dark:bg-zinc-900">
+          <thead className="bg-zinc-50 text-left text-xs uppercase tracking-wide text-zinc-500">
             <tr><th className="px-3 py-2">Request type</th><th className="px-3 py-2">Status</th><th className="px-3 py-2">Published</th><th className="px-3 py-2">Draft</th><th className="px-3 py-2 text-right">Requests</th></tr>
           </thead>
-          <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
+          <tbody className="divide-y divide-zinc-200">
             {types.map((t) => {
               const current = currentOf(t);
               const draft = draftOf(t);
@@ -40,8 +40,8 @@ async function Content() {
 export default function FormsPage() {
   return (
     <main>
-      <h1 className="text-2xl font-semibold">Forms &amp; approval routes</h1>
-      <p className="mt-1 mb-6 text-sm text-zinc-600 dark:text-zinc-400">Design request forms (fields, required flags, help text, conditional visibility) and their approval routes. Changes are drafted, then published as a new version; requests already submitted keep the version they used.</p>
+      <h1 className="page-title">Forms &amp; approval routes</h1>
+      <p className="mt-1 mb-6 text-sm text-zinc-600">Design request forms (fields, required flags, help text, conditional visibility) and their approval routes. Changes are drafted, then published as a new version; requests already submitted keep the version they used.</p>
       <Suspense fallback={<p className="text-sm text-zinc-500">Loading…</p>}><Content /></Suspense>
     </main>
   );

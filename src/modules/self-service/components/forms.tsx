@@ -4,13 +4,13 @@ import { useActionState } from "react";
 import { changePasswordAction, updateProfileAction, type ActionState } from "../actions";
 
 function Feedback({ state }: { state: ActionState }) {
-  if (state.error) return <p role="alert" className="mt-2 text-sm text-red-700 dark:text-red-300">{state.error}</p>;
-  if (state.message) return <p role="status" className="mt-2 text-sm text-green-700 dark:text-green-300">{state.message}</p>;
+  if (state.error) return <p role="alert" className="mt-2 text-sm text-red-700">{state.error}</p>;
+  if (state.message) return <p role="status" className="mt-2 text-sm text-green-700">{state.message}</p>;
   return null;
 }
 
-const input = "mt-1 block w-full rounded-md border border-zinc-300 px-3 py-3 text-base dark:border-zinc-700 dark:bg-zinc-900";
-const button = "mt-4 w-full rounded-md bg-zinc-900 px-4 py-3 text-base font-medium text-white disabled:opacity-60 dark:bg-zinc-100 dark:text-zinc-900";
+const input = "mt-1 block w-full rounded-md border border-zinc-300 px-3 py-3 text-base";
+const button = "mt-4 w-full rounded-md bg-primary px-4 py-3 text-base font-medium text-primary-ink disabled:opacity-60";
 
 export function ProfileForm(props: { phone: string; emergencyContactName: string; emergencyContactPhone: string }) {
   const [state, action, pending] = useActionState<ActionState, FormData>(updateProfileAction, {});

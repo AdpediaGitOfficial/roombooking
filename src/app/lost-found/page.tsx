@@ -20,25 +20,25 @@ async function Register({ searchParams }: { searchParams: Search }) {
     <>
       <dl className="grid grid-cols-2 gap-3 sm:grid-cols-5">
         {[["Open items", summary.open], ["Claims to verify", summary.claims], ["Due for disposal", summary.due], ["Returned (30 d)", summary.returned30], ["Disposed (30 d)", summary.disposed30]].map(([label, value]) => (
-          <div key={label} className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800"><dt className="text-xs uppercase tracking-wide text-zinc-500">{label}</dt><dd data-summary={label} className="mt-1 text-2xl font-semibold tabular-nums">{value}</dd></div>
+          <div key={label} className="card p-3"><dt className="text-xs uppercase tracking-wide text-zinc-500">{label}</dt><dd data-summary={label} className="mt-1 text-2xl font-semibold tabular-nums">{value}</dd></div>
         ))}
       </dl>
       <div className="mt-4 flex flex-wrap items-center gap-2">
         <nav className="flex flex-wrap gap-2 text-sm">
-          {ITEM_FILTERS.map(([f, label]) => <Link key={f} href={`/lost-found?filter=${f}${q ? `&q=${encodeURIComponent(q)}` : ""}`} className={`rounded-full px-3 py-1 ${f === filter ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900" : "border border-zinc-300 dark:border-zinc-700"}`}>{label}</Link>)}
+          {ITEM_FILTERS.map(([f, label]) => <Link key={f} href={`/lost-found?filter=${f}${q ? `&q=${encodeURIComponent(q)}` : ""}`} className={`rounded-full px-3 py-1 ${f === filter ? "bg-deep text-white" : "border border-zinc-300"}`}>{label}</Link>)}
         </nav>
         <form method="get" action="/lost-found" className="ml-auto flex items-center gap-2 text-sm">
           <input type="hidden" name="filter" value={filter} />
-          <input name="q" defaultValue={q ?? ""} placeholder="Search reference, description, place" className="rounded-md border border-zinc-300 px-2 py-1.5 dark:border-zinc-700 dark:bg-zinc-900" aria-label="Search" />
-          <button type="submit" className="rounded-md border border-zinc-300 px-3 py-1.5 dark:border-zinc-700">Search</button>
+          <input name="q" defaultValue={q ?? ""} placeholder="Search reference, description, place" className="rounded-md border border-zinc-300 px-2 py-1.5" aria-label="Search" />
+          <button type="submit" className="rounded-md border border-zinc-300 px-3 py-1.5">Search</button>
         </form>
       </div>
-      <div className="mt-4 overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-800">
+      <div className="mt-4 overflow-x-auto card">
         <table className="w-full text-sm">
-          <thead className="bg-zinc-50 text-left text-xs uppercase tracking-wide text-zinc-500 dark:bg-zinc-900">
+          <thead className="bg-zinc-50 text-left text-xs uppercase tracking-wide text-zinc-500">
             <tr><th className="px-3 py-2">Reference</th><th className="px-3 py-2">Item</th><th className="px-3 py-2">Found</th><th className="px-3 py-2">Status</th><th className="px-3 py-2">Custodian</th><th className="px-3 py-2">Keep until</th></tr>
           </thead>
-          <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
+          <tbody className="divide-y divide-zinc-200">
             {items.map((i) => {
               const due = (i.status === "REPORTED" || i.status === "STORED") && !!i.retainUntil && i.retainUntil <= now;
               return (
@@ -48,7 +48,7 @@ async function Register({ searchParams }: { searchParams: Search }) {
                   <td className="px-3 py-3 text-xs">{when(i.foundAt)}{i.foundLocation ? ` · ${i.foundLocation}` : ""}<div className="text-zinc-500">{i.site.name}</div></td>
                   <td className="px-3 py-3"><StatusBadge status={i.status} />{i.claims.length > 0 && <span className="ml-1 text-xs text-zinc-500">{i.claims.length} open claim{i.claims.length === 1 ? "" : "s"}</span>}</td>
                   <td className="px-3 py-3 text-xs">{i.custodian.name}</td>
-                  <td className={`px-3 py-3 text-xs ${due ? "text-red-700 dark:text-red-300" : ""}`}>{i.retainUntil ? i.retainUntil.toISOString().slice(0, 10) : "—"}{due ? " · due" : ""}</td>
+                  <td className={`px-3 py-3 text-xs ${due ? "text-red-700" : ""}`}>{i.retainUntil ? i.retainUntil.toISOString().slice(0, 10) : "—"}{due ? " · due" : ""}</td>
                 </tr>
               );
             })}
@@ -64,8 +64,8 @@ async function Register({ searchParams }: { searchParams: Search }) {
 export default function LostFoundPage({ searchParams }: PageProps<"/lost-found">) {
   return (
     <main>
-      <h1 className="text-2xl font-semibold">Lost &amp; found</h1>
-      <p className="mt-1 mb-6 text-sm text-zinc-600 dark:text-zinc-400">Found items, storage, claims, handover and disposal.</p>
+      <h1 className="page-title">Lost &amp; found</h1>
+      <p className="mt-1 mb-6 text-sm text-zinc-600">Found items, storage, claims, handover and disposal.</p>
       <Suspense fallback={<p className="text-sm text-zinc-500">Loading…</p>}>
         <Register searchParams={searchParams as Search} />
       </Suspense>

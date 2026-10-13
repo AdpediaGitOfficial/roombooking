@@ -4,8 +4,8 @@ import { useActionState, useState } from "react";
 import { visibleFields, type FormField } from "../forms";
 import { resubmitRequestAction, submitRequestAction, type FormState } from "../actions";
 
-const input = "mt-1 block w-full rounded-md border border-zinc-300 px-3 py-3 text-base dark:border-zinc-700 dark:bg-zinc-900";
-const button = "mt-6 w-full rounded-md bg-zinc-900 px-4 py-3 text-base font-medium text-white disabled:opacity-60 dark:bg-zinc-100 dark:text-zinc-900";
+const input = "mt-1 block w-full rounded-md border border-zinc-300 px-3 py-3 text-base";
+const button = "mt-6 w-full rounded-md bg-primary px-4 py-3 text-base font-medium text-primary-ink disabled:opacity-60";
 
 /** Renders the fields that are visible for the current values; tracks changes so conditional fields show and hide as the person types (WF-02). */
 export function FieldList({ fields, values, errors, preview }: { fields: FormField[]; values: Record<string, string>; errors: Record<string, string>; preview?: boolean }) {
@@ -54,7 +54,7 @@ export function FieldList({ fields, values, errors, preview }: { fields: FormFie
               </>
             )}
             {field.help && <p id={`${id}-help`} className="mt-1 text-xs text-zinc-500">{field.help}</p>}
-            {err && <p id={`${id}-err`} role="alert" className="mt-1 text-sm text-red-700 dark:text-red-300">{err}</p>}
+            {err && <p id={`${id}-err`} role="alert" className="mt-1 text-sm text-red-700">{err}</p>}
           </div>
         );
       })}
@@ -87,7 +87,7 @@ export function DynamicForm(props: Props) {
         <input type="hidden" name="requestId" value={props.requestId} />
       )}
       <FieldList fields={props.fields} values={values} errors={errors} />
-      {state.error && <p role="alert" className="mt-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">{state.error}</p>}
+      {state.error && <p role="alert" className="mt-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{state.error}</p>}
       <button type="submit" disabled={pending} className={button}>
         {pending ? "Submitting…" : props.mode === "submit" ? "Submit request" : "Resubmit request"}
       </button>

@@ -10,7 +10,7 @@ export async function RoomKeysPanel({ roomId, staffId, canOperate, returnPath }:
   if (rows.length === 0) return null;
   const staff = canOperate ? await staffOptions() : [];
   return (
-    <div className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800" data-room-keys>
+    <div className="card p-4" data-room-keys>
       <h3 className="font-medium">Room keys</h3>
       <ul className="mt-2 space-y-3">
         {rows.map(({ key, issue }) => (

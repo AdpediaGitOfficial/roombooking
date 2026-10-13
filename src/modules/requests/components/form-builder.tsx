@@ -8,17 +8,17 @@ import { createDraftAction, createTypeAction, draftAction, updateTypeAction, typ
 import { FieldList } from "./dynamic-form";
 
 function Feedback({ state }: { state: BuilderState }) {
-  if (state.error) return <p role="alert" className="mt-2 text-sm text-red-700 dark:text-red-300">{state.error}</p>;
-  if (state.message) return <p role="status" className="mt-2 text-sm text-green-700 dark:text-green-300">{state.message}</p>;
+  if (state.error) return <p role="alert" className="mt-2 text-sm text-red-700">{state.error}</p>;
+  if (state.message) return <p role="status" className="mt-2 text-sm text-green-700">{state.message}</p>;
   return null;
 }
-const input = "mt-1 block w-full rounded-md border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900";
-const primary = "rounded-md bg-zinc-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-60 dark:bg-zinc-100 dark:text-zinc-900";
-const secondary = "rounded-md border border-zinc-300 px-3 py-2 text-sm font-medium disabled:opacity-60 dark:border-zinc-700";
-const danger = "rounded-md border border-red-300 px-3 py-2 text-sm font-medium text-red-700 disabled:opacity-60 dark:border-red-800 dark:text-red-300";
-const tiny = "rounded border border-zinc-300 px-2 py-0.5 text-xs disabled:opacity-40 dark:border-zinc-700";
-const panel = "rounded-lg border border-zinc-200 p-4 dark:border-zinc-800";
-const err = (m?: string) => (m ? <span role="alert" className="text-xs text-red-700 dark:text-red-300">{m}</span> : null);
+const input = "mt-1 block w-full rounded-md border border-zinc-300 px-2 py-1.5 text-sm";
+const primary = "rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-ink disabled:opacity-60";
+const secondary = "rounded-md border border-zinc-300 px-3 py-2 text-sm font-medium disabled:opacity-60";
+const danger = "rounded-md border border-red-300 px-3 py-2 text-sm font-medium text-red-700 disabled:opacity-60";
+const tiny = "rounded border border-zinc-300 px-2 py-0.5 text-xs disabled:opacity-40";
+const panel = "card p-4";
+const err = (m?: string) => (m ? <span role="alert" className="text-xs text-red-700">{m}</span> : null);
 const TYPE_LABEL: Record<FieldType, string> = { text: "Short text", textarea: "Paragraph", date: "Date", number: "Number", select: "Choice", checkbox: "Checkbox" };
 const OP_LABEL: Record<VisibilityOp, string> = { equals: "equals", notEquals: "does not equal", isSet: "has a value", isNotSet: "is empty", isTrue: "is ticked", isFalse: "is not ticked" };
 
@@ -101,7 +101,7 @@ export function FormBuilder({ typeId, draft, initialFields, initialSteps, roles 
       {err(e.fields)}
 
       {preview ? (
-        <div className="mt-4 rounded-lg border border-dashed border-zinc-300 p-4 dark:border-zinc-700" data-preview>
+        <div className="mt-4 rounded-lg border border-dashed border-zinc-300 p-4" data-preview>
           <p className="mb-3 text-xs text-zinc-500">How residents will see it. Conditional fields appear as you fill in the ones they depend on.</p>
           <FieldList key={JSON.stringify(fields)} fields={fields} values={{}} errors={{}} />
           {steps.length > 0 && <p className="mt-4 text-xs text-zinc-500">Approval: {steps.map((s) => s.name || "(unnamed)").join(" → ")}</p>}
@@ -114,13 +114,13 @@ export function FormBuilder({ typeId, draft, initialFields, initialSteps, roles 
               const earlier = fields.slice(0, i).filter((o) => o.name);
               const dep = f.visibleWhen ? fields.find((o) => o.name === f.visibleWhen?.field) : null;
               return (
-                <li key={i} data-builder-field={i} className="rounded-md border border-zinc-200 p-3 dark:border-zinc-800">
+                <li key={i} data-builder-field={i} className="rounded-md border border-zinc-200 p-3">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <span className="text-xs font-medium text-zinc-500">Field {i + 1}</span>
                     <span className="flex gap-1">
                       <button type="button" onClick={() => move(i, -1)} disabled={i === 0} className={tiny} aria-label="Move up">↑</button>
                       <button type="button" onClick={() => move(i, 1)} disabled={i === fields.length - 1} className={tiny} aria-label="Move down">↓</button>
-                      <button type="button" onClick={() => setFields((fs) => fs.filter((_, j) => j !== i))} className={`${tiny} text-red-700 dark:text-red-300`} data-remove-field>Remove</button>
+                      <button type="button" onClick={() => setFields((fs) => fs.filter((_, j) => j !== i))} className={`${tiny} text-red-700`} data-remove-field>Remove</button>
                     </span>
                   </div>
                   <div className="mt-2 grid gap-2 sm:grid-cols-4">
@@ -178,7 +178,7 @@ export function FormBuilder({ typeId, draft, initialFields, initialSteps, roles 
           <h4 className="mt-6 text-sm font-medium">Approval route <span className="font-normal text-zinc-500">(in order; none = approved on submission)</span></h4>
           <ol className="mt-2 space-y-2">
             {steps.map((s, i) => (
-              <li key={i} data-builder-step={i} className="flex flex-wrap items-end gap-2 rounded-md border border-zinc-200 p-2 dark:border-zinc-800">
+              <li key={i} data-builder-step={i} className="flex flex-wrap items-end gap-2 rounded-md border border-zinc-200 p-2">
                 <span className="pb-2 text-xs text-zinc-500">Step {i + 1}</span>
                 <label className="block text-sm">Name<input value={s.name} onChange={(ev) => setStep(i, { name: ev.target.value })} className={input} />{err(e[`steps.${i}.name`])}</label>
                 <label className="block text-sm">Approver role<select value={s.approverRole} onChange={(ev) => setStep(i, { approverRole: ev.target.value as Role })} className={input}>{roles.map((r) => <option key={r} value={r}>{r.toLowerCase().replaceAll("_", " ")}</option>)}</select>{err(e[`steps.${i}.approverRole`])}</label>
@@ -186,7 +186,7 @@ export function FormBuilder({ typeId, draft, initialFields, initialSteps, roles 
                 <span className="flex gap-1 pb-2">
                   <button type="button" onClick={() => moveStep(i, -1)} disabled={i === 0} className={tiny} aria-label="Move up">↑</button>
                   <button type="button" onClick={() => moveStep(i, 1)} disabled={i === steps.length - 1} className={tiny} aria-label="Move down">↓</button>
-                  <button type="button" onClick={() => setSteps((ss) => ss.filter((_, j) => j !== i))} className={`${tiny} text-red-700 dark:text-red-300`}>Remove</button>
+                  <button type="button" onClick={() => setSteps((ss) => ss.filter((_, j) => j !== i))} className={`${tiny} text-red-700`}>Remove</button>
                 </span>
               </li>
             ))}

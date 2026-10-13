@@ -37,7 +37,7 @@ async function Content({ searchParams }: { searchParams: Search }) {
         <section>
           <h2 className="font-medium">Backlog by priority</h2>
           <div className={wrap}><table className={table}><thead className={thead}><tr><th className={th}>Priority</th><th className={`${th} text-right`}>Open</th><th className={`${th} text-right`}>Overdue</th></tr></thead><tbody className={tbody}>
-            {r.backlogByPriority.map((x) => <tr key={x.priority}><td className={td}>{low(x.priority)}</td><td className={`${td} text-right tabular-nums`}>{x.count}</td><td className={`${td} text-right tabular-nums ${x.overdue ? "text-red-700 dark:text-red-300" : ""}`}>{x.overdue}</td></tr>)}
+            {r.backlogByPriority.map((x) => <tr key={x.priority}><td className={td}>{low(x.priority)}</td><td className={`${td} text-right tabular-nums`}>{x.count}</td><td className={`${td} text-right tabular-nums ${x.overdue ? "text-red-700" : ""}`}>{x.overdue}</td></tr>)}
           </tbody></table></div>
         </section>
         <section>
@@ -64,11 +64,11 @@ async function Content({ searchParams }: { searchParams: Search }) {
                 <tr key={x.id} data-ticket={x.ticketNumber}>
                   <td className={td}><Link href={`/maintenance/${x.id}`} className="underline">{x.ticketNumber}</Link></td>
                   <td className={`${td} text-xs tabular-nums`}>{x.createdAt.toISOString().slice(0, 16).replace("T", " ")}</td>
-                  <td className={td}>{low(x.status)}{x.overdue && <span className="ml-1 text-xs font-medium text-red-700 dark:text-red-300">overdue</span>}</td>
+                  <td className={td}>{low(x.status)}{x.overdue && <span className="ml-1 text-xs font-medium text-red-700">overdue</span>}</td>
                   <td className={td}>{low(x.priority)}</td><td className={td}>{x.category}</td><td className={td}>{x.site}{x.building ? ` · ${x.building}` : ""}</td>
                   <td className={td}>{x.assignee ?? x.vendor ?? "—"}</td>
                   <td className={`${td} text-right tabular-nums`}>{x.hours ?? ""}</td>
-                  <td className={td}>{x.slaMet === null ? "" : x.slaMet ? "met" : <span className="text-red-700 dark:text-red-300">missed</span>}</td>
+                  <td className={td}>{x.slaMet === null ? "" : x.slaMet ? "met" : <span className="text-red-700">missed</span>}</td>
                 </tr>
               ))}
               {r.rows.length === 0 && <tr><td colSpan={9} className="px-3 py-6 text-center text-zinc-500">No tickets match.</td></tr>}
@@ -84,8 +84,8 @@ async function Content({ searchParams }: { searchParams: Search }) {
 export default function MaintenanceReportPage({ searchParams }: PageProps<"/reports/maintenance">) {
   return (
     <main>
-      <h1 className="text-2xl font-semibold">Maintenance</h1>
-      <p className="mt-1 mb-6 text-sm text-zinc-600 dark:text-zinc-400">Backlog, overdue work, resolution times and team and vendor workload.</p>
+      <h1 className="page-title">Maintenance</h1>
+      <p className="mt-1 mb-6 text-sm text-zinc-600">Backlog, overdue work, resolution times and team and vendor workload.</p>
       <Suspense fallback={<p className="text-sm text-zinc-500">Loading…</p>}><Content searchParams={searchParams as Search} /></Suspense>
     </main>
   );

@@ -23,7 +23,7 @@ function Row({ r }: { r: RequestRecord & { coveringFor?: string | null } }) {
       </td>
       <td className="px-3 py-3">{r.requestType.name}</td>
       <td className="px-3 py-3 tabular-nums">{r.createdAt.toISOString().slice(0, 10)}</td>
-      <td className="px-3 py-3"><RequestStatusBadge request={r} />{r.coveringFor && <div data-covering className="mt-1 text-xs text-amber-700 dark:text-amber-300">covering for {r.coveringFor}</div>}</td>
+      <td className="px-3 py-3"><RequestStatusBadge request={r} />{r.coveringFor && <div data-covering className="mt-1 text-xs text-amber-700">covering for {r.coveringFor}</div>}</td>
       <td className="px-3 py-3 text-right"><Link href={`/approvals/${r.id}`} className="underline">Open</Link></td>
     </tr>
   );
@@ -40,20 +40,20 @@ async function Inbox({ searchParams }: { searchParams: Promise<{ filter?: string
 
   return (
     <>
-      <p className="mb-3 text-sm"><Link href="/approvals/delegations" className="underline" data-delegations-link>Delegation &amp; absence cover</Link>{covering.length > 0 && <span className="ml-2 text-amber-700 dark:text-amber-300">· you are currently covering for {covering.join(", ")}</span>}</p>
+      <p className="mb-3 text-sm"><Link href="/approvals/delegations" className="underline" data-delegations-link>Delegation &amp; absence cover</Link>{covering.length > 0 && <span className="ml-2 text-amber-700">· you are currently covering for {covering.join(", ")}</span>}</p>
       {isAdmin && (
         <nav className="flex flex-wrap gap-2 text-sm">
           {FILTERS.map(([f, label]) => (
-            <Link key={f} href={`/approvals?filter=${f}`} className={`rounded-full px-3 py-1 ${f === filter ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900" : "border border-zinc-300 dark:border-zinc-700"}`}>{label}</Link>
+            <Link key={f} href={`/approvals?filter=${f}`} className={`rounded-full px-3 py-1 ${f === filter ? "bg-deep text-white" : "border border-zinc-300"}`}>{label}</Link>
           ))}
         </nav>
       )}
-      <div className="mt-4 overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-800">
+      <div className="mt-4 overflow-x-auto card">
         <table className="w-full text-sm">
-          <thead className="bg-zinc-50 text-left text-xs uppercase tracking-wide text-zinc-500 dark:bg-zinc-900">
+          <thead className="bg-zinc-50 text-left text-xs uppercase tracking-wide text-zinc-500">
             <tr><th className="px-3 py-2">Requester</th><th className="px-3 py-2">Type</th><th className="px-3 py-2">Submitted</th><th className="px-3 py-2">Status</th><th className="px-3 py-2"></th></tr>
           </thead>
-          <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
+          <tbody className="divide-y divide-zinc-200">
             {requests.map((r) => <Row key={r.id} r={r} />)}
             {requests.length === 0 && <tr><td colSpan={5} className="px-3 py-6 text-center text-zinc-500">{filter === "inbox" ? "Nothing is waiting for your approval." : "Nothing to show."}</td></tr>}
           </tbody>
@@ -66,8 +66,8 @@ async function Inbox({ searchParams }: { searchParams: Promise<{ filter?: string
 export default function ApprovalsPage({ searchParams }: PageProps<"/approvals">) {
   return (
     <main>
-      <h1 className="text-2xl font-semibold">Approvals</h1>
-      <p className="mt-1 mb-6 text-sm text-zinc-600 dark:text-zinc-400">Requests waiting on a step you are responsible for.</p>
+      <h1 className="page-title">Approvals</h1>
+      <p className="mt-1 mb-6 text-sm text-zinc-600">Requests waiting on a step you are responsible for.</p>
       <Suspense fallback={<p className="text-sm text-zinc-500">Loading…</p>}>
         <Inbox searchParams={searchParams as Promise<{ filter?: string }>} />
       </Suspense>

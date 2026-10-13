@@ -11,9 +11,9 @@ async function Content() {
     <>
       <div className="grid gap-4 md:grid-cols-2">
         {KINDS.map((k) => (
-          <div key={k.kind} className="rounded-lg border border-zinc-200 p-4 text-sm dark:border-zinc-800" data-kind={k.kind}>
+          <div key={k.kind} className="card p-4 text-sm" data-kind={k.kind}>
             <div className="font-medium">{k.label}</div>
-            <p className="mt-1 text-zinc-600 dark:text-zinc-400">{k.blurb}</p>
+            <p className="mt-1 text-zinc-600">{k.blurb}</p>
             <p className="mt-2 font-mono text-xs text-zinc-500">{k.columns.join(", ")}</p>
             <div className="mt-3 flex flex-wrap gap-3 text-xs">
               <a href={`/api/imports/${k.kind}.csv?template=1`} className="underline">Download template</a>
@@ -24,10 +24,10 @@ async function Content() {
       </div>
       <div className="mt-6"><UploadForm kinds={KINDS.map((k) => ({ kind: k.kind, label: k.label }))} /></div>
       <h2 className="mt-8 text-lg font-semibold">Recent imports</h2>
-      <div className="mt-2 overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-800">
+      <div className="mt-2 overflow-x-auto card">
         <table className="w-full text-sm">
-          <thead className="bg-zinc-50 text-left text-xs uppercase tracking-wide text-zinc-500 dark:bg-zinc-900"><tr><th className="px-3 py-2">File</th><th className="px-3 py-2">Kind</th><th className="px-3 py-2">Rows</th><th className="px-3 py-2">State</th><th className="px-3 py-2">By</th></tr></thead>
-          <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
+          <thead className="bg-zinc-50 text-left text-xs uppercase tracking-wide text-zinc-500"><tr><th className="px-3 py-2">File</th><th className="px-3 py-2">Kind</th><th className="px-3 py-2">Rows</th><th className="px-3 py-2">State</th><th className="px-3 py-2">By</th></tr></thead>
+          <tbody className="divide-y divide-zinc-200">
             {batches.map((b) => { const s = b.summary as Summary; return (
               <tr key={b.id} data-batch={b.id} data-state={b.status}>
                 <td className="px-3 py-3"><Link href={`/admin/import/${b.id}`} className="font-medium underline">{b.fileName}</Link><div className="text-xs text-zinc-500">{b.createdAt.toISOString().slice(0, 16).replace("T", " ")}</div></td>
@@ -48,8 +48,8 @@ async function Content() {
 export default function ImportPage() {
   return (
     <main>
-      <h1 className="text-2xl font-semibold">Bulk import &amp; export</h1>
-      <p className="mt-1 mb-6 text-sm text-zinc-600 dark:text-zinc-400">Load staff profiles or buildings, rooms and beds from CSV. Every file is previewed row by row before anything is written.</p>
+      <h1 className="page-title">Bulk import &amp; export</h1>
+      <p className="mt-1 mb-6 text-sm text-zinc-600">Load staff profiles or buildings, rooms and beds from CSV. Every file is previewed row by row before anything is written.</p>
       <Suspense fallback={<p className="text-sm text-zinc-500">Loading…</p>}><Content /></Suspense>
     </main>
   );

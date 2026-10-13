@@ -23,16 +23,16 @@ async function Content({ params, searchParams }: { params: Promise<{ userId: str
   return (
     <>
       <div className="mt-1 flex flex-wrap items-center gap-3">
-        <h1 className="text-2xl font-semibold">{user.name}</h1>
+        <h1 className="page-title">{user.name}</h1>
         <UserStatusBadge status={user.status} />
       </div>
-      <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">{user.email}{user.staffProfile ? ` · ${user.staffProfile.employeeId}${user.staffProfile.department ? ` · ${user.staffProfile.department}` : ""}` : ""}{user.vendor ? ` · ${user.vendor.name}` : ""}{user.lastLoginAt ? ` · last sign-in ${user.lastLoginAt.toISOString().replace("T", " ").slice(0, 16)}` : " · never signed in"}</p>
+      <p className="mt-1 text-sm text-zinc-600">{user.email}{user.staffProfile ? ` · ${user.staffProfile.employeeId}${user.staffProfile.department ? ` · ${user.staffProfile.department}` : ""}` : ""}{user.vendor ? ` · ${user.vendor.name}` : ""}{user.lastLoginAt ? ` · last sign-in ${user.lastLoginAt.toISOString().replace("T", " ").slice(0, 16)}` : " · never signed in"}</p>
 
       <div className="mt-6 grid gap-6 md:grid-cols-2">
         <section className="space-y-4">
-          <div className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+          <div className="card p-4">
             <h3 className="font-medium">Roles</h3>
-            <ul className="mt-2 divide-y divide-zinc-200 dark:divide-zinc-800">
+            <ul className="mt-2 divide-y divide-zinc-200">
               {user.roleAssignments.map((a) => (
                 <li key={a.id} data-role={a.role} className="flex items-start justify-between gap-3 py-2 text-sm">
                   <div><div className="font-medium">{a.role.toLowerCase().replace(/_/g, " ")} <span className="font-normal text-zinc-500">· {scopeLabel(a)}</span></div><div className="text-xs text-zinc-500">{ROLE_DESCRIPTIONS[a.role]}</div></div>
@@ -47,7 +47,7 @@ async function Content({ params, searchParams }: { params: Promise<{ userId: str
         </section>
         <section className="space-y-4">
           {canManage && user.id !== actor.id && <StatusForm userId={user.id} status={user.status} hasPassword={!!user.passwordHash} />}
-          {canManage && user.id === actor.id && <p className="rounded-lg border border-zinc-200 p-4 text-sm text-zinc-500 dark:border-zinc-800">This is your own account. Another administrator must change its status or administrator role.</p>}
+          {canManage && user.id === actor.id && <p className="card p-4 text-sm text-zinc-500">This is your own account. Another administrator must change its status or administrator role.</p>}
           {canManage && user.status === "INVITED" && <TokenForm userId={user.id} purpose="INVITE" initialLink={initialLink} />}
           {canManage && user.status === "ACTIVE" && <TokenForm userId={user.id} purpose="RESET" />}
           {canManage && <SignOutEverywhereForm userId={user.id} sessions={user._count.sessions} />}
@@ -55,8 +55,8 @@ async function Content({ params, searchParams }: { params: Promise<{ userId: str
       </div>
 
       <section className="mt-8">
-        <h2 className="text-lg font-semibold">Account history</h2>
-        <ol className="mt-2 divide-y divide-zinc-200 rounded-lg border border-zinc-200 text-sm dark:divide-zinc-800 dark:border-zinc-800">
+        <h2 className="section-title">Account history</h2>
+        <ol className="mt-2 divide-y divide-zinc-200 card text-sm">
           {audit.map((e) => (
             <li key={e.id} data-audit={e.action} className="flex flex-wrap justify-between gap-2 px-3 py-2">
               <span><span className="font-medium">{e.action.toLowerCase().replace(/_/g, " ")}</span>{e.actor ? <span className="text-zinc-500"> · by {e.actor.name}</span> : null}{e.after ? <span className="ml-2 text-xs text-zinc-500">{JSON.stringify(e.after).slice(0, 120)}</span> : null}</span>

@@ -15,10 +15,10 @@ async function Content({ searchParams }: { searchParams: Search }) {
     <>
       {claims.length > 0 && (
         <section className="mt-6" data-my-claims>
-          <h2 className="text-lg font-semibold">My claims</h2>
+          <h2 className="section-title">My claims</h2>
           <ul className="mt-2 space-y-2">
             {claims.map((c) => (
-              <li key={c.id} data-claim-outcome={c.outcome} className="rounded-lg border border-zinc-200 p-3 text-sm dark:border-zinc-800">
+              <li key={c.id} data-claim-outcome={c.outcome} className="card p-3 text-sm">
                 <div className="flex flex-wrap items-center justify-between gap-2"><Link href={`/my/lost-found/${c.item.id}`} className="font-medium underline">{c.item.reference} · {c.item.description}</Link><OutcomeBadge outcome={c.outcome} /></div>
                 <div className="mt-1 text-xs text-zinc-500">{c.outcome === "VERIFIED" && c.item.status !== "RETURNED" ? "Verified: collect it from the accommodation office with your ID." : c.item.status === "RETURNED" ? `Handed over ${c.item.handedOverAt ? when(c.item.handedOverAt) : ""}` : c.decisionNote ? c.decisionNote : `Submitted ${when(c.createdAt)}`}</div>
               </li>
@@ -27,15 +27,15 @@ async function Content({ searchParams }: { searchParams: Search }) {
         </section>
       )}
       <section className="mt-6">
-        <h2 className="text-lg font-semibold">Found items</h2>
+        <h2 className="section-title">Found items</h2>
         <p className="mt-1 text-xs text-zinc-500">Lost something? Look for it here and submit a claim. The office checks every claim before handing anything over.</p>
         <form method="get" action="/my/lost-found" className="mt-2 flex gap-2 text-sm">
-          <input name="q" defaultValue={q ?? ""} placeholder="Search e.g. wallet, keys, Block A" className="flex-1 rounded-md border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900" aria-label="Search" />
-          <button type="submit" className="rounded-md border border-zinc-300 px-3 py-2 dark:border-zinc-700">Search</button>
+          <input name="q" defaultValue={q ?? ""} placeholder="Search e.g. wallet, keys, Block A" className="flex-1 rounded-md border border-zinc-300 px-3 py-2" aria-label="Search" />
+          <button type="submit" className="rounded-md border border-zinc-300 px-3 py-2">Search</button>
         </form>
         <ul className="mt-3 space-y-2">
           {items.map((i) => (
-            <li key={i.id} data-found={i.reference} className="rounded-lg border border-zinc-200 p-3 text-sm dark:border-zinc-800">
+            <li key={i.id} data-found={i.reference} className="card p-3 text-sm">
               <div className="flex flex-wrap items-center justify-between gap-2"><Link href={`/my/lost-found/${i.id}`} className="font-medium underline">{i.description}</Link>{claimedIds.has(i.id) ? <span className="text-xs text-zinc-500">claim pending</span> : <StatusBadge status={i.status} />}</div>
               <div className="mt-1 text-xs text-zinc-500">{i.category ? `${i.category} · ` : ""}found {when(i.foundAt)}{i.foundLocation ? ` at ${i.foundLocation}` : ""} · {i.site.name}</div>
             </li>
@@ -50,7 +50,7 @@ async function Content({ searchParams }: { searchParams: Search }) {
 export default function MyLostFoundPage({ searchParams }: PageProps<"/my/lost-found">) {
   return (
     <main>
-      <h1 className="text-2xl font-semibold">Lost &amp; found</h1>
+      <h1 className="page-title">Lost &amp; found</h1>
       <Suspense fallback={<p className="mt-6 text-sm text-zinc-500">Loading…</p>}>
         <Content searchParams={searchParams as Search} />
       </Suspense>

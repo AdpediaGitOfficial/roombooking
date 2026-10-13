@@ -31,12 +31,12 @@ async function Content({ params }: { params: Params }) {
   return (
     <>
       <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-2xl font-semibold">{item.reference}</h1>
+        <h1 className="page-title">{item.reference}</h1>
         <StatusBadge status={item.status} />
-        {due && <span data-due className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-900 dark:bg-red-950 dark:text-red-200">Retention expired</span>}
+        {due && <span data-due className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-900">Retention expired</span>}
       </div>
       <p className="mt-1 text-lg">{item.description}</p>
-      <dl className="mt-4 grid grid-cols-2 gap-3 rounded-lg border border-zinc-200 p-4 sm:grid-cols-4 dark:border-zinc-800">
+      <dl className="mt-4 grid grid-cols-2 gap-3 card p-4 sm:grid-cols-4">
         <Field label="Category">{item.category ?? "—"}</Field>
         <Field label="Found">{when(item.foundAt)}{item.foundLocation ? ` · ${item.foundLocation}` : ""}{item.foundByName ? ` · by ${item.foundByName}` : ""}</Field>
         <Field label="Site">{item.site.name}</Field>
@@ -52,7 +52,7 @@ async function Content({ params }: { params: Params }) {
 
       {similar.length > 0 && (
         <section className="mt-6" data-similar>
-          <h2 className="text-lg font-semibold">Possibly the same item</h2>
+          <h2 className="section-title">Possibly the same item</h2>
           <ul className="mt-2 space-y-1 text-sm">
             {similar.map((s) => <li key={s.item.id}><Link href={`/lost-found/${s.item.id}`} className="underline">{s.item.reference}</Link> · {s.item.description} · found {when(s.item.foundAt)} <span className="text-xs text-zinc-500">{s.sameCategory ? "same category" : ""}{s.shared.length ? ` shares: ${s.shared.join(", ")}` : ""}</span></li>)}
           </ul>
@@ -60,12 +60,12 @@ async function Content({ params }: { params: Params }) {
       )}
 
       <section className="mt-6">
-        <h2 className="text-lg font-semibold">Claims</h2>
+        <h2 className="section-title">Claims</h2>
         <p className="mt-1 text-xs text-zinc-500">Claimant details are visible only to lost and found staff.</p>
         {item.claims.length === 0 ? <p className="mt-2 text-sm text-zinc-500">No claims yet.</p> : (
           <ul className="mt-2 space-y-3">
             {item.claims.map((c) => (
-              <li key={c.id} data-claim={c.id} className="rounded-lg border border-zinc-200 p-3 text-sm dark:border-zinc-800">
+              <li key={c.id} data-claim={c.id} className="card p-3 text-sm">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="font-medium">{claimantLabel(c)}{c.claimantContact ? <span className="ml-2 text-xs font-normal text-zinc-500">{c.claimantContact}</span> : null}</div>
                   <OutcomeBadge outcome={c.outcome} />
@@ -86,7 +86,7 @@ async function Content({ params }: { params: Params }) {
 
       {canOperate && open && options && (
         <section className="mt-6">
-          <h2 className="text-lg font-semibold">Actions</h2>
+          <h2 className="section-title">Actions</h2>
           <div className="mt-3 grid gap-4 sm:grid-cols-2">
             {verified && <ItemForm kind="HANDOVER" itemId={item.id} />}
             {!verified && <ItemForm kind="CLAIM" itemId={item.id} staff={options.staff} />}
@@ -99,11 +99,11 @@ async function Content({ params }: { params: Params }) {
       )}
 
       <section className="mt-6">
-        <h2 className="text-lg font-semibold">History</h2>
-        <ol data-timeline className="mt-2 divide-y divide-zinc-200 rounded-lg border border-zinc-200 text-sm dark:divide-zinc-800 dark:border-zinc-800">
+        <h2 className="section-title">History</h2>
+        <ol data-timeline className="mt-2 divide-y divide-zinc-200 card text-sm">
           {item.events.map((e) => (
             <li key={e.id} data-event={e.type} className="flex flex-wrap justify-between gap-2 p-3">
-              <div><span className="font-medium">{e.type.toLowerCase().replaceAll("_", " ")}</span>{e.notes && <span className="ml-2 text-zinc-600 dark:text-zinc-400">{e.notes}</span>}{e.toStatus && e.fromStatus !== e.toStatus && <span className="ml-2 text-xs text-zinc-500">→ {e.toStatus.toLowerCase().replace("_", " ")}</span>}</div>
+              <div><span className="font-medium">{e.type.toLowerCase().replaceAll("_", " ")}</span>{e.notes && <span className="ml-2 text-zinc-600">{e.notes}</span>}{e.toStatus && e.fromStatus !== e.toStatus && <span className="ml-2 text-xs text-zinc-500">→ {e.toStatus.toLowerCase().replace("_", " ")}</span>}</div>
               <div className="text-xs text-zinc-500">{when(e.createdAt)} · {e.actor.name}</div>
             </li>
           ))}

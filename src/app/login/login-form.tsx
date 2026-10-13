@@ -21,7 +21,7 @@ export function LoginForm({ next }: { next: string }) {
           autoComplete="email"
           inputMode="email"
           required
-          className="mt-1 block w-full rounded-md border border-zinc-300 px-3 py-3 text-base dark:border-zinc-700 dark:bg-zinc-900"
+          className="mt-1 block w-full rounded-md border border-zinc-300 px-3 py-3 text-base"
         />
       </div>
 
@@ -35,12 +35,12 @@ export function LoginForm({ next }: { next: string }) {
           type="password"
           autoComplete="current-password"
           required
-          className="mt-1 block w-full rounded-md border border-zinc-300 px-3 py-3 text-base dark:border-zinc-700 dark:bg-zinc-900"
+          className="mt-1 block w-full rounded-md border border-zinc-300 px-3 py-3 text-base"
         />
       </div>
 
       {state.error && (
-        <p role="alert" className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
+        <p role="alert" className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
           {state.error}
         </p>
       )}
@@ -48,7 +48,7 @@ export function LoginForm({ next }: { next: string }) {
       <button
         type="submit"
         disabled={pending}
-        className="w-full rounded-md bg-zinc-900 px-4 py-3 text-base font-medium text-white disabled:opacity-60 dark:bg-zinc-100 dark:text-zinc-900"
+        className="w-full rounded-md bg-primary px-4 py-3 text-base font-medium text-primary-ink disabled:opacity-60"
       >
         {pending ? "Signing in…" : "Sign in"}
       </button>

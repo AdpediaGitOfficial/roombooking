@@ -21,23 +21,23 @@ async function Content({ params }: { params: Promise<{ workOrderId: string }> })
   return (
     <>
       <div className="mt-1 flex flex-wrap items-center gap-3">
-        <h1 className="text-2xl font-semibold">{wo.category}</h1>
+        <h1 className="page-title">{wo.category}</h1>
         <WorkOrderStatusBadge status={wo.status} />
       </div>
-      <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">{wo.ticketNumber} · {locationLabel(wo)} · <PriorityLabel priority={wo.priority} /></p>
+      <p className="mt-1 text-sm text-zinc-600">{wo.ticketNumber} · {locationLabel(wo)} · <PriorityLabel priority={wo.priority} /></p>
       <p className="mt-3 whitespace-pre-line text-sm">{wo.description}</p>
       {wo.assignee || wo.vendor ? <p className="mt-2 text-xs text-zinc-500">Being handled by {wo.assignee?.name ?? wo.vendor?.name}.</p> : <p className="mt-2 text-xs text-zinc-500">Waiting for the maintenance team to pick this up.</p>}
       {wo.status === "RESOLVED" && (
-        <div className="mt-4 rounded-lg bg-green-50 p-3 text-sm text-green-900 dark:bg-green-950 dark:text-green-200">
+        <div className="mt-4 rounded-lg bg-green-50 p-3 text-sm text-green-900">
           <div className="font-medium">Marked resolved</div>
           <p className="mt-1">{wo.resolutionNote}</p>
           <p className="mt-1 text-xs">Please confirm below, or reopen if the problem persists.</p>
         </div>
       )}
-      {wo.status === "WAITING_STAFF" && <p className="mt-4 rounded-lg bg-orange-50 p-3 text-sm text-orange-900 dark:bg-orange-950 dark:text-orange-200">The team needs something from you. Check the latest note and reply below.</p>}
+      {wo.status === "WAITING_STAFF" && <p className="mt-4 rounded-lg bg-orange-50 p-3 text-sm text-orange-900">The team needs something from you. Check the latest note and reply below.</p>}
 
       <section className="mt-6">
-        <h2 className="text-lg font-semibold">Updates</h2>
+        <h2 className="section-title">Updates</h2>
         <div className="mt-2"><NoteList notes={visibleNotes(wo, access)} photos={photos} /></div>
       </section>
 

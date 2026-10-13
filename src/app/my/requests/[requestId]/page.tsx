@@ -23,7 +23,7 @@ async function RequestContent({ params }: { params: Promise<{ requestId: string 
   return (
     <>
       <div className="mt-1 flex flex-wrap items-center gap-3">
-        <h1 className="text-2xl font-semibold">{request.requestType.name}</h1>
+        <h1 className="page-title">{request.requestType.name}</h1>
         <RequestStatusBadge request={request} />
       </div>
       <p className="mt-1 text-xs text-zinc-500">Submitted {request.createdAt.toISOString().slice(0, 10)} · reference {request.id.slice(-8).toUpperCase()}</p>
@@ -31,7 +31,7 @@ async function RequestContent({ params }: { params: Promise<{ requestId: string 
 
       {canResubmit ? (
         <section className="mt-6">
-          <div className="rounded-lg bg-orange-50 p-3 text-sm text-orange-900 dark:bg-orange-950 dark:text-orange-200">
+          <div className="rounded-lg bg-orange-50 p-3 text-sm text-orange-900">
             <div className="font-medium">{request.status === "EXPIRED" ? "Expired without a decision" : "Returned for changes"}</div>
             {request.status === "EXPIRED" ? <p className="mt-1">It was not decided within the time allowed. Resubmit it below if it is still needed.</p> : lastReturn?.comment && <p className="mt-1 whitespace-pre-line">{lastReturn.comment}</p>}
           </div>
@@ -42,17 +42,17 @@ async function RequestContent({ params }: { params: Promise<{ requestId: string 
         </section>
       ) : (
         <section className="mt-6">
-          <h2 className="text-lg font-semibold">Details</h2>
+          <h2 className="section-title">Details</h2>
           <div className="mt-2"><RequestDetails request={request} /></div>
         </section>
       )}
 
       {request.fulfilmentNote && (request.status === "APPROVED" || request.status === "FULFILLED") && (
-        <p className="mt-4 rounded-lg bg-green-50 p-3 text-sm text-green-900 dark:bg-green-950 dark:text-green-200">{request.fulfilmentNote}</p>
+        <p className="mt-4 rounded-lg bg-green-50 p-3 text-sm text-green-900">{request.fulfilmentNote}</p>
       )}
 
       <section className="mt-6">
-        <h2 className="text-lg font-semibold">History</h2>
+        <h2 className="section-title">History</h2>
         <RequestHistory request={request} showApproverNames={false} />
       </section>
 

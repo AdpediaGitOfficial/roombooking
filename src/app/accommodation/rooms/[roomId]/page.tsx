@@ -20,12 +20,12 @@ async function RoomView({ params }: { params: Promise<{ roomId: string }> }) {
 
   return (
     <>
-      <p className="text-sm text-zinc-600 dark:text-zinc-400">
+      <p className="text-sm text-zinc-600">
         <Link href={`/accommodation/buildings/${room.building.id}`} className="underline">{room.building.name}</Link>
         {" · "}{room.building.site.name}
       </p>
       <h1 className="mt-1 text-2xl font-semibold">Room {room.code}</h1>
-      <p className="mt-1 mb-6 text-sm text-zinc-600 dark:text-zinc-400">
+      <p className="mt-1 mb-6 text-sm text-zinc-600">
         {room.type ?? "room"}{room.floor ? ` · floor ${room.floor}` : ""} · {room.genderPolicy.toLowerCase()} · status {room.status.toLowerCase()}
         {room.blockReason ? ` (${room.blockReason})` : ""} · as of {today}
       </p>
@@ -33,9 +33,9 @@ async function RoomView({ params }: { params: Promise<{ roomId: string }> }) {
       <SummaryTiles summary={summary} />
 
       <h2 className="mt-8 text-lg font-semibold">Bed spaces</h2>
-      <div className="mt-3 overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-800">
+      <div className="mt-3 overflow-x-auto card">
         <table className="w-full text-sm">
-          <thead className="bg-zinc-50 text-left text-xs uppercase tracking-wide text-zinc-500 dark:bg-zinc-900">
+          <thead className="bg-zinc-50 text-left text-xs uppercase tracking-wide text-zinc-500">
             <tr>
               <th className="px-3 py-2">Bed</th>
               <th className="px-3 py-2">Availability</th>
@@ -45,7 +45,7 @@ async function RoomView({ params }: { params: Promise<{ roomId: string }> }) {
               {canManage && <th className="px-3 py-2">Configure</th>}
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
+          <tbody className="divide-y divide-zinc-200">
             {beds.map((bed) => (
               <tr key={bed.id} data-bed={bed.code} className="align-top">
                 <td className="px-3 py-3 font-medium">{bed.code}</td>
@@ -55,7 +55,7 @@ async function RoomView({ params }: { params: Promise<{ roomId: string }> }) {
                     <div className="mt-1 text-xs text-zinc-500">{bed.blockReason}</div>
                   )}
                   {(bed.state === "OCCUPIED" || bed.state === "ALLOCATED") && bed.status === "BLOCKED" && (
-                    <div className="mt-1 text-xs text-red-700 dark:text-red-300">Blocked: occupant needs relocating</div>
+                    <div className="mt-1 text-xs text-red-700">Blocked: occupant needs relocating</div>
                   )}
                 </td>
                 <td className="px-3 py-3">

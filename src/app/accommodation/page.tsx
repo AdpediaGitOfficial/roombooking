@@ -13,11 +13,11 @@ async function Overview() {
     <div className="space-y-10">
       {sites.map(({ site, today, buildings, summary }) => (
         <section key={site.id}>
-          <h2 className="text-lg font-semibold">
+          <h2 className="section-title">
             {site.name} <span className="text-sm font-normal text-zinc-500">({site.code}) · as of {today} {site.timezone}</span>
           </h2>
           <div className="mt-3"><SummaryTiles summary={summary} /></div>
-          <ul className="mt-4 divide-y divide-zinc-200 rounded-lg border border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
+          <ul className="mt-4 divide-y divide-zinc-200 card">
             {buildings.map(({ building, roomCount, summary: s }) => (
               <li key={building.id} className="flex flex-wrap items-center justify-between gap-2 p-4">
                 <div>
@@ -26,7 +26,7 @@ async function Overview() {
                   </Link>
                   <div className="text-xs text-zinc-500">{building.type.toLowerCase()} · {roomCount} rooms</div>
                 </div>
-                <div className="text-sm tabular-nums text-zinc-600 dark:text-zinc-400">
+                <div className="text-sm tabular-nums text-zinc-600">
                   {s.occupied}/{s.capacity} occupied · {s.vacant} vacant · {s.blocked} blocked
                 </div>
               </li>
@@ -42,8 +42,8 @@ async function Overview() {
 export default function AccommodationPage() {
   return (
     <main>
-      <h1 className="text-2xl font-semibold">Accommodation</h1>
-      <p className="mt-1 mb-6 text-sm text-zinc-600 dark:text-zinc-400">Sites, buildings, rooms and bed spaces.</p>
+      <h1 className="page-title">Accommodation</h1>
+      <p className="mt-1 mb-6 text-sm text-zinc-600">Sites, buildings, rooms and bed spaces.</p>
       <Suspense fallback={<p className="text-sm text-zinc-500">Loading…</p>}>
         <Overview />
       </Suspense>

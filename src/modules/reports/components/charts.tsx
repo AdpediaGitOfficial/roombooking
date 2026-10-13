@@ -3,11 +3,11 @@
 import { useId, useState } from "react";
 
 // Validated categorical slots (reference palette): occupied, vacant, blocked.
-// Light / dark steps are swapped by CSS variables declared in chart-theme.css.
+// Colours come from the --viz-* tokens in globals.css (the design system greens).
 export const SERIES = [
-  { key: "occupied", label: "Occupied", cls: "fill-[var(--viz-1)]" },
-  { key: "vacant", label: "Vacant", cls: "fill-[var(--viz-2)]" },
-  { key: "blocked", label: "Blocked", cls: "fill-[var(--viz-3)]" },
+  { key: "occupied", label: "Occupied", cls: "fill-[var(--viz-1)]", ink: "fill-[var(--viz-1-ink)]" },
+  { key: "vacant", label: "Vacant", cls: "fill-[var(--viz-2)]", ink: "fill-[var(--viz-2-ink)]" },
+  { key: "blocked", label: "Blocked", cls: "fill-[var(--viz-3)]", ink: "fill-[var(--viz-3-ink)]" },
 ] as const;
 
 export type StackRow = { id: string; label: string; occupied: number; vacant: number; blocked: number; href?: string };
@@ -51,7 +51,7 @@ export function OccupancyStackChart({ rows }: { rows: StackRow[] }) {
                 return (
                   <g key={s.key} onMouseEnter={(ev) => setHover({ row, key: s.key, x: ev.clientX, y: ev.clientY })} onMouseMove={(ev) => setHover({ row, key: s.key, x: ev.clientX, y: ev.clientY })}>
                     <rect x={seg.x} y={y} width={Math.max(0, seg.w - gap)} height={barH} rx={isLast ? 4 : 0} className={s.cls} />
-                    {seg.w - gap > 26 && <text x={seg.x + 6} y={y + barH / 2 + 4} className="text-[11px] fill-white">{value}</text>}
+                    {seg.w - gap > 26 && <text x={seg.x + 6} y={y + barH / 2 + 4} className={`text-[11px] ${s.ink}`}>{value}</text>}
                   </g>
                 );
               })}
@@ -62,7 +62,7 @@ export function OccupancyStackChart({ rows }: { rows: StackRow[] }) {
         <line x1={labelW} x2={labelW} y1={0} y2={height} className="stroke-[var(--viz-axis)]" strokeWidth="1" />
       </svg>
       {hover && (
-        <div role="tooltip" className="pointer-events-none fixed z-10 rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs shadow dark:border-zinc-700 dark:bg-zinc-900" style={{ left: hover.x + 12, top: hover.y + 12 }}>
+        <div role="tooltip" className="pointer-events-none fixed z-10 rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs shadow" style={{ left: hover.x + 12, top: hover.y + 12 }}>
           <div className="font-medium">{hover.row.label}</div>
           <div>{SERIES.find((s) => s.key === hover.key)?.label}: {hover.row[hover.key as "occupied" | "vacant" | "blocked"]} of {hover.row.occupied + hover.row.vacant + hover.row.blocked} beds</div>
         </div>
@@ -140,7 +140,7 @@ export function OccupancyTrendChart({ points }: { points: TrendPoint[] }) {
             <line x1={xOf(hover)} x2={xOf(hover)} y1={padT} y2={padT + plotH} className="stroke-[var(--viz-axis)]" strokeWidth="1" />
             <circle cx={xOf(hover)} cy={yOf(points[hover].occupied)} r="5" className="fill-[var(--viz-1)] stroke-[var(--viz-surface)]" strokeWidth="2" />
             <foreignObject x={Math.min(xOf(hover) + 8, width - 150)} y={padT} width="142" height="48">
-              <div role="tooltip" className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-[11px] shadow dark:border-zinc-700 dark:bg-zinc-900">
+              <div role="tooltip" className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-[11px] shadow">
                 <div className="font-medium">{points[hover].date}</div>
                 <div>{points[hover].occupied} occupied of {points[hover].capacity}</div>
               </div>

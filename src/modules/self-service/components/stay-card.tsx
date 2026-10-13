@@ -5,7 +5,7 @@ import { isoDate } from "@/modules/accommodation/occupancy";
 export function StayCard({ allocation, compact = false }: { allocation: StayAllocation | null; compact?: boolean }) {
   if (!allocation) {
     return (
-      <div className="rounded-lg border border-dashed border-zinc-300 p-4 text-sm text-zinc-600 dark:border-zinc-700 dark:text-zinc-400">
+      <div className="rounded-lg border border-dashed border-zinc-300 p-4 text-sm text-zinc-600">
         No accommodation is currently allocated to you. Contact the accommodation office if you expect one.
       </div>
     );
@@ -13,13 +13,13 @@ export function StayCard({ allocation, compact = false }: { allocation: StayAllo
   const { bed } = allocation;
   const awaiting = allocation.status === "CONFIRMED";
   return (
-    <div data-stay={bed.code} className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+    <div data-stay={bed.code} className="card p-4">
       <div className="text-xs uppercase tracking-wide text-zinc-500">{awaiting ? "Allocated · check in at reception" : "Your bed"}</div>
       <div className="mt-1 text-2xl font-semibold">Bed {bed.code}</div>
-      <div className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+      <div className="mt-1 text-sm text-zinc-600">
         {bed.room.building.name} · Room {bed.room.code}{bed.room.floor ? ` · Floor ${bed.room.floor}` : ""}
       </div>
-      <div className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">{bed.room.building.site.name}</div>
+      <div className="mt-1 text-sm text-zinc-600">{bed.room.building.site.name}</div>
       <div className="mt-2 text-sm tabular-nums">
         {isoDate(allocation.startDate)} → {allocation.endDate ? isoDate(allocation.endDate) : "open-ended"}
       </div>

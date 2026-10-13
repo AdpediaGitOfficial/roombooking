@@ -26,15 +26,15 @@ async function AllocationList({ searchParams }: { searchParams: Promise<{ filter
           <Link
             key={f}
             href={`/accommodation/allocations?filter=${f}`}
-            className={`rounded-full px-3 py-1 ${f === filter ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900" : "border border-zinc-300 dark:border-zinc-700"}`}
+            className={`rounded-full px-3 py-1 ${f === filter ? "bg-deep text-white" : "border border-zinc-300"}`}
           >
             {label}
           </Link>
         ))}
       </nav>
-      <div className="mt-4 overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-800">
+      <div className="mt-4 overflow-x-auto card">
         <table className="w-full text-sm">
-          <thead className="bg-zinc-50 text-left text-xs uppercase tracking-wide text-zinc-500 dark:bg-zinc-900">
+          <thead className="bg-zinc-50 text-left text-xs uppercase tracking-wide text-zinc-500">
             <tr>
               <th className="px-3 py-2">Resident</th>
               <th className="px-3 py-2">Bed</th>
@@ -43,7 +43,7 @@ async function AllocationList({ searchParams }: { searchParams: Promise<{ filter
               <th className="px-3 py-2"></th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
+          <tbody className="divide-y divide-zinc-200">
             {allocations.map((a) => (
               <tr key={a.id} data-allocation={a.id}>
                 <td className="px-3 py-3">
@@ -80,10 +80,10 @@ export default function AllocationsPage({ searchParams }: PageProps<"/accommodat
     <main>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold">Allocations</h1>
-          <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">Who is in which bed, arrivals and departures.</p>
+          <h1 className="page-title">Allocations</h1>
+          <p className="mt-1 text-sm text-zinc-600">Who is in which bed, arrivals and departures.</p>
         </div>
-        <Link href="/accommodation/allocations/new" className="rounded-md bg-zinc-900 px-3 py-2 text-sm font-medium text-white dark:bg-zinc-100 dark:text-zinc-900">
+        <Link href="/accommodation/allocations/new" className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-ink">
           New allocation
         </Link>
       </div>

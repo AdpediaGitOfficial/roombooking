@@ -20,11 +20,11 @@ async function Content({ params }: { params: Params }) {
   const canClaim = open && (!mine || (mine.outcome !== "PENDING" && mine.outcome !== "VERIFIED"));
   return (
     <>
-      <div className="mt-1 flex flex-wrap items-center gap-2"><h1 className="text-2xl font-semibold">{item.description}</h1><StatusBadge status={item.status} /></div>
+      <div className="mt-1 flex flex-wrap items-center gap-2"><h1 className="page-title">{item.description}</h1><StatusBadge status={item.status} /></div>
       <p className="mt-1 text-xs text-zinc-500">{item.reference}{item.category ? ` · ${item.category}` : ""} · found {when(item.foundAt)}{item.foundLocation ? ` at ${item.foundLocation}` : ""} · {item.site.name}</p>
       <div className="mt-3"><PhotoStrip photos={photos} /></div>
       {mine && (
-        <section className="mt-5 rounded-lg border border-zinc-200 p-3 text-sm dark:border-zinc-800" data-my-claim-status>
+        <section className="mt-5 card p-3 text-sm" data-my-claim-status>
           <div className="flex flex-wrap items-center justify-between gap-2"><span className="font-medium">Your claim</span><OutcomeBadge outcome={mine.outcome} /></div>
           <p className="mt-1">{mine.evidence}</p>
           <p className="mt-1 text-xs text-zinc-500">{mine.outcome === "PENDING" ? "The office will check this and let you know." : mine.outcome === "VERIFIED" ? (item.status === "RETURNED" ? `Handed over ${item.handedOverAt ? when(item.handedOverAt) : ""}.` : "Verified. Collect it from the accommodation office with your ID.") : mine.decisionNote ?? ""}</p>

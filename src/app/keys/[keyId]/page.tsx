@@ -31,16 +31,16 @@ async function Content({ params }: { params: Promise<{ keyId: string }> }) {
   return (
     <>
       <div className="mt-1 flex flex-wrap items-center gap-3">
-        <h1 className="text-2xl font-semibold">Key {key.code}</h1>
+        <h1 className="page-title">Key {key.code}</h1>
         <KeyStatusBadge status={key.status} />
       </div>
-      <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">{key.label ? `${key.label} · ` : ""}{keyLocation(key)}{key.allowCopies ? " · copies exist" : ""}</p>
+      <p className="mt-1 text-sm text-zinc-600">{key.label ? `${key.label} · ` : ""}{keyLocation(key)}{key.allowCopies ? " · copies exist" : ""}</p>
       {key.replaces && <p className="mt-1 text-xs text-zinc-500">Replaces <Link href={`/keys/${key.replaces.id}`} className="underline">{key.replaces.code}</Link></p>}
       {key.replacedBy.length > 0 && <p className="mt-1 text-xs text-zinc-500">Replaced by {key.replacedBy.map((k) => <Link key={k.id} href={`/keys/${k.id}`} className="underline">{k.code}</Link>)}</p>}
       {key.notes && <p className="mt-2 text-sm">{key.notes}</p>}
 
       {issue && (
-        <div data-holder className={`mt-4 rounded-lg p-3 text-sm ${isOverdue(issue, now) ? "bg-red-50 text-red-900 dark:bg-red-950 dark:text-red-200" : "bg-blue-50 text-blue-900 dark:bg-blue-950 dark:text-blue-200"}`}>
+        <div data-holder className={`mt-4 rounded-lg p-3 text-sm ${isOverdue(issue, now) ? "bg-red-50 text-red-900" : "bg-blue-50 text-blue-900"}`}>
           <div className="font-medium">Held by {holderLabel(issue)}</div>
           <div className="mt-0.5 text-xs">Issued {issue.createdAt.toISOString().replace("T", " ").slice(0, 16)} by {issue.custodian.name}{issue.expectedReturnAt ? ` · expected back ${issue.expectedReturnAt.toISOString().slice(0, 10)}` : ""}{isOverdue(issue, now) ? " · overdue" : ""}{key.status === "LOST" ? " · reported lost while issued" : ""}</div>
         </div>
@@ -48,12 +48,12 @@ async function Content({ params }: { params: Promise<{ keyId: string }> }) {
 
       <div className="mt-6 grid gap-6 md:grid-cols-2">
         <section>
-          <h2 className="text-lg font-semibold">History</h2>
+          <h2 className="section-title">History</h2>
           <p className="mb-2 text-xs text-zinc-500">Every issue, return and exception is kept permanently.</p>
           <TransactionHistory transactions={key.transactions} />
         </section>
         <section className="space-y-4">
-          <h2 className="text-lg font-semibold">Actions</h2>
+          <h2 className="section-title">Actions</h2>
           {canOperate && key.status === "AVAILABLE" && <IssueKeyForm keyId={key.id} staff={staff} />}
           {canOperate && issue && key.status === "ISSUED" && <ReturnKeyForm keyId={key.id} />}
           <KeyExceptionForm keyId={key.id} kinds={exceptionKinds} withIncident={key.status === "ISSUED" || key.status === "AVAILABLE"} />

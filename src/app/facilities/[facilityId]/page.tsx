@@ -31,24 +31,24 @@ async function Content({ params, searchParams }: { params: Params; searchParams:
   return (
     <>
       <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-2xl font-semibold">{facility.name}</h1>
-        <span className="rounded-full border border-zinc-300 px-2 py-0.5 text-xs dark:border-zinc-700">{facility.status === "ACTIVE" ? "Active" : "Inactive"}</span>
-        {facility.requiresApproval && <span className="rounded-full border border-amber-300 px-2 py-0.5 text-xs text-amber-800 dark:border-amber-700 dark:text-amber-300">Approval required</span>}
+        <h1 className="page-title">{facility.name}</h1>
+        <span className="rounded-full border border-zinc-300 px-2 py-0.5 text-xs">{facility.status === "ACTIVE" ? "Active" : "Inactive"}</span>
+        {facility.requiresApproval && <span className="rounded-full border border-amber-300 px-2 py-0.5 text-xs text-amber-800">Approval required</span>}
       </div>
-      <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">{facility.site.name}{facility.location ? ` · ${facility.location}` : ""} · {facility.code} · holds {facility.capacity} · {tz}</p>
+      <p className="mt-1 text-sm text-zinc-600">{facility.site.name}{facility.location ? ` · ${facility.location}` : ""} · {facility.code} · holds {facility.capacity} · {tz}</p>
 
       <section className="mt-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-lg font-semibold">Schedule · {date}</h2>
+          <h2 className="section-title">Schedule · {date}</h2>
           <DayNav base={base} date={date} prev={addDaysIso(date, -1)} next={addDaysIso(date, 1)} today={today} />
         </div>
         <div className="mt-3"><SlotGrid slots={slots} capacity={facility.capacity} date={date} closed={slots.length === 0} /></div>
-        <div className="mt-4 overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-800">
+        <div className="mt-4 overflow-x-auto card">
           <table className="w-full text-sm">
-            <thead className="bg-zinc-50 text-left text-xs uppercase tracking-wide text-zinc-500 dark:bg-zinc-900">
+            <thead className="bg-zinc-50 text-left text-xs uppercase tracking-wide text-zinc-500">
               <tr><th className="px-3 py-2">Time</th><th className="px-3 py-2">Booked by</th><th className="px-3 py-2">People</th><th className="px-3 py-2">Status</th>{canOperate && <th className="px-3 py-2">Actions</th>}</tr>
             </thead>
-            <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
+            <tbody className="divide-y divide-zinc-200">
               {bookings.map((b) => {
                 const when = bookingWhen(b);
                 const started = b.startsAt <= now;
@@ -79,7 +79,7 @@ async function Content({ params, searchParams }: { params: Params; searchParams:
 
       {users && facility.status === "ACTIVE" && slots.length > 0 && (
         <section className="mt-6">
-          <h2 className="text-lg font-semibold">Book on behalf</h2>
+          <h2 className="section-title">Book on behalf</h2>
           <div className="mt-2">
             <BookingForm facilityId={facility.id} facilityName={facility.name} date={date} capacity={facility.capacity} rules={rules} users={users} returnPath={returnPath}
               slots={slots.map((s) => ({ label: s.label, remaining: s.remaining, past: s.past }))} />
@@ -89,7 +89,7 @@ async function Content({ params, searchParams }: { params: Params; searchParams:
 
       {canManage && (
         <section className="mt-6">
-          <h2 className="text-lg font-semibold">Settings</h2>
+          <h2 className="section-title">Settings</h2>
           <div className="mt-2"><FacilityConfigForm facility={{ id: facility.id, name: facility.name, location: facility.location, description: facility.description, capacity: facility.capacity, requiresApproval: facility.requiresApproval, status: facility.status }} hours={hours} rules={rules} /></div>
         </section>
       )}

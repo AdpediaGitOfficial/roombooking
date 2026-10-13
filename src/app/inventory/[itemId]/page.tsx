@@ -33,14 +33,14 @@ async function Content({ params }: { params: Params }) {
   return (
     <>
       <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-2xl font-semibold">{item.name}</h1>
+        <h1 className="page-title">{item.name}</h1>
         <ItemStateBadge item={item} />
         {serialised && <ConditionBadge condition={item.condition} />}
       </div>
-      <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">{item.sku}{item.serialNumber ? ` · serial #${item.serialNumber}` : ""} · {item.category} · {item.site.name}</p>
-      {isLowStock(item) && <p data-low-stock className="mt-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-950 dark:text-amber-200">Low stock: {item.quantity} {item.unit} on hand, reorder threshold {item.reorderThreshold}.</p>}
+      <p className="mt-1 text-sm text-zinc-600">{item.sku}{item.serialNumber ? ` · serial #${item.serialNumber}` : ""} · {item.category} · {item.site.name}</p>
+      {isLowStock(item) && <p data-low-stock className="mt-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">Low stock: {item.quantity} {item.unit} on hand, reorder threshold {item.reorderThreshold}.</p>}
 
-      <dl className="mt-4 grid grid-cols-2 gap-3 rounded-lg border border-zinc-200 p-4 sm:grid-cols-4 dark:border-zinc-800">
+      <dl className="mt-4 grid grid-cols-2 gap-3 card p-4 sm:grid-cols-4">
         <Field label={serialised ? "In store" : "On hand"}><span data-on-hand className="text-lg font-semibold tabular-nums">{serialised ? (item.quantity === 1 ? "Yes" : "No") : `${item.quantity} ${item.unit}`}</span></Field>
         {!serialised && <Field label="Issued out">{outstanding.reduce((s, o) => s + o.quantity, 0)} {item.unit}</Field>}
         {!serialised && <Field label="Reorder threshold">{item.reorderThreshold ?? "—"}</Field>}
@@ -53,8 +53,8 @@ async function Content({ params }: { params: Params }) {
 
       {!serialised && outstanding.length > 0 && (
         <section className="mt-6">
-          <h2 className="text-lg font-semibold">Currently issued</h2>
-          <ul data-outstanding className="mt-2 divide-y divide-zinc-200 rounded-lg border border-zinc-200 text-sm dark:divide-zinc-800 dark:border-zinc-800">
+          <h2 className="section-title">Currently issued</h2>
+          <ul data-outstanding className="mt-2 divide-y divide-zinc-200 card text-sm">
             {outstanding.map((o) => <li key={`${o.roomId}${o.staffId}${o.facilityId}`} className="flex justify-between p-3"><span>{o.label}</span><span className="tabular-nums">{o.quantity} {item.unit}</span></li>)}
           </ul>
         </section>
@@ -62,7 +62,7 @@ async function Content({ params }: { params: Params }) {
 
       {canOperate && active && options && (
         <section className="mt-6">
-          <h2 className="text-lg font-semibold">Actions</h2>
+          <h2 className="section-title">Actions</h2>
           <div className="mt-3 grid gap-4 sm:grid-cols-2">
             {!serialised && <MovementForm kind="RECEIVE" {...base} />}
             {(serialised ? !open && item.condition !== "DAMAGED" : item.quantity > 0) && <MovementForm kind="ISSUE" {...base} options={options} />}
@@ -78,7 +78,7 @@ async function Content({ params }: { params: Params }) {
       {canManage && active && <section className="mt-6"><EditItemForm item={item} /></section>}
 
       <section className="mt-6">
-        <h2 className="text-lg font-semibold">History</h2>
+        <h2 className="section-title">History</h2>
         <div className="mt-2"><TransactionTable rows={transactions} /></div>
       </section>
     </>

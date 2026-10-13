@@ -4,11 +4,11 @@ import { useActionState } from "react";
 import { retryAction, runWorkerAction, sendTestEmailAction, sendTestWhatsAppAction, setEmailPreferenceAction, setWhatsAppPreferenceAction, type ActionState } from "../actions";
 
 function Feedback({ state }: { state: ActionState }) {
-  if (state.error) return <p role="alert" className="mt-2 text-sm text-red-700 dark:text-red-300">{state.error}</p>;
-  if (state.message) return <p role="status" className="mt-2 text-sm text-green-700 dark:text-green-300">{state.message}</p>;
+  if (state.error) return <p role="alert" className="mt-2 text-sm text-red-700">{state.error}</p>;
+  if (state.message) return <p role="status" className="mt-2 text-sm text-green-700">{state.message}</p>;
   return null;
 }
-const secondary = "rounded-md border border-zinc-300 px-3 py-2 text-sm font-medium disabled:opacity-60 dark:border-zinc-700";
+const secondary = "rounded-md border border-zinc-300 px-3 py-2 text-sm font-medium disabled:opacity-60";
 
 export function RunWorkerButton() {
   const [state, action, pending] = useActionState<ActionState, FormData>(async () => runWorkerAction(), {});
@@ -31,7 +31,7 @@ export function RetryButton({ id }: { id: string }) {
     <form action={action} className="inline">
       <input type="hidden" name="id" value={id} />
       <button type="submit" disabled={pending} className="text-xs underline disabled:opacity-60">Retry</button>
-      {state.error && <span role="alert" className="ml-2 text-xs text-red-700 dark:text-red-300">{state.error}</span>}
+      {state.error && <span role="alert" className="ml-2 text-xs text-red-700">{state.error}</span>}
     </form>
   );
 }
@@ -56,7 +56,7 @@ export function WhatsAppPreferenceForm({ number, enabled, consentAt, suggestedNu
   const v = state.values;
   return (
     <form key={v ? JSON.stringify(v) : "initial"} action={action} data-whatsapp-preference>
-      <label className="block text-sm">WhatsApp number<input name="whatsappNumber" type="tel" defaultValue={v ? v.whatsappNumber : number || suggestedNumber || ""} placeholder="+971 50 123 4567" className="mt-1 block w-full rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900" /></label>
+      <label className="block text-sm">WhatsApp number<input name="whatsappNumber" type="tel" defaultValue={v ? v.whatsappNumber : number || suggestedNumber || ""} placeholder="+971 50 123 4567" className="mt-1 block w-full rounded-md border border-zinc-300 px-3 py-2 text-sm" /></label>
       <label className="mt-3 flex items-start gap-3 text-sm">
         <input type="checkbox" name="whatsappNotifications" defaultChecked={v ? v.whatsappNotifications === "on" : enabled} className="mt-1 h-5 w-5" />
         <span>Send me WhatsApp messages about my accommodation (allocation, requests, maintenance, bookings, lost and found)</span>

@@ -18,7 +18,7 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 async function StayContent() {
   const { staff } = await requireResident("/my/stay");
   if (!staff) {
-    return <p className="mt-4 text-sm text-zinc-600 dark:text-zinc-400">Your account is not linked to a staff record yet. Contact the accommodation office.</p>;
+    return <p className="mt-4 text-sm text-zinc-600">Your account is not linked to a staff record yet. Contact the accommodation office.</p>;
   }
   const [stay, heldKeys, heldItems] = await Promise.all([getMyStay(staff.id), keysHeldBy(staff.id), itemsHeldBy({ staffId: staff.id })]);
   const site = stay.current?.bed.room.building.site ?? stay.upcoming?.bed.room.building.site ?? null;
@@ -28,7 +28,7 @@ async function StayContent() {
       <StayCard allocation={stay.current} />
 
       {stay.current && (
-        <dl className="mt-4 divide-y divide-zinc-200 rounded-lg border border-zinc-200 px-4 dark:divide-zinc-800 dark:border-zinc-800">
+        <dl className="mt-4 divide-y divide-zinc-200 card px-4">
           <Row label="Status">{stay.current.status === "CHECKED_IN" ? "Checked in" : "Allocated, not yet checked in"}</Row>
           <Row label="Room type">{stay.current.bed.room.type?.toLowerCase() ?? "room"}</Row>
           {stay.roomSharing && (
@@ -41,16 +41,16 @@ async function StayContent() {
 
       {stay.upcoming && (
         <section className="mt-6">
-          <h2 className="text-lg font-semibold">{stay.current ? "Your next bed" : "Upcoming stay"}</h2>
+          <h2 className="section-title">{stay.current ? "Your next bed" : "Upcoming stay"}</h2>
           <div className="mt-2"><StayCard allocation={stay.upcoming} /></div>
         </section>
       )}
 
       {heldItems.length > 0 && (
         <section className="mt-6" data-held-items>
-          <h2 className="text-lg font-semibold">Items issued to you</h2>
+          <h2 className="section-title">Items issued to you</h2>
           <p className="mt-1 text-xs text-zinc-500">Return these at check-out.</p>
-          <ul className="mt-2 divide-y divide-zinc-200 rounded-lg border border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
+          <ul className="mt-2 divide-y divide-zinc-200 card">
             {heldItems.map((h) => (
               <li key={h.itemId} className="flex justify-between gap-3 p-3 text-sm">
                 <div className="font-medium">{h.name}{h.serialNumber ? ` #${h.serialNumber}` : ""}</div>
@@ -63,8 +63,8 @@ async function StayContent() {
 
       {heldKeys.length > 0 && (
         <section className="mt-6" data-held-keys>
-          <h2 className="text-lg font-semibold">Keys you hold</h2>
-          <ul className="mt-2 divide-y divide-zinc-200 rounded-lg border border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
+          <h2 className="section-title">Keys you hold</h2>
+          <ul className="mt-2 divide-y divide-zinc-200 card">
             {heldKeys.map((t) => (
               <li key={t.id} className="flex justify-between gap-3 p-3 text-sm">
                 <div>
@@ -79,9 +79,9 @@ async function StayContent() {
       )}
 
       <section className="mt-6">
-        <h2 className="text-lg font-semibold">Accommodation office</h2>
+        <h2 className="section-title">Accommodation office</h2>
         {site ? (
-          <dl className="mt-2 divide-y divide-zinc-200 rounded-lg border border-zinc-200 px-4 dark:divide-zinc-800 dark:border-zinc-800">
+          <dl className="mt-2 divide-y divide-zinc-200 card px-4">
             <Row label="Site">{site.name}</Row>
             {site.contactPhone && <Row label="Phone"><a href={`tel:${site.contactPhone}`} className="underline">{site.contactPhone}</a></Row>}
             {site.contactEmail && <Row label="Email"><a href={`mailto:${site.contactEmail}`} className="underline">{site.contactEmail}</a></Row>}
@@ -94,8 +94,8 @@ async function StayContent() {
 
       {stay.history.length > 0 && (
         <section className="mt-6">
-          <h2 className="text-lg font-semibold">Previous stays</h2>
-          <ul className="mt-2 divide-y divide-zinc-200 rounded-lg border border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
+          <h2 className="section-title">Previous stays</h2>
+          <ul className="mt-2 divide-y divide-zinc-200 card">
             {stay.history.map((a) => (
               <li key={a.id} className="flex justify-between gap-3 p-3 text-sm">
                 <div>
@@ -115,7 +115,7 @@ async function StayContent() {
 export default function MyStayPage() {
   return (
     <main>
-      <h1 className="text-2xl font-semibold">My stay</h1>
+      <h1 className="page-title">My stay</h1>
       <div className="mt-4">
         <Suspense fallback={<p className="text-sm text-zinc-500">Loading…</p>}>
           <StayContent />

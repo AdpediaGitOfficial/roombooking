@@ -22,7 +22,7 @@ async function Overview() {
   return (
     <div className="grid gap-4 sm:grid-cols-2">
       {cards.map(([title, href, blurb, stats]) => (
-        <Link key={href} href={href} data-report-card={title} className="rounded-lg border border-zinc-200 p-4 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-900">
+        <Link key={href} href={href} data-report-card={title} className="card p-4 hover:bg-zinc-50">
           <div className="font-medium">{title}</div>
           <div className="mt-0.5 text-xs text-zinc-500">{blurb}</div>
           <dl className="mt-3 grid grid-cols-3 gap-2">{stats.map(([l, v]) => <div key={l}><dt className="text-xs text-zinc-500">{l}</dt><dd className="text-lg font-semibold tabular-nums">{v}</dd></div>)}</dl>
@@ -35,8 +35,8 @@ async function Overview() {
 export default function ReportsPage() {
   return (
     <main>
-      <h1 className="text-2xl font-semibold">Reports</h1>
-      <p className="mt-1 mb-6 text-sm text-zinc-600 dark:text-zinc-400">Last 30 days across the sites you can see. Each report has date, site, building, status and category filters and a CSV export.</p>
+      <h1 className="page-title">Reports</h1>
+      <p className="mt-1 mb-6 text-sm text-zinc-600">Last 30 days across the sites you can see. Each report has date, site, building, status and category filters and a CSV export.</p>
       <Suspense fallback={<p className="text-sm text-zinc-500">Loading…</p>}>
         <Overview />
       </Suspense>

@@ -13,7 +13,7 @@ async function Content({ params }: { params: Params }) {
   if (!a) notFound();
   return (
     <>
-      <h1 className="text-2xl font-semibold">{a.title}</h1>
+      <h1 className="page-title">{a.title}</h1>
       <p className="mt-1 text-xs text-zinc-500">{a.sentAt ? a.sentAt.toISOString().slice(0, 16).replace("T", " ") : ""}{a.sentBy ? ` · ${a.sentBy.name}` : ""}</p>
       <div data-announcement-body className="mt-4 whitespace-pre-line text-base">{a.body}</div>
       <p className="mt-6 text-sm"><Link href="/my/announcements" className="underline">← All announcements</Link></p>

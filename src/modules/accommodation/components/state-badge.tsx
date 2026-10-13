@@ -1,11 +1,11 @@
 import type { BedState } from "../occupancy";
 
 const STYLES: Record<BedState, string> = {
-  OCCUPIED: "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-200",
-  ALLOCATED: "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-200",
-  VACANT: "bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-200",
-  BLOCKED: "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-200",
-  RETIRED: "bg-zinc-200 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",
+  OCCUPIED: "bg-blue-100 text-blue-800",
+  ALLOCATED: "bg-amber-100 text-amber-800",
+  VACANT: "bg-green-100 text-green-800",
+  BLOCKED: "bg-red-100 text-red-800",
+  RETIRED: "bg-zinc-200 text-zinc-700",
 };
 
 const LABELS: Record<BedState, string> = {

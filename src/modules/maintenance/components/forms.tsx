@@ -5,16 +5,16 @@ import type { WorkOrderStatus } from "@prisma/client";
 import { assignAction, createWorkOrderAction, noteAction, statusAction, triageAction, type ActionState, type FormState } from "../actions";
 
 function Feedback({ state }: { state: ActionState | FormState }) {
-  if (state.error) return <p role="alert" className="mt-2 text-sm text-red-700 dark:text-red-300">{state.error}</p>;
-  if ("message" in state && state.message) return <p role="status" className="mt-2 text-sm text-green-700 dark:text-green-300">{state.message}</p>;
+  if (state.error) return <p role="alert" className="mt-2 text-sm text-red-700">{state.error}</p>;
+  if ("message" in state && state.message) return <p role="status" className="mt-2 text-sm text-green-700">{state.message}</p>;
   return null;
 }
 
-const input = "mt-1 block w-full rounded-md border border-zinc-300 px-3 py-3 text-base dark:border-zinc-700 dark:bg-zinc-900";
-const inputSm = "mt-1 block w-full rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900";
-const primary = "rounded-md bg-zinc-900 px-4 py-3 text-base font-medium text-white disabled:opacity-60 dark:bg-zinc-100 dark:text-zinc-900";
-const secondary = "rounded-md border border-zinc-300 px-3 py-2 text-sm font-medium disabled:opacity-60 dark:border-zinc-700";
-const panel = "rounded-lg border border-zinc-200 p-4 dark:border-zinc-800";
+const input = "mt-1 block w-full rounded-md border border-zinc-300 px-3 py-3 text-base";
+const inputSm = "mt-1 block w-full rounded-md border border-zinc-300 px-3 py-2 text-sm";
+const primary = "rounded-md bg-primary px-4 py-3 text-base font-medium text-primary-ink disabled:opacity-60";
+const secondary = "rounded-md border border-zinc-300 px-3 py-2 text-sm font-medium disabled:opacity-60";
+const panel = "card p-4";
 
 type LocationOption = { id: string; label: string };
 
@@ -46,7 +46,7 @@ export function NewWorkOrderForm(props: {
           </select>
         )}
         <input id="locationNote" name="locationNote" defaultValue={v.locationNote ?? ""} placeholder="Location details, e.g. kitchen on floor 2" className={`${input} mt-2`} />
-        {e.locationNote && <p role="alert" className="mt-1 text-sm text-red-700 dark:text-red-300">{e.locationNote}</p>}
+        {e.locationNote && <p role="alert" className="mt-1 text-sm text-red-700">{e.locationNote}</p>}
       </div>
 
       <div>
@@ -55,7 +55,7 @@ export function NewWorkOrderForm(props: {
           <option value="">Select…</option>
           {props.categories.map((c) => <option key={c} value={c}>{c}</option>)}
         </select>
-        {e.category && <p role="alert" className="mt-1 text-sm text-red-700 dark:text-red-300">{e.category}</p>}
+        {e.category && <p role="alert" className="mt-1 text-sm text-red-700">{e.category}</p>}
       </div>
 
       <div>
@@ -72,13 +72,13 @@ export function NewWorkOrderForm(props: {
       <div>
         <label htmlFor="description" className="block text-sm font-medium">What is wrong? *</label>
         <textarea id="description" name="description" rows={4} defaultValue={v.description ?? ""} className={input} />
-        {e.description && <p role="alert" className="mt-1 text-sm text-red-700 dark:text-red-300">{e.description}</p>}
+        {e.description && <p role="alert" className="mt-1 text-sm text-red-700">{e.description}</p>}
       </div>
 
       <div>
         <label htmlFor="photo" className="block text-sm font-medium">Photo (optional)</label>
         <input id="photo" name="photo" type="file" accept="image/jpeg,image/png,image/webp" className="mt-1 block w-full text-sm" />
-        {e.photo && <p role="alert" className="mt-1 text-sm text-red-700 dark:text-red-300">{e.photo}</p>}
+        {e.photo && <p role="alert" className="mt-1 text-sm text-red-700">{e.photo}</p>}
       </div>
 
       <div>
@@ -86,7 +86,7 @@ export function NewWorkOrderForm(props: {
         <input id="preferredContact" name="preferredContact" defaultValue={v.preferredContact ?? ""} placeholder="e.g. WhatsApp 050 123 4567, after 6pm" className={input} />
       </div>
 
-      {state.error && <p role="alert" className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">{state.error}</p>}
+      {state.error && <p role="alert" className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{state.error}</p>}
       <button type="submit" disabled={pending} className={`${primary} w-full`}>{pending ? "Submitting…" : "Submit request"}</button>
     </form>
   );
@@ -144,7 +144,7 @@ export function StatusForm(props: { workOrderId: string; options: WorkOrderStatu
       <textarea id={`status-note-${props.workOrderId}`} name="note" rows={2} className={inputSm} />
       <div className="mt-3 flex flex-wrap gap-2">
         {props.options.map((s) => (
-          <button key={s} type="submit" name="status" value={s} disabled={pending} className={s === "CANCELLED" || s === "REOPENED" ? "rounded-md border border-red-300 px-3 py-2 text-sm font-medium text-red-700 disabled:opacity-60 dark:border-red-800 dark:text-red-300" : s === "RESOLVED" || s === "CLOSED" ? "rounded-md bg-zinc-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-60 dark:bg-zinc-100 dark:text-zinc-900" : secondary}>
+          <button key={s} type="submit" name="status" value={s} disabled={pending} className={s === "CANCELLED" || s === "REOPENED" ? "rounded-md border border-red-300 px-3 py-2 text-sm font-medium text-red-700 disabled:opacity-60" : s === "RESOLVED" || s === "CLOSED" ? "rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-ink disabled:opacity-60" : secondary}>
             {STATUS_LABEL[s] ?? s}
           </button>
         ))}

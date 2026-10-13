@@ -4,14 +4,14 @@ import { zonedDateTime } from "@/lib/time";
 import { describeBookingStatus, type BookingRecord, type Slot } from "../service";
 
 const STATUS_CLASS: Record<BookingStatus, string> = {
-  PENDING_APPROVAL: "bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200",
-  CONFIRMED: "bg-green-100 text-green-900 dark:bg-green-950 dark:text-green-200",
-  CHECKED_IN: "bg-blue-100 text-blue-900 dark:bg-blue-950 dark:text-blue-200",
-  COMPLETED: "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",
-  CANCELLED: "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",
-  REJECTED: "bg-red-100 text-red-900 dark:bg-red-950 dark:text-red-200",
-  EXPIRED: "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",
-  NO_SHOW: "bg-red-100 text-red-900 dark:bg-red-950 dark:text-red-200",
+  PENDING_APPROVAL: "bg-amber-100 text-amber-900",
+  CONFIRMED: "bg-green-100 text-green-900",
+  CHECKED_IN: "bg-blue-100 text-blue-900",
+  COMPLETED: "bg-zinc-100 text-zinc-700",
+  CANCELLED: "bg-zinc-100 text-zinc-700",
+  REJECTED: "bg-red-100 text-red-900",
+  EXPIRED: "bg-zinc-100 text-zinc-700",
+  NO_SHOW: "bg-red-100 text-red-900",
 };
 
 export function BookingStatusBadge({ status }: { status: BookingStatus }) {
@@ -33,12 +33,12 @@ export function bookerName(b: BookingRecord): string {
 
 /** Availability strip for a day: one cell per slot with remaining places. */
 export function SlotGrid({ slots, capacity, date, closed }: { slots: Slot[]; capacity: number; date: string; closed: boolean }) {
-  if (closed) return <p data-slots="closed" className="rounded-lg border border-dashed border-zinc-300 p-3 text-sm text-zinc-600 dark:border-zinc-700 dark:text-zinc-400">Closed on {date}.</p>;
+  if (closed) return <p data-slots="closed" className="rounded-lg border border-dashed border-zinc-300 p-3 text-sm text-zinc-600">Closed on {date}.</p>;
   return (
     <ol data-slots={date} className="grid grid-cols-4 gap-1 sm:grid-cols-8" aria-label={`Availability on ${date}`}>
       {slots.map((s) => {
         const full = s.remaining === 0;
-        const tone = s.past ? "border-zinc-200 text-zinc-400 dark:border-zinc-800 dark:text-zinc-600" : full ? "border-red-200 bg-red-50 text-red-900 dark:border-red-900 dark:bg-red-950 dark:text-red-200" : s.booked > 0 ? "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200" : "border-green-200 bg-green-50 text-green-900 dark:border-green-900 dark:bg-green-950 dark:text-green-200";
+        const tone = s.past ? "border-zinc-200 text-zinc-400" : full ? "border-red-200 bg-red-50 text-red-900" : s.booked > 0 ? "border-amber-200 bg-amber-50 text-amber-900" : "border-green-200 bg-green-50 text-green-900";
         return (
           <li key={s.label} data-slot={s.label} data-remaining={s.remaining} className={`rounded border px-1 py-1 text-center text-xs tabular-nums ${tone}`} title={s.past ? "Past" : full ? "Full" : `${s.remaining} of ${capacity} free`}>
             <div className="font-medium">{s.label}</div>
@@ -53,14 +53,14 @@ export function SlotGrid({ slots, capacity, date, closed }: { slots: Slot[]; cap
 export function BookingCard({ b, href, children }: { b: BookingRecord; href?: string; children?: React.ReactNode }) {
   const when = bookingWhen(b);
   return (
-    <li data-booking={b.id} className="rounded-lg border border-zinc-200 p-3 text-sm dark:border-zinc-800">
+    <li data-booking={b.id} className="card p-3 text-sm">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="font-medium">{href ? <Link href={href} className="underline">{b.facility.name}</Link> : b.facility.name}</div>
         <BookingStatusBadge status={b.status} />
       </div>
-      <div className="mt-1 text-zinc-600 dark:text-zinc-400">{when.date} · {when.start}–{when.end} · {b.headcount} {b.headcount === 1 ? "person" : "people"}</div>
+      <div className="mt-1 text-zinc-600">{when.date} · {when.start}–{when.end} · {b.headcount} {b.headcount === 1 ? "person" : "people"}</div>
       {b.purpose && <div className="mt-1 text-xs text-zinc-500">{b.purpose}</div>}
-      {b.status === "REJECTED" && b.decisionNote && <div className="mt-1 text-xs text-red-700 dark:text-red-300">Declined: {b.decisionNote}</div>}
+      {b.status === "REJECTED" && b.decisionNote && <div className="mt-1 text-xs text-red-700">Declined: {b.decisionNote}</div>}
       {b.status === "CANCELLED" && b.cancelReason && <div className="mt-1 text-xs text-zinc-500">{b.cancelReason}</div>}
       {children && <div className="mt-2">{children}</div>}
     </li>
@@ -69,11 +69,11 @@ export function BookingCard({ b, href, children }: { b: BookingRecord; href?: st
 
 /** Links to move between days plus a date picker (plain GET form, no JavaScript needed). */
 export function DayNav({ base, date, prev, next, today }: { base: string; date: string; prev: string; next: string; today: string }) {
-  const link = "rounded-md border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700";
+  const link = "rounded-md border border-zinc-300 px-3 py-1.5 text-sm";
   return (
     <form method="get" action={base} className="flex flex-wrap items-center gap-2">
       <Link href={`${base}?date=${prev}`} className={link} aria-label="Previous day">‹</Link>
-      <input type="date" name="date" defaultValue={date} min={today} className="rounded-md border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900" aria-label="Date" />
+      <input type="date" name="date" defaultValue={date} min={today} className="rounded-md border border-zinc-300 px-2 py-1.5 text-sm" aria-label="Date" />
       <button type="submit" className={link}>Go</button>
       <Link href={`${base}?date=${next}`} className={link} aria-label="Next day">›</Link>
       {date !== today && <Link href={base} className="text-sm underline">Today</Link>}

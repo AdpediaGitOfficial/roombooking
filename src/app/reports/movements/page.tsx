@@ -51,8 +51,8 @@ async function Content({ searchParams }: { searchParams: Search }) {
 export default function MovementsReportPage({ searchParams }: PageProps<"/reports/movements">) {
   return (
     <main>
-      <h1 className="text-2xl font-semibold">Staff movements</h1>
-      <p className="mt-1 mb-6 text-sm text-zinc-600 dark:text-zinc-400">Allocation history: arrivals, departures, transfers and cancellations.</p>
+      <h1 className="page-title">Staff movements</h1>
+      <p className="mt-1 mb-6 text-sm text-zinc-600">Allocation history: arrivals, departures, transfers and cancellations.</p>
       <Suspense fallback={<p className="text-sm text-zinc-500">Loading…</p>}><Content searchParams={searchParams as Search} /></Suspense>
     </main>
   );

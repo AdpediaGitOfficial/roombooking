@@ -18,9 +18,9 @@ async function ProfileContent() {
   return (
     <>
       <section>
-        <h2 className="text-lg font-semibold">Employment record</h2>
+        <h2 className="section-title">Employment record</h2>
         <p className="mt-1 text-xs text-zinc-500">Managed by HR and the accommodation office. Contact them for corrections.</p>
-        <dl className="mt-2 divide-y divide-zinc-200 rounded-lg border border-zinc-200 px-4 dark:divide-zinc-800 dark:border-zinc-800">
+        <dl className="mt-2 divide-y divide-zinc-200 card px-4">
           <Row label="Name">{staff ? `${staff.firstName} ${staff.lastName}` : user.name}</Row>
           <Row label="Email">{user.email}</Row>
           {staff && <Row label="Employee ID">{staff.employeeId}</Row>}
@@ -32,7 +32,7 @@ async function ProfileContent() {
 
       {staff && (
         <section className="mt-8">
-          <h2 className="text-lg font-semibold">Contact details</h2>
+          <h2 className="section-title">Contact details</h2>
           <div className="mt-2">
             <ProfileForm phone={staff.phone ?? ""} emergencyContactName={staff.emergencyContactName ?? ""} emergencyContactPhone={staff.emergencyContactPhone ?? ""} />
           </div>
@@ -40,20 +40,20 @@ async function ProfileContent() {
       )}
 
       <section className="mt-8">
-        <h2 className="text-lg font-semibold">Notifications</h2>
+        <h2 className="section-title">Notifications</h2>
         <div className="mt-2"><EmailPreferenceForm enabled={user.emailNotifications} /></div>
         <h3 className="mt-6 font-medium">WhatsApp</h3>
         <div className="mt-2"><WhatsAppPreferenceForm number={user.whatsappNumber ?? ""} enabled={user.whatsappNotifications} consentAt={user.whatsappConsentAt ? user.whatsappConsentAt.toISOString().slice(0, 10) : null} suggestedNumber={staff?.phone} /></div>
       </section>
 
       <section className="mt-8">
-        <h2 className="text-lg font-semibold">Password</h2>
+        <h2 className="section-title">Password</h2>
         <div className="mt-2"><PasswordForm /></div>
       </section>
 
       <section className="mt-8">
         <form action={logout}>
-          <button type="submit" className="w-full rounded-md border border-zinc-300 px-4 py-3 text-base dark:border-zinc-700">Sign out</button>
+          <button type="submit" className="w-full rounded-md border border-zinc-300 px-4 py-3 text-base">Sign out</button>
         </form>
       </section>
     </>
@@ -63,7 +63,7 @@ async function ProfileContent() {
 export default function MyProfilePage() {
   return (
     <main>
-      <h1 className="text-2xl font-semibold">Profile</h1>
+      <h1 className="page-title">Profile</h1>
       <div className="mt-4">
         <Suspense fallback={<p className="text-sm text-zinc-500">Loading…</p>}>
           <ProfileContent />

@@ -1,54 +1,241 @@
 @import "tailwindcss";
 
+/* Fynix minimal design system (light theme, subtle glass).
+   Tokens below drive both the Tailwind palette the pages use and the shell. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --bg: #f8f8f8;
+  --surface: #ffffff;
+  --surface-soft: #f1f3f1;
+  --border: #e3e7e3;
+  --text: #17211d;
+  --muted: #69746e;
+  --primary: #97d766;
+  --primary-hover: #8aca5b;
+  --primary-light: #b1ea90;
+  --primary-soft: #f5fbef;
+  --primary-ink: #17321f;
+  --deep: #3c6558;
+  --success: #23784b;
+  --success-bg: #f5fbef;
+  --warning: #946313;
+  --warning-bg: #fbf3df;
+  --danger: #b53c3c;
+  --danger-bg: #fbeaea;
+  --info: #355d8a;
+  --info-bg: #edf3fa;
+  --radius: 14px;
+  --shadow: 0 2px 10px rgba(20, 35, 27, 0.035);
+  --glass: rgba(255, 255, 255, 0.78);
+  --glass-control: rgba(255, 255, 255, 0.72);
+  --glass-border: rgba(60, 101, 88, 0.12);
+  --glass-shadow: 0 8px 24px rgba(40, 68, 56, 0.045), inset 0 1px 0 rgba(255, 255, 255, 0.82);
+  color-scheme: light;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-inter), Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --radius-sm: 6px;
+  --radius-md: 9px;
+  --radius-lg: 14px;
+  --radius-xl: 18px;
+
+  --color-background: var(--bg);
+  --color-foreground: var(--text);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-ink: var(--primary-ink);
+  --color-primary-soft: var(--primary-soft);
+  --color-deep: var(--deep);
+
+  /* Neutrals: the zinc scale the pages already use, in the system's green-tinted greys. */
+  --color-zinc-50: #f8f9f8;
+  --color-zinc-100: #f1f3f1;
+  --color-zinc-200: #e3e7e3;
+  --color-zinc-300: #d9dfda;
+  --color-zinc-400: #9aa39e;
+  --color-zinc-500: #69746e;
+  --color-zinc-600: #4e5a53;
+  --color-zinc-700: #3b463f;
+  --color-zinc-800: #2a332d;
+  --color-zinc-900: #17211d;
+  --color-zinc-950: #0f1613;
+
+  /* Status colours: green = success, amber/orange = warning, red = danger, blue = info. */
+  --color-green-50: #f5fbef;
+  --color-green-100: #e6f5d6;
+  --color-green-200: #cdebb0;
+  --color-green-300: #b1ea90;
+  --color-green-600: #2a8c58;
+  --color-green-700: #23784b;
+  --color-green-800: #1f6a42;
+  --color-green-900: #1a5636;
+  --color-amber-50: #fbf3df;
+  --color-amber-100: #f7e8c4;
+  --color-amber-200: #efd99f;
+  --color-amber-300: #e2c27a;
+  --color-amber-700: #946313;
+  --color-amber-800: #7f5410;
+  --color-amber-900: #684510;
+  --color-orange-50: #fbf3df;
+  --color-orange-100: #f7e8c4;
+  --color-orange-200: #efd99f;
+  --color-orange-300: #e2c27a;
+  --color-orange-700: #946313;
+  --color-orange-800: #7f5410;
+  --color-orange-900: #684510;
+  --color-yellow-50: #fbf3df;
+  --color-yellow-100: #f7e8c4;
+  --color-yellow-700: #946313;
+  --color-yellow-800: #7f5410;
+  --color-yellow-900: #684510;
+  --color-red-50: #fbeaea;
+  --color-red-100: #f6d6d6;
+  --color-red-200: #efbdbd;
+  --color-red-300: #e3a0a0;
+  --color-red-600: #c04444;
+  --color-red-700: #b53c3c;
+  --color-red-800: #9d3333;
+  --color-red-900: #822a2a;
+  --color-blue-50: #edf3fa;
+  --color-blue-100: #dce8f5;
+  --color-blue-200: #c3d6ea;
+  --color-blue-300: #9dbbdb;
+  --color-blue-600: #3b6a9e;
+  --color-blue-700: #355d8a;
+  --color-blue-800: #2e5079;
+  --color-blue-900: #264263;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@layer base {
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  h1, h2, h3 { text-wrap: pretty; }
+  th { font-weight: 650; }
+  /* Form controls: translucent surface, fine border, green focus ring. */
+  :is(input:not([type="checkbox"], [type="radio"], [type="file"], [type="range"], [type="color"]), select, textarea) {
+    background: var(--glass-control);
+    border-color: rgba(60, 101, 88, 0.16);
+    border-radius: var(--radius-md);
+    color: var(--text);
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
+  }
+  :is(input, select, textarea):focus-visible {
+    outline: none;
+    border-color: #83c95a;
+    box-shadow: 0 0 0 3px rgba(139, 220, 88, 0.16);
+  }
+  /* Buttons: the pages style them with rounded-md utilities; the system adds weight, lift and glass. */
+  :is(button, a, summary).rounded-md {
+    font-weight: 600;
+    transition: transform 0.16s ease, box-shadow 0.16s ease, background-color 0.16s ease;
+  }
+  :is(button, a).rounded-md.border {
+    background-color: var(--glass-control);
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
+  }
+  :is(button, a).rounded-md:not(:disabled):hover {
+    transform: translateY(-1px);
+    box-shadow: 0 5px 14px rgba(40, 68, 56, 0.1);
+  }
+  a { text-underline-offset: 2px; }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { transition: none !important; animation: none !important; }
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@layer components {
+  /* Surfaces */
+  .card {
+    background: var(--glass);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius);
+    box-shadow: var(--glass-shadow);
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
+    min-width: 0;
+  }
+  /* Type scale */
+  .page-title { font-size: 28px; line-height: 1.2; letter-spacing: -0.8px; font-weight: 700; }
+  .section-title { font-size: 16px; line-height: 1.4; letter-spacing: -0.2px; font-weight: 650; }
+  .metric { font-size: 27px; line-height: 1.1; font-weight: 720; letter-spacing: -0.8px; font-variant-numeric: tabular-nums; }
+  .crumb { font-size: 12px; color: var(--muted); }
+  /* Buttons for shell and new UI */
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    border: 1px solid var(--border); background: var(--glass-control); color: var(--text);
+    padding: 9px 14px; border-radius: var(--radius-md); cursor: pointer; font-weight: 600; text-decoration: none;
+    transition: transform 0.16s ease, box-shadow 0.16s ease, background-color 0.16s ease;
+  }
+  .btn:not(:disabled):hover { transform: translateY(-1px); box-shadow: 0 5px 14px rgba(40, 68, 56, 0.1); }
+  .btn-primary { background: var(--primary); border-color: var(--primary); color: var(--primary-ink); box-shadow: 0 4px 12px rgba(151, 215, 102, 0.18); }
+  .btn-primary:not(:disabled):hover { background: var(--primary-hover); }
+  .btn-dark { background: var(--deep); border-color: var(--deep); color: #fff; }
+  .btn-small { padding: 6px 10px; font-size: 12px; }
+  /* Badges */
+  .badge { display: inline-flex; align-items: center; border-radius: 7px; padding: 4px 8px; font-size: 11px; font-weight: 650; background: var(--surface-soft); color: #526058; }
+  .badge-success { background: var(--success-bg); color: var(--success); }
+  .badge-warning { background: var(--warning-bg); color: var(--warning); }
+  .badge-danger { background: var(--danger-bg); color: var(--danger); }
+  .badge-info { background: var(--info-bg); color: var(--info); }
+  /* Application shell */
+  .layout { display: grid; grid-template-columns: 230px minmax(0, 1fr); min-height: 100vh; }
+  .sidebar {
+    background: var(--glass); border-right: 1px solid var(--border); padding: 24px 16px;
+    display: flex; flex-direction: column; gap: 24px; position: sticky; top: 0; height: 100vh; overflow-y: auto;
+    -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+  }
+  .brand { display: flex; align-items: center; gap: 10px; padding: 0 10px; font-size: 18px; font-weight: 750; letter-spacing: -0.5px; color: var(--text); text-decoration: none; }
+  .brand-mark { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; background: var(--primary); color: var(--deep); font-weight: 800; flex-shrink: 0; }
+  .nav-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.09em; padding: 0 12px; margin-bottom: 7px; }
+  .nav a { display: flex; align-items: center; gap: 11px; padding: 9px 12px; border-radius: 9px; text-decoration: none; color: #4e5a53; margin: 2px 0; font-size: 13.5px; }
+  .nav a:hover { background: var(--surface-soft); }
+  .nav a.active { background: var(--primary-soft); color: var(--deep); font-weight: 650; }
+  .nav .ico { width: 18px; text-align: center; font-size: 15px; flex-shrink: 0; }
+  .sidebar-note { margin-top: auto; background: rgba(245, 251, 239, 0.72); border: 1px solid rgba(60, 101, 88, 0.1); padding: 14px; border-radius: 12px; color: var(--muted); font-size: 12px; }
+  .shell-main { padding: 30px clamp(18px, 3vw, 42px); max-width: 1500px; width: 100%; margin: 0 auto; min-width: 0; }
+  .mobile-bar { display: none; }
+  @media (max-width: 1050px) { .layout { grid-template-columns: 200px minmax(0, 1fr); } }
+  @media (max-width: 720px) {
+    .layout { grid-template-columns: 1fr; }
+    .sidebar { display: none; }
+    .shell-main { padding: 18px 14px 32px; }
+    .mobile-bar { display: block; position: sticky; top: 0; z-index: 20; background: var(--glass); border-bottom: 1px solid var(--border); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
+    .mobile-bar summary { list-style: none; display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; cursor: pointer; }
+    .mobile-bar summary::-webkit-details-marker { display: none; }
+    .mobile-bar .nav { padding: 6px 10px 12px; border-top: 1px solid var(--border); }
+  }
+  /* Resident portal bottom tabs */
+  .tabbar { position: fixed; inset-inline: 0; bottom: 0; background: var(--glass); border-top: 1px solid var(--border); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+  .tabbar a { display: block; padding: 10px 2px; text-align: center; font-size: 11px; font-weight: 600; color: #4e5a53; text-decoration: none; white-space: nowrap; border-radius: 9px; margin: 4px 2px; }
+  .tabbar a.active { background: var(--primary-soft); color: var(--deep); }
 }
 
-/* Chart tokens (validated reference palette; dark steps are their own values, not a flip). */
+/* Hover on primary buttons built from utilities (unlayered so it wins over bg-primary). */
+:is(button, a).bg-primary:not(:disabled):hover { background-color: var(--primary-hover); }
+
+/* Chart tokens: the system's greens. Series read with direct labels, gaps and the table view. */
 .viz-root {
   color-scheme: light;
-  --viz-surface: #fcfcfb;
-  --viz-ink-1: #0b0b0b;
-  --viz-ink-2: #52514e;
-  --viz-ink-3: #898781;
-  --viz-grid: #e1e0d9;
-  --viz-axis: #c3c2b7;
-  --viz-1: #2a78d6;
-  --viz-2: #eb6834;
-  --viz-3: #1baf7a;
-}
-@media (prefers-color-scheme: dark) {
-  .viz-root {
-    color-scheme: dark;
-    --viz-surface: #1a1a19;
-    --viz-ink-1: #f0efec;
-    --viz-ink-2: #c3c2b7;
-    --viz-ink-3: #898781;
-    --viz-grid: #2c2c2a;
-    --viz-axis: #383835;
-    --viz-1: #3987e5;
-    --viz-2: #d95926;
-    --viz-3: #199e70;
-  }
+  --viz-surface: #ffffff;
+  --viz-ink-1: #17211d;
+  --viz-ink-2: #4e5a53;
+  --viz-ink-3: #69746e;
+  --viz-grid: #e3e7e3;
+  --viz-axis: #c9d0ca;
+  --viz-1: #3c6558;
+  --viz-2: #97d766;
+  --viz-3: #aeb8b1;
+  --viz-1-ink: #ffffff;
+  --viz-2-ink: #17321f;
+  --viz-3-ink: #17211d;
 }

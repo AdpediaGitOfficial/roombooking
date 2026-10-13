@@ -30,18 +30,18 @@ async function Content({ params }: { params: Promise<{ workOrderId: string }> })
   return (
     <>
       <div className="mt-1 flex flex-wrap items-center gap-3">
-        <h1 className="text-2xl font-semibold">{wo.ticketNumber}</h1>
+        <h1 className="page-title">{wo.ticketNumber}</h1>
         <WorkOrderStatusBadge status={wo.status} />
         <PriorityLabel priority={wo.priority} />
         <SlaLabel wo={wo} now={now} />
       </div>
-      <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">{wo.category} · {locationLabel(wo)} · raised {wo.createdAt.toISOString().replace("T", " ").slice(0, 16)}{wo.reopenCount > 0 ? ` · reopened ${wo.reopenCount}×` : ""}</p>
+      <p className="mt-1 text-sm text-zinc-600">{wo.category} · {locationLabel(wo)} · raised {wo.createdAt.toISOString().replace("T", " ").slice(0, 16)}{wo.reopenCount > 0 ? ` · reopened ${wo.reopenCount}×` : ""}</p>
 
       <div className="mt-6 grid gap-6 md:grid-cols-2">
         <section>
-          <h2 className="text-lg font-semibold">Issue</h2>
+          <h2 className="section-title">Issue</h2>
           <p className="mt-2 whitespace-pre-line text-sm">{wo.description}</p>
-          <dl className="mt-4 grid gap-3 rounded-lg border border-zinc-200 p-4 text-sm sm:grid-cols-2 dark:border-zinc-800">
+          <dl className="mt-4 grid gap-3 card p-4 text-sm sm:grid-cols-2">
             <Field label="Reported by">{limited ? "Resident" : staff ? `${staff.firstName} ${staff.lastName} (${staff.employeeId})` : wo.requester.name}</Field>
             <Field label="Contact">{wo.preferredContact ?? (limited ? "Via the accommodation office" : (staff?.phone ?? wo.requester.email))}</Field>
             <Field label="Assigned to">{wo.assignee?.name ?? wo.vendor?.name ?? <span className="text-zinc-400">Unassigned</span>}</Field>
@@ -55,7 +55,7 @@ async function Content({ params }: { params: Promise<{ workOrderId: string }> })
         </section>
 
         <section className="space-y-4">
-          <h2 className="text-lg font-semibold">Actions</h2>
+          <h2 className="section-title">Actions</h2>
           {access === "coordinator" && !isTerminal && wo.status !== "RESOLVED" && assignees && (
             <AssignForm workOrderId={wo.id} engineers={assignees.engineers.map((e) => ({ id: e.id, label: e.name }))} vendors={assignees.vendors.map((v) => ({ id: v.id, label: v.name }))} current={wo.assigneeId ? `user:${wo.assigneeId}` : wo.vendorId ? `vendor:${wo.vendorId}` : undefined} />
           )}

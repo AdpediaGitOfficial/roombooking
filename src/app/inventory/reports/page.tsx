@@ -27,7 +27,7 @@ async function Reports({ searchParams }: { searchParams: Search }) {
     conditionReport(siteId),
   ]);
   const qs = new URLSearchParams({ ...(siteId ? { siteId } : {}), from, to, ...(type ? { type } : {}) }).toString();
-  const sel = "rounded-md border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900";
+  const sel = "rounded-md border border-zinc-300 px-2 py-1.5 text-sm";
   return (
     <>
       <form method="get" action="/inventory/reports" className="flex flex-wrap items-end gap-2 text-sm">
@@ -35,17 +35,17 @@ async function Reports({ searchParams }: { searchParams: Search }) {
         <label className="block">From<input type="date" name="from" defaultValue={from} className={`${sel} mt-1 block`} /></label>
         <label className="block">To<input type="date" name="to" defaultValue={to} className={`${sel} mt-1 block`} /></label>
         <label className="block">Movement<select name="type" defaultValue={type ?? ""} className={`${sel} mt-1 block`}><option value="">All</option>{TYPES.map((t) => <option key={t} value={t}>{describeTransaction(t)}</option>)}</select></label>
-        <button type="submit" className="rounded-md border border-zinc-300 px-3 py-1.5 dark:border-zinc-700">Apply</button>
-        <a href={`/api/reports/inventory-movements.csv?${qs}`} className="rounded-md bg-zinc-900 px-3 py-1.5 text-white dark:bg-zinc-100 dark:text-zinc-900">Download movements CSV</a>
+        <button type="submit" className="rounded-md border border-zinc-300 px-3 py-1.5">Apply</button>
+        <a href={`/api/reports/inventory-movements.csv?${qs}`} className="rounded-md bg-primary px-3 py-1.5 text-primary-ink">Download movements CSV</a>
       </form>
 
       <section className="mt-6">
-        <h2 className="text-lg font-semibold">Stock balance by category</h2>
-        <div className="mt-2 overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-800">
+        <h2 className="section-title">Stock balance by category</h2>
+        <div className="mt-2 overflow-x-auto card">
           <table className="w-full text-sm">
-            <thead className="bg-zinc-50 text-left text-xs uppercase tracking-wide text-zinc-500 dark:bg-zinc-900"><tr><th className="px-3 py-2">Category</th><th className="px-3 py-2 text-right">Stock lines</th><th className="px-3 py-2 text-right">Units on hand</th><th className="px-3 py-2 text-right">Low stock</th><th className="px-3 py-2 text-right">Assets</th><th className="px-3 py-2 text-right">Assets issued</th></tr></thead>
-            <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
-              {balance.map((r) => <tr key={r.category} data-balance={r.category}><td className="px-3 py-2">{r.category}</td><td className="px-3 py-2 text-right tabular-nums">{r.lines}</td><td className="px-3 py-2 text-right tabular-nums">{r.units}</td><td className={`px-3 py-2 text-right tabular-nums ${r.low ? "text-amber-700 dark:text-amber-300" : ""}`}>{r.low}</td><td className="px-3 py-2 text-right tabular-nums">{r.assets}</td><td className="px-3 py-2 text-right tabular-nums">{r.assetsIssued}</td></tr>)}
+            <thead className="bg-zinc-50 text-left text-xs uppercase tracking-wide text-zinc-500"><tr><th className="px-3 py-2">Category</th><th className="px-3 py-2 text-right">Stock lines</th><th className="px-3 py-2 text-right">Units on hand</th><th className="px-3 py-2 text-right">Low stock</th><th className="px-3 py-2 text-right">Assets</th><th className="px-3 py-2 text-right">Assets issued</th></tr></thead>
+            <tbody className="divide-y divide-zinc-200">
+              {balance.map((r) => <tr key={r.category} data-balance={r.category}><td className="px-3 py-2">{r.category}</td><td className="px-3 py-2 text-right tabular-nums">{r.lines}</td><td className="px-3 py-2 text-right tabular-nums">{r.units}</td><td className={`px-3 py-2 text-right tabular-nums ${r.low ? "text-amber-700" : ""}`}>{r.low}</td><td className="px-3 py-2 text-right tabular-nums">{r.assets}</td><td className="px-3 py-2 text-right tabular-nums">{r.assetsIssued}</td></tr>)}
               {balance.length === 0 && <tr><td colSpan={6} className="px-3 py-6 text-center text-zinc-500">No items.</td></tr>}
             </tbody>
           </table>
@@ -53,11 +53,11 @@ async function Reports({ searchParams }: { searchParams: Search }) {
       </section>
 
       <section className="mt-6">
-        <h2 className="text-lg font-semibold">Asset condition</h2>
-        <div className="mt-2 overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-800">
+        <h2 className="section-title">Asset condition</h2>
+        <div className="mt-2 overflow-x-auto card">
           <table className="w-full text-sm">
-            <thead className="bg-zinc-50 text-left text-xs uppercase tracking-wide text-zinc-500 dark:bg-zinc-900"><tr><th className="px-3 py-2">Condition</th><th className="px-3 py-2 text-right">Assets</th><th className="px-3 py-2 text-right">Of which issued</th></tr></thead>
-            <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
+            <thead className="bg-zinc-50 text-left text-xs uppercase tracking-wide text-zinc-500"><tr><th className="px-3 py-2">Condition</th><th className="px-3 py-2 text-right">Assets</th><th className="px-3 py-2 text-right">Of which issued</th></tr></thead>
+            <tbody className="divide-y divide-zinc-200">
               {conditions.map((r) => <tr key={r.condition} data-condition-row={r.condition}><td className="px-3 py-2">{describeCondition(r.condition)}</td><td className="px-3 py-2 text-right tabular-nums">{r.count}</td><td className="px-3 py-2 text-right tabular-nums">{r.issued}</td></tr>)}
               {conditions.length === 0 && <tr><td colSpan={3} className="px-3 py-6 text-center text-zinc-500">No serialised assets.</td></tr>}
             </tbody>
@@ -66,12 +66,12 @@ async function Reports({ searchParams }: { searchParams: Search }) {
       </section>
 
       <section className="mt-6">
-        <h2 className="text-lg font-semibold">Allocated items by location</h2>
+        <h2 className="section-title">Allocated items by location</h2>
         <div className="mt-2 grid gap-3 sm:grid-cols-2">
           {allocated.map((g) => (
-            <div key={`${g.kind}:${g.label}`} data-allocated={g.label} className="rounded-lg border border-zinc-200 p-3 text-sm dark:border-zinc-800">
+            <div key={`${g.kind}:${g.label}`} data-allocated={g.label} className="card p-3 text-sm">
               <div className="font-medium">{g.label} <span className="text-xs font-normal text-zinc-500">· {g.kind}</span></div>
-              <ul className="mt-1 space-y-0.5">{g.items.map((i) => <li key={`${i.itemId}`} className="flex justify-between"><Link href={`/inventory/${i.itemId}`} className="underline">{i.name}{i.serialNumber ? ` #${i.serialNumber}` : ""}</Link><span className="tabular-nums text-zinc-600 dark:text-zinc-400">{i.quantity} {i.unit}{i.since ? ` · since ${i.since.toISOString().slice(0, 10)}` : ""}</span></li>)}</ul>
+              <ul className="mt-1 space-y-0.5">{g.items.map((i) => <li key={`${i.itemId}`} className="flex justify-between"><Link href={`/inventory/${i.itemId}`} className="underline">{i.name}{i.serialNumber ? ` #${i.serialNumber}` : ""}</Link><span className="tabular-nums text-zinc-600">{i.quantity} {i.unit}{i.since ? ` · since ${i.since.toISOString().slice(0, 10)}` : ""}</span></li>)}</ul>
             </div>
           ))}
           {allocated.length === 0 && <p className="text-sm text-zinc-500">Nothing is issued at the moment.</p>}
@@ -79,7 +79,7 @@ async function Reports({ searchParams }: { searchParams: Search }) {
       </section>
 
       <section className="mt-6">
-        <h2 className="text-lg font-semibold">Movements {from} to {to}{type ? ` · ${describeTransaction(type)}` : ""}</h2>
+        <h2 className="section-title">Movements {from} to {to}{type ? ` · ${describeTransaction(type)}` : ""}</h2>
         <p className="mt-1 text-xs text-zinc-500">Latest 200 shown; the CSV holds everything in the range.</p>
         <div className="mt-2"><TransactionTable rows={movements} showItem /></div>
       </section>
@@ -90,8 +90,8 @@ async function Reports({ searchParams }: { searchParams: Search }) {
 export default function InventoryReportsPage({ searchParams }: PageProps<"/inventory/reports">) {
   return (
     <main>
-      <h1 className="text-2xl font-semibold">Inventory reports</h1>
-      <p className="mt-1 mb-6 text-sm text-zinc-600 dark:text-zinc-400">Stock balance, movements, allocated items and asset condition.</p>
+      <h1 className="page-title">Inventory reports</h1>
+      <p className="mt-1 mb-6 text-sm text-zinc-600">Stock balance, movements, allocated items and asset condition.</p>
       <Suspense fallback={<p className="text-sm text-zinc-500">Loading…</p>}>
         <Reports searchParams={searchParams as Search} />
       </Suspense>

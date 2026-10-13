@@ -3,63 +3,47 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth/authorize";
 import { isResidentOnly } from "@/modules/self-service/context";
-import { logout } from "./login/actions";
+import { AppShell } from "@/components/shell/app-shell";
+import { visibleGroups } from "@/components/shell/nav";
 
-const modules: Array<[string, string, string?]> = [
-  ["Dashboard", "Occupancy, arrivals, departures and pending actions", "/dashboard"],
-  ["Accommodation", "Sites, buildings, rooms, beds, allocations, check-in/out", "/accommodation"],
-  ["Staff self-service", "My stay, profile, requests", "/my"],
-  ["Maintenance", "Work orders, assignment, contractor access", "/maintenance"],
-  ["Forms & approvals", "Room change, visitor, family, exit clearance", "/approvals"],
-  ["Facility booking", "Shared facilities, calendars and approvals", "/facilities"],
-  ["Keys", "Issue, return, lost and damaged keys", "/keys"],
-  ["Inventory", "Stock, serialised assets, issues and returns", "/inventory"],
-  ["Lost & found", "Found items, claims, handover and disposal", "/lost-found"],
-  ["Notifications", "Broadcasts; in-app, email and WhatsApp delivery", "/admin/broadcasts"],
-  ["Reports", "Movements, maintenance, facilities, keys; filters and CSV", "/reports"],
-  ["Administration", "Users, roles, audit, configuration", "/admin/users"],
-];
-
-async function UserBar() {
+async function Modules() {
   const user = await requireUser("/");
   // Residents without operational roles get the mobile self-service portal.
   if (isResidentOnly(user)) redirect("/my");
-  const roles = user.roleAssignments.map((r) => r.role.replaceAll("_", " ").toLowerCase());
+  const groups = visibleGroups(user.roleAssignments.map((r) => r.role));
+  const firstName = user.name.split(" ")[0];
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
-      <div>
-        <div className="font-medium">{user.name}</div>
-        <div className="text-sm text-zinc-600 dark:text-zinc-400">
-          {user.email}
-          {roles.length > 0 && <> · {roles.join(", ")}</>}
-        </div>
-      </div>
-      <form action={logout}>
-        <button type="submit" className="rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700">
-          Sign out
-        </button>
-      </form>
-    </div>
+    <>
+      <h1 className="page-title">Hello, {firstName}</h1>
+      <p className="mt-1 text-sm text-zinc-500">Everything you have access to, in one place.</p>
+      {groups.map((g) => (
+        <section key={g.label} className="mt-8">
+          <h2 className="section-title">{g.label}</h2>
+          <ul className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {g.items.map((i) => (
+              <li key={i.href}>
+                <Link href={i.href} className="card block p-4 hover:bg-zinc-50">
+                  <div className="flex items-center gap-3">
+                    <span className="brand-mark" aria-hidden="true">{i.icon}</span>
+                    <span className="font-semibold">{i.label}</span>
+                  </div>
+                  <div className="mt-2 text-sm text-zinc-500">{i.description}</div>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ))}
+    </>
   );
 }
 
 export default function Home() {
   return (
-    <main className="mx-auto w-full max-w-3xl px-4 py-10">
-      <h1 className="text-2xl font-semibold">Staff Accommodation Management</h1>
-      <div className="mt-6">
-        <Suspense fallback={<div className="h-16 animate-pulse rounded-lg bg-zinc-100 dark:bg-zinc-900" />}>
-          <UserBar />
-        </Suspense>
-      </div>
-      <ul className="mt-8 grid gap-3 sm:grid-cols-2">
-        {modules.map(([name, desc, href]) => (
-          <li key={name} className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
-            <div className="font-medium">{href ? <Link href={href} className="underline">{name}</Link> : name}</div>
-            <div className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">{desc}</div>
-          </li>
-        ))}
-      </ul>
-    </main>
+    <AppShell returnTo="/">
+      <Suspense fallback={<div className="h-16 animate-pulse rounded-lg bg-zinc-100" />}>
+        <Modules />
+      </Suspense>
+    </AppShell>
   );
 }

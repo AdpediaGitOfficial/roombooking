@@ -13,7 +13,7 @@ export async function ResidentItemsPanel({ staffId, canOperate, returnPath }: { 
   const options = canOperate ? await targetOptions() : null;
   const target = `staff:${staffId}`;
   return (
-    <div className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800" data-resident-items>
+    <div className="card p-4" data-resident-items>
       <h3 className="font-medium">Items issued to the resident</h3>
       {held.length === 0 ? <p className="mt-1 text-sm text-zinc-500">Nothing issued.</p> : (
         <ul className="mt-2 space-y-3">

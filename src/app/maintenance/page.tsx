@@ -23,7 +23,7 @@ async function Queue({ searchParams }: { searchParams: Promise<{ filter?: string
     <>
       <dl className="grid grid-cols-2 gap-3 sm:grid-cols-5">
         {[["Open", summary.open], ["Unassigned", summary.unassigned], ["Overdue", summary.overdue], ["Waiting", summary.waiting], ["To close", summary.awaitingClose]].map(([label, value]) => (
-          <div key={label} className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
+          <div key={label} className="card p-3">
             <dt className="text-xs uppercase tracking-wide text-zinc-500">{label}</dt>
             <dd className="mt-1 text-2xl font-semibold tabular-nums" data-summary={label}>{value}</dd>
           </div>
@@ -31,15 +31,15 @@ async function Queue({ searchParams }: { searchParams: Promise<{ filter?: string
       </dl>
       <nav className="mt-4 flex flex-wrap gap-2 text-sm">
         {FILTERS.filter(([f]) => isCoordinator || f !== "unassigned").map(([f, label]) => (
-          <Link key={f} href={`/maintenance?filter=${f}`} className={`rounded-full px-3 py-1 ${f === filter ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900" : "border border-zinc-300 dark:border-zinc-700"}`}>{label}</Link>
+          <Link key={f} href={`/maintenance?filter=${f}`} className={`rounded-full px-3 py-1 ${f === filter ? "bg-deep text-white" : "border border-zinc-300"}`}>{label}</Link>
         ))}
       </nav>
-      <div className="mt-4 overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-800">
+      <div className="mt-4 overflow-x-auto card">
         <table className="w-full text-sm">
-          <thead className="bg-zinc-50 text-left text-xs uppercase tracking-wide text-zinc-500 dark:bg-zinc-900">
+          <thead className="bg-zinc-50 text-left text-xs uppercase tracking-wide text-zinc-500">
             <tr><th className="px-3 py-2">Ticket</th><th className="px-3 py-2">Issue</th><th className="px-3 py-2">Location</th><th className="px-3 py-2">Assigned</th><th className="px-3 py-2">Status</th><th className="px-3 py-2">SLA</th></tr>
           </thead>
-          <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
+          <tbody className="divide-y divide-zinc-200">
             {orders.map((wo) => (
               <tr key={wo.id} data-ticket={wo.ticketNumber}>
                 <td className="px-3 py-3"><Link href={`/maintenance/${wo.id}`} className="font-medium underline">{wo.ticketNumber}</Link><div><PriorityLabel priority={wo.priority} /></div></td>
@@ -63,10 +63,10 @@ export default function MaintenancePage({ searchParams }: PageProps<"/maintenanc
     <main>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold">Maintenance</h1>
-          <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">Work orders, assignment and progress.</p>
+          <h1 className="page-title">Maintenance</h1>
+          <p className="mt-1 text-sm text-zinc-600">Work orders, assignment and progress.</p>
         </div>
-        <Link href="/maintenance/new" className="rounded-md bg-zinc-900 px-3 py-2 text-sm font-medium text-white dark:bg-zinc-100 dark:text-zinc-900">Raise a ticket</Link>
+        <Link href="/maintenance/new" className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-ink">Raise a ticket</Link>
       </div>
       <div className="mt-6">
         <Suspense fallback={<p className="text-sm text-zinc-500">Loading…</p>}>
