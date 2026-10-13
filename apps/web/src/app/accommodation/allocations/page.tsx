@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import Link from "next/link";
-import { requireRole } from "@/lib/auth/authorize";
+import { requireRole, requireUser, userCan } from "@/lib/auth/authorize";
 import { visibleSites } from "@/lib/auth/scope";
 import { ALLOCATION_VIEW_ROLES } from "@sam/core/modules/allocations/access";
 import { listAllocations, type AllocationListFilter } from "@sam/core/modules/allocations/service";
@@ -14,6 +14,18 @@ const FILTERS: Array<[AllocationListFilter, string]> = [
   ["history", "History"],
   ["all", "All"],
 ];
+
+async function HeaderActions() {
+  const user = await requireUser("/accommodation/allocations");
+  return (
+    <>
+      <Link href="/accommodation" className="btn">Buildings &amp; rooms</Link>
+      {userCan(user, "accom.allocate") && <Link href="/accommodation/waitlist" className="btn">Waitlist</Link>}
+      {userCan(user, "accom.bulk_allocate") && <Link href="/accommodation/allocations/bulk" className="btn">Bulk allocate</Link>}
+      {userCan(user, "accom.allocate") && <Link href="/accommodation/allocations/new" className="btn btn-primary">＋ New allocation</Link>}
+    </>
+  );
+}
 
 async function AllocationList({ searchParams }: { searchParams: Promise<{ filter?: string; staffId?: string; requestId?: string }> }) {
   const user = await requireRole(ALLOCATION_VIEW_ROLES, "/accommodation/allocations");
@@ -75,7 +87,7 @@ async function AllocationList({ searchParams }: { searchParams: Promise<{ filter
 export default function AllocationsPage({ searchParams }: PageProps<"/accommodation/allocations">) {
   return (
     <main>
-      <PageHeader crumbs={[["Accommodation", "/accommodation"], ["Allocations"]]} title="Allocations" subtitle="Who is in which bed, who is arriving and who is leaving." actions={<><Link href="/accommodation" className="btn">Buildings &amp; rooms</Link><Link href="/accommodation/allocations/new" className="btn btn-primary">＋ New allocation</Link></>} />
+      <PageHeader crumbs={[["Accommodation", "/accommodation"], ["Allocations"]]} title="Allocations" subtitle="Who is in which bed, who is arriving and who is leaving." actions={<Suspense fallback={null}><HeaderActions /></Suspense>} />
       <div>
         <Suspense fallback={<p className="text-sm text-zinc-500">Loading…</p>}>
           <AllocationList searchParams={searchParams as Promise<{ filter?: string; staffId?: string; requestId?: string }>} />
