@@ -9,7 +9,7 @@ export const NAV = [
   ["/my/requests", "Requests", "✎"],
   ["/my/maintenance", "Maintenance", "⚒"],
   ["/my/facilities", "Facilities", "◷"],
-  ["/my/profile", "Profile", "☺"],
+  ["/my/more", "More", "☰"],
 ] as const;
 
 export function TabLinks({ active }: { active?: string }) {

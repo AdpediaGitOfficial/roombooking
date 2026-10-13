@@ -46,6 +46,7 @@ async function Detail({ params }: { params: Promise<{ id: string }> }) {
               ))}
               {row.allocations.length === 0 && <li className="py-2 text-zinc-500">No stays yet.</li>}
             </ul>
+            {can("charges.raise") && <Link href={`/charges/new?staffId=${row.id}`} className="btn btn-small btn-ghost mt-3 ml-2 inline-block">Record a charge</Link>}
             {can("accom.allocate") && !row.archivedAt && <Link href={`/accommodation/allocations/new?staffId=${row.id}`} className="btn btn-small mt-3 inline-block">Allocate a bed</Link>}
           </section>
           {full && (

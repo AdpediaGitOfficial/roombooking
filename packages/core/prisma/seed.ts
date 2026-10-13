@@ -64,6 +64,12 @@ async function main() {
     }
   }
 
+  /** Switches a single capability on for every holder of a role (document: residents register visitors once the site switches it on). */
+  async function ensureRoleCapability(role: Role, capability: string, reason: string, grantedById: string) {
+    const existing = await prisma.permissionGrant.findFirst({ where: { role, capability, revokedAt: null } });
+    if (!existing) await prisma.permissionGrant.create({ data: { organizationId: org.id, role, capability, reason, grantedById } });
+  }
+
   // Two Super Admins plus a break-glass account (document section 12).
   const adminUser = await ensureUser("admin@example.com", "Super Admin", Role.SYSTEM_ADMIN);
   await ensureUser("admin2@example.com", "Second Super Admin", Role.SYSTEM_ADMIN);
@@ -77,6 +83,7 @@ async function main() {
   await ensureUser("readonly@example.com", "Read-only Manager", Role.READONLY_MANAGER);
   // A senior officer holds the Key supervisor and Inventory supervisor sets; another leads the facilities.
   const custodian = await ensureUser("custodian@example.com", "Senior Officer (keys & stock)", Role.ACCOMMODATION_OFFICER);
+  await ensureRoleCapability(Role.STAFF, "sec.preregister", "Residents may register their own visitors at go-live", adminUser.id);
   await ensureSetGrant(custodian.id, "KEY_SUPERVISOR", "Senior officer keeps the key register", adminUser.id);
   await ensureSetGrant(custodian.id, "INVENTORY_SUPERVISOR", "Senior officer keeps the stores", adminUser.id);
   const facilityUser = await ensureUser("facility@example.com", "Facility In-charge", Role.ACCOMMODATION_OFFICER);
