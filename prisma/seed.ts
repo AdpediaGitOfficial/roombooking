@@ -180,7 +180,7 @@ async function main() {
     const version = await prisma.workflowVersion.upsert({
       where: { requestTypeId_version: { requestTypeId: type.id, version: 1 } },
       update: { formSchema: { fields: rt.fields } },
-      create: { requestTypeId: type.id, version: 1, isCurrent: true, formSchema: { fields: rt.fields } },
+      create: { requestTypeId: type.id, version: 1, isCurrent: true, publishedAt: new Date(), publishedById: adminUser.id, formSchema: { fields: rt.fields } },
     });
     const steps = [
       { order: 1, name: "Line manager approval", approverRole: Role.APPROVER, requireComment: false },

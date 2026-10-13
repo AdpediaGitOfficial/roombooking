@@ -8,7 +8,8 @@ export default function AdminLayout({ children }: LayoutProps<"/admin">) {
         <Link href="/admin/users" className="underline">Users</Link><span>·</span>
         <Link href="/admin/audit" className="underline">Audit log</Link><span>·</span>
         <Link href="/admin/notifications" className="underline">Notifications</Link><span>·</span>
-        <Link href="/admin/broadcasts" className="underline">Broadcasts</Link>
+        <Link href="/admin/broadcasts" className="underline">Broadcasts</Link><span>·</span>
+        <Link href="/admin/forms" className="underline">Forms</Link>
       </nav>
       {children}
     </div>

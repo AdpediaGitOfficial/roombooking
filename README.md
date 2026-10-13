@@ -130,6 +130,26 @@ requests by status). Seeded routes: line manager approval, then accommodation
 administrator approval with a mandatory comment. Demo approver:
 `manager@example.com`.
 
+### Form builder
+
+Administrators design request forms and approval routes at `/admin/forms`
+(WF-02, WF-03). A request type starts with an empty draft; the builder adds
+fields (short text, paragraph, date, number, choice with fixed options or
+active buildings, checkbox) with labels, stored names, required flags, help
+text, placeholders, ranges and lengths, and a *show only when* condition on an
+earlier field (equals, does not equal, has a value, is empty, ticked, not
+ticked). The route is an ordered list of steps with an approver role and an
+optional mandatory comment. A preview renders the form as residents will see
+it, with conditional fields appearing as values are entered.
+
+Drafts are saved, previewed and then published as a new version with a change
+note; one draft exists at a time, publishing requires at least one field, and
+published versions are never edited. Requests pin the version they were
+submitted under, so changing a form never alters an in-flight request. Hidden
+fields are neither required nor stored on submission. Types can be set
+inactive to hide them from residents. Every create, save, publish, discard and
+settings change is audited.
+
 ## Maintenance
 
 Residents report issues from the portal (`/my/maintenance`) with location,

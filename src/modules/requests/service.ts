@@ -6,7 +6,7 @@ import { enqueueNotification } from "@/lib/notifications";
 import { isoDate, todayInTimezone } from "@/modules/accommodation/occupancy";
 import { RequestError } from "./errors";
 import { REQUEST_ADMIN_ROLES } from "./access";
-import { TYPE_RULES, parseSchema, toFormStrings, validateSubmission, type FormData, type FormField, type FormSchema } from "./forms";
+import { TYPE_RULES, parseSchema, toFormStrings, validateSubmission, visibleFields, type FormData, type FormField, type FormSchema } from "./forms";
 
 type Tx = Prisma.TransactionClient;
 type Db = Tx | PrismaClient;
@@ -347,7 +347,7 @@ export async function listAllRequests(filter: RequestListFilter) {
 export function summarizeRequest(request: { data: Prisma.JsonValue; workflowVersion: { formSchema: Prisma.JsonValue } }) {
   const schema = parseSchema(request.workflowVersion.formSchema);
   const data = toFormStrings((request.data ?? {}) as FormData);
-  return schema.fields.map((f) => ({ label: f.label, value: f.type === "checkbox" ? (data[f.name] === "on" ? "Yes" : "No") : data[f.name] || "—" }));
+  return visibleFields(schema.fields, data).map((f) => ({ label: f.label, value: f.type === "checkbox" ? (data[f.name] === "on" ? "Yes" : "No") : data[f.name] || "—" }));
 }
 
 export function describeStatus(request: { status: string; currentStepOrder: number | null; workflowVersion: { steps: Array<{ order: number; name: string }> } }): string {

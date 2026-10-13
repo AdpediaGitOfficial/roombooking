@@ -195,29 +195,31 @@ model User {
   vendorId        String?
   accessExpiresAt DateTime?
 
-  requests              Request[]              @relation("RequestRequester")
-  approvalDecisions     ApprovalDecision[]
-  workOrdersRequested   WorkOrder[]            @relation("WorkOrderRequester")
-  workOrdersAssigned    WorkOrder[]            @relation("WorkOrderAssignee")
-  workOrderNotes        WorkOrderNote[]
-  facilityBookings      FacilityBooking[]
-  keyTransactions       KeyTransaction[]
-  inventoryTransactions InventoryTransaction[]
-  assetAssignments      AssetAssignment[]      @relation("AssetAssignedBy")
-  assetAssignmentsEnded AssetAssignment[]      @relation("AssetEndedBy")
-  lostFoundCustody      LostFoundItem[]        @relation("LostFoundCustody")
-  lostFoundRegistered   LostFoundItem[]        @relation("LostFoundRegistered")
-  lostFoundHandedOver   LostFoundItem[]        @relation("LostFoundHandedOver")
-  lostFoundDisposed     LostFoundItem[]        @relation("LostFoundDisposed")
-  lostFoundClaims       LostFoundClaim[]       @relation("LostFoundClaimant")
-  lostFoundDecisions    LostFoundClaim[]       @relation("LostFoundClaimDecided")
-  lostFoundEvents       LostFoundEvent[]       @relation("LostFoundEvents")
-  broadcastsCreated     Broadcast[]            @relation("BroadcastsCreated")
-  broadcastsSent        Broadcast[]            @relation("BroadcastsSent")
-  notifications         Notification[]
-  auditEvents           AuditEvent[]
-  attachments           Attachment[]
-  allocations           Allocation[]
+  requests                  Request[]              @relation("RequestRequester")
+  approvalDecisions         ApprovalDecision[]
+  workOrdersRequested       WorkOrder[]            @relation("WorkOrderRequester")
+  workOrdersAssigned        WorkOrder[]            @relation("WorkOrderAssignee")
+  workOrderNotes            WorkOrderNote[]
+  facilityBookings          FacilityBooking[]
+  keyTransactions           KeyTransaction[]
+  inventoryTransactions     InventoryTransaction[]
+  assetAssignments          AssetAssignment[]      @relation("AssetAssignedBy")
+  assetAssignmentsEnded     AssetAssignment[]      @relation("AssetEndedBy")
+  lostFoundCustody          LostFoundItem[]        @relation("LostFoundCustody")
+  lostFoundRegistered       LostFoundItem[]        @relation("LostFoundRegistered")
+  lostFoundHandedOver       LostFoundItem[]        @relation("LostFoundHandedOver")
+  lostFoundDisposed         LostFoundItem[]        @relation("LostFoundDisposed")
+  lostFoundClaims           LostFoundClaim[]       @relation("LostFoundClaimant")
+  lostFoundDecisions        LostFoundClaim[]       @relation("LostFoundClaimDecided")
+  lostFoundEvents           LostFoundEvent[]       @relation("LostFoundEvents")
+  broadcastsCreated         Broadcast[]            @relation("BroadcastsCreated")
+  broadcastsSent            Broadcast[]            @relation("BroadcastsSent")
+  workflowVersionsCreated   WorkflowVersion[]      @relation("WorkflowVersionsCreated")
+  workflowVersionsPublished WorkflowVersion[]      @relation("WorkflowVersionsPublished")
+  notifications             Notification[]
+  auditEvents               AuditEvent[]
+  attachments               Attachment[]
+  allocations               Allocation[]
 }
 
 // Server-side sessions (ADM-05). The cookie carries a random token; only its
@@ -389,15 +391,22 @@ model RequestType {
 
 // A request pins the workflow version that was current when it was submitted,
 // so editing a form or route never changes in-flight requests.
+// A version is a draft until published (WF-02); publishing makes it current.
 model WorkflowVersion {
-  id            String   @id @default(cuid())
+  id            String    @id @default(cuid())
   requestTypeId String
   version       Int
   formSchema    Json
-  isCurrent     Boolean  @default(false)
-  createdAt     DateTime @default(now())
+  isCurrent     Boolean   @default(false)
+  changeNote    String?
+  createdById   String?
+  publishedById String?
+  publishedAt   DateTime?
+  createdAt     DateTime  @default(now())
 
   requestType RequestType    @relation(fields: [requestTypeId], references: [id])
+  createdBy   User?          @relation("WorkflowVersionsCreated", fields: [createdById], references: [id])
+  publishedBy User?          @relation("WorkflowVersionsPublished", fields: [publishedById], references: [id])
   steps       ApprovalStep[]
   requests    Request[]
 
