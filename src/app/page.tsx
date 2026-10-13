@@ -16,7 +16,7 @@ const modules: Array<[string, string, string?]> = [
   ["Lost & found", "Items, claims and handover"],
   ["Notifications", "In-app, email and WhatsApp"],
   ["Reports", "Occupancy, movements, maintenance, utilisation"],
-  ["Administration", "Users, roles, audit, configuration"],
+  ["Administration", "Users, roles, audit, configuration", "/admin/users"],
 ];
 
 async function UserBar() {

@@ -160,6 +160,18 @@ permanent transaction history and the actions for its state. Rules in
 
 Demo custodian: `custodian@example.com`.
 
+## User and role administration
+
+System administrators manage accounts at `/admin/users`; administrators and
+auditors read the audit log at `/admin/audit`. Rules in
+`src/modules/admin/users-service.ts`:
+
+- users are created as *invited* with roles scoped to all sites, a site or a building, optionally linked to a staff record (one user per record) or a vendor (required for the vendor role, with an access expiry);
+- invites and password resets are one-time links (`/invite/:token`) with an expiry; only a hash of the token is stored; using a link sets the password, activates the account and ends other sessions. Until email delivery exists the link is shown to the administrator and queued in the outbox;
+- suspending or deactivating requires a reason, ends sessions immediately and keeps history; reactivation needs a password to exist;
+- you cannot remove your own administrator role or change your own status, and the last active system administrator cannot be demoted, suspended or deactivated;
+- every change writes an audit event with actor, target and before/after values; the user page shows the account's history and `/admin/audit` the whole log with filters.
+
 ## Authentication
 
 Sessions are owned by the application, not a third-party provider, so the
@@ -221,6 +233,7 @@ src/
   modules/requests/       form schemas, approval workflow service, actions, components
   modules/maintenance/    work order service, actions, components
   modules/keys/           key register service, actions, components
+  modules/admin/          users and roles administration, audit log
   lib/uploads.ts          photo validation and storage
   lib/notifications.ts   notification outbox writer
   lib/audit.ts         append-only audit writer

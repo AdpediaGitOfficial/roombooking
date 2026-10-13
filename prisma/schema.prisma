@@ -169,6 +169,10 @@ model User {
   passwordChangedAt   DateTime?
   failedLoginAttempts Int        @default(0)
   lockedUntil         DateTime?
+  // One-time invite / password-reset token (hash only) with expiry (ADM-01, SS-08).
+  tokenHash           String?    @unique
+  tokenPurpose        String?
+  tokenExpiresAt      DateTime?
   status              UserStatus @default(INVITED)
   lastLoginAt         DateTime?
   createdAt           DateTime   @default(now())
