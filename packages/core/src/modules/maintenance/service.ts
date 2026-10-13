@@ -1,105 +1,20 @@
 // Maintenance requests and work orders (SRS 5.3, 6.3, 8.3).
-import type { Prisma, PrismaClient, Role, WorkOrderPriority, WorkOrderStatus } from "@prisma/client";
+import type { Prisma, PrismaClient, WorkOrderPriority, WorkOrderStatus } from "@prisma/client";
 import { prisma } from "../../lib/db";
 import { recordAudit } from "../../lib/audit";
 import { enqueueNotification } from "../../lib/notifications";
 import { storeImage, UploadError } from "../../lib/uploads";
 import { MaintenanceError } from "./errors";
 import { MAINTENANCE_COORDINATOR_ROLES } from "./access";
+import { CATEGORIES, PRIORITIES, REOPEN_WINDOW_DAYS, OPEN_STATUSES, WAITING_STATUSES, allowedTransitions, accessFor, isOverdue, reopenWindowOpen, slaDueAt, visibleNotes, workOrderInclude, type Actor, type QueueFilter, type WorkOrderAccess } from "./rules";
+
+export * from "./rules";
 
 type Tx = Prisma.TransactionClient;
 type Db = Tx | PrismaClient;
 
-export type Actor = { id: string; roles: Role[]; vendorId?: string | null };
-
-export const CATEGORIES = ["Electrical", "Plumbing", "Air conditioning", "Furniture", "Doors and locks", "Cleaning", "Pest control", "Internet / TV", "Other"] as const;
-export const PRIORITIES: WorkOrderPriority[] = ["LOW", "MEDIUM", "HIGH", "URGENT"];
-
-/** Hours to resolve by priority (MNT-06). Configurable per client later. */
-export const SLA_HOURS: Record<WorkOrderPriority, number> = { URGENT: 4, HIGH: 24, MEDIUM: 72, LOW: 168 };
-export const REOPEN_WINDOW_DAYS = Number(process.env.MAINTENANCE_REOPEN_WINDOW_DAYS ?? 7);
-
-export const OPEN_STATUSES: WorkOrderStatus[] = ["NEW", "TRIAGED", "ASSIGNED", "IN_PROGRESS", "WAITING_STAFF", "WAITING_PARTS", "WAITING_ACCESS", "REOPENED"];
-export const WAITING_STATUSES: WorkOrderStatus[] = ["WAITING_STAFF", "WAITING_PARTS", "WAITING_ACCESS"];
-const TERMINAL: WorkOrderStatus[] = ["CLOSED", "CANCELLED"];
-
-export function slaDueAt(priority: WorkOrderPriority, from: Date = new Date()): Date {
-  return new Date(from.getTime() + SLA_HOURS[priority] * 3600 * 1000);
-}
-
-export function isOverdue(wo: { status: WorkOrderStatus; slaDueAt: Date | null }, now: Date = new Date()): boolean {
-  return OPEN_STATUSES.includes(wo.status) && !!wo.slaDueAt && wo.slaDueAt < now;
-}
-
-export const workOrderInclude = {
-  site: true,
-  building: true,
-  room: true,
-  requester: { select: { id: true, name: true, email: true, vendorId: true, staffProfile: { select: { employeeId: true, firstName: true, lastName: true, phone: true } } } },
-  assignee: { select: { id: true, name: true } },
-  vendor: true,
-  notes: { include: { author: { select: { id: true, name: true, vendorId: true } } }, orderBy: { createdAt: "asc" } },
-} satisfies Prisma.WorkOrderInclude;
-
-export type WorkOrderRecord = Prisma.WorkOrderGetPayload<{ include: typeof workOrderInclude }>;
-
-// ---------------------------------------------------------------------------
-// Access
-// ---------------------------------------------------------------------------
-
-export type WorkOrderAccess = "coordinator" | "assignee" | "vendor" | "requester" | "auditor" | null;
-
-export function accessFor(wo: Pick<WorkOrderRecord, "requesterId" | "assigneeId" | "vendorId">, actor: Actor): WorkOrderAccess {
-  if (actor.roles.some((r) => MAINTENANCE_COORDINATOR_ROLES.includes(r))) return "coordinator";
-  if (wo.assigneeId === actor.id) return "assignee";
-  if (actor.vendorId && wo.vendorId === actor.vendorId && actor.roles.includes("VENDOR")) return "vendor";
-  if (wo.requesterId === actor.id) return "requester";
-  if (actor.roles.includes("AUDITOR")) return "auditor";
-  return null;
-}
-
-/** Notes the actor may see: internal notes are for coordinators and internal assignees only. */
-export function visibleNotes(wo: WorkOrderRecord, access: WorkOrderAccess) {
-  const seesInternal = access === "coordinator" || access === "assignee" || access === "auditor";
-  return seesInternal ? wo.notes : wo.notes.filter((n) => !n.internal);
-}
-
-// ---------------------------------------------------------------------------
-// Transitions (8.3)
-// ---------------------------------------------------------------------------
-
-const WORKER_TARGETS: WorkOrderStatus[] = ["IN_PROGRESS", "WAITING_STAFF", "WAITING_PARTS", "WAITING_ACCESS", "RESOLVED"];
-
-/** Statuses the actor may move the ticket to, by its current status and the actor's relationship to it. */
-export function allowedTransitions(status: WorkOrderStatus, access: WorkOrderAccess, opts: { reopenWindowOpen: boolean }): WorkOrderStatus[] {
-  const isWorker = access === "assignee" || access === "vendor";
-  const isCoordinator = access === "coordinator";
-  switch (status) {
-    case "NEW":
-      return isCoordinator ? ["TRIAGED", "CANCELLED"] : access === "requester" ? ["CANCELLED"] : [];
-    case "TRIAGED":
-      return isCoordinator ? ["CANCELLED"] : [];
-    case "ASSIGNED":
-    case "IN_PROGRESS":
-    case "WAITING_STAFF":
-    case "WAITING_PARTS":
-    case "WAITING_ACCESS":
-    case "REOPENED":
-      if (isCoordinator) return [...WORKER_TARGETS.filter((s) => s !== status), "CANCELLED"];
-      if (isWorker) return WORKER_TARGETS.filter((s) => s !== status);
-      return [];
-    case "RESOLVED":
-      if (isCoordinator) return ["CLOSED", "REOPENED"];
-      if (access === "requester") return opts.reopenWindowOpen ? ["CLOSED", "REOPENED"] : ["CLOSED"];
-      return [];
-    default:
-      return [];
-  }
-}
-
-export function reopenWindowOpen(wo: { resolvedAt: Date | null }, now: Date = new Date()): boolean {
-  return !!wo.resolvedAt && now.getTime() - wo.resolvedAt.getTime() <= REOPEN_WINDOW_DAYS * 86400000;
-}
+export const TERMINAL_STATUSES: WorkOrderStatus[] = ["CLOSED", "CANCELLED"];
+const TERMINAL = TERMINAL_STATUSES;
 
 // ---------------------------------------------------------------------------
 // Create (MNT-01, MNT-02)
@@ -353,7 +268,6 @@ export async function listAttachments(workOrderId: string, db: Db = prisma) {
   return db.attachment.findMany({ where: { entityType: "WorkOrder", entityId: workOrderId }, orderBy: { createdAt: "asc" } });
 }
 
-export type QueueFilter = "open" | "unassigned" | "mine" | "waiting" | "resolved" | "closed" | "all";
 
 /** Operations queue, scoped by what the actor may see. */
 export async function listWorkOrders(actor: Actor, filter: QueueFilter) {
@@ -402,16 +316,72 @@ export async function listAssignees(db: Db = prisma) {
   return { engineers, vendors };
 }
 
-export function describeStatus(status: WorkOrderStatus): string {
-  const map: Record<WorkOrderStatus, string> = {
-    NEW: "New", TRIAGED: "Triaged", ASSIGNED: "Assigned", IN_PROGRESS: "In progress",
-    WAITING_STAFF: "Waiting for you", WAITING_PARTS: "Waiting for parts", WAITING_ACCESS: "Waiting for access",
-    RESOLVED: "Resolved · please confirm", CLOSED: "Closed", REOPENED: "Reopened", CANCELLED: "Cancelled",
+// ---------------------------------------------------------------------------
+// Views for the API: everything a page needs in one call
+// ---------------------------------------------------------------------------
+
+export type WorkOrderPerspective = "ops" | "mine";
+
+/**
+ * One ticket as the actor may see it: the record, the relationship that grants
+ * access, the notes they may read, photos, and the status changes open to them.
+ * "mine" is the resident's own view: only their tickets, even for coordinators.
+ */
+export async function getWorkOrderView(actor: Actor, id: string, perspective: WorkOrderPerspective, now: Date = new Date()) {
+  const workOrder = await getWorkOrder(id);
+  if (!workOrder) throw new MaintenanceError("NOT_FOUND", "Work order not found.");
+  let access = accessFor(workOrder, actor);
+  if (perspective === "mine") {
+    if (workOrder.requesterId !== actor.id) throw new MaintenanceError("NOT_FOUND", "Work order not found.");
+    if (access === "coordinator") access = "requester";
+  } else if (!access) {
+    throw new MaintenanceError("NOT_FOUND", "Work order not found.");
+  }
+  const transitionAccess: WorkOrderAccess = perspective === "mine" ? "requester" : access;
+  const [photos, assignees] = await Promise.all([listAttachments(id), perspective === "ops" && access === "coordinator" ? listAssignees() : Promise.resolve(null)]);
+  return {
+    workOrder,
+    access,
+    notes: visibleNotes(workOrder, access),
+    photos,
+    transitions: allowedTransitions(workOrder.status, transitionAccess, { reopenWindowOpen: reopenWindowOpen(workOrder, now) }),
+    assignees,
+    now,
   };
-  return map[status];
 }
 
-export function locationLabel(wo: Pick<WorkOrderRecord, "site" | "building" | "room" | "locationNote">): string {
-  const parts = [wo.building?.name, wo.room ? `Room ${wo.room.code}` : null, wo.locationNote].filter(Boolean);
-  return parts.length ? parts.join(" · ") : wo.site.name;
+/** The operations queue with its summary counts. */
+export async function getQueue(actor: Actor, filter: QueueFilter, now: Date = new Date()) {
+  const [orders, summary] = await Promise.all([listWorkOrders(actor, filter), queueSummary(actor, now)]);
+  return { orders, summary, now };
+}
+
+/** Rooms a resident can report against: the room of each current or upcoming bed. */
+export async function residentRoomOptions(userId: string) {
+  const staff = await prisma.staffProfile.findUnique({ where: { userId }, select: { id: true } });
+  if (!staff) return [];
+  const allocations = await prisma.allocation.findMany({
+    where: { staffId: staff.id, status: { in: ["CONFIRMED", "CHECKED_IN"] } },
+    include: { bed: { include: { room: { include: { building: true } } } } },
+    orderBy: { startDate: "desc" },
+  });
+  const seen = new Set<string>();
+  return allocations.flatMap((a) => {
+    const room = a.bed.room;
+    if (seen.has(room.id)) return [];
+    seen.add(room.id);
+    return [{ id: room.id, label: `My room · ${room.building.name} room ${room.code}` }];
+  });
+}
+
+/** Locations a coordinator can raise a ticket against. */
+export async function opsLocationOptions() {
+  const [rooms, buildings] = await Promise.all([
+    prisma.room.findMany({ where: { status: { not: "INACTIVE" } }, include: { building: true }, orderBy: [{ building: { code: "asc" } }, { code: "asc" }] }),
+    prisma.building.findMany({ where: { status: "ACTIVE" }, include: { site: true }, orderBy: [{ site: { name: "asc" } }, { code: "asc" }] }),
+  ]);
+  return {
+    rooms: rooms.map((r) => ({ id: r.id, label: `${r.building.name} · Room ${r.code}` })),
+    buildings: buildings.map((b) => ({ id: b.id, label: `${b.site.name} · ${b.name}` })),
+  };
 }

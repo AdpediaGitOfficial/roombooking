@@ -3,6 +3,9 @@ import type { Handlers } from "../register";
 import { accommodationHandlers } from "./accommodation";
 import { allocationHandlers } from "./allocations";
 import { authHandlers } from "./auth";
+import { keyHandlers } from "./keys";
+import { lookupHandlers } from "./lookups";
+import { fileHandlers, maintenanceHandlers } from "./maintenance";
 import { meHandlers, searchHandlers } from "./me";
 
 export const handlers: Handlers<ApiContract> = {
@@ -10,5 +13,9 @@ export const handlers: Handlers<ApiContract> = {
   me: meHandlers,
   accommodation: accommodationHandlers,
   allocations: allocationHandlers,
+  maintenance: maintenanceHandlers,
+  files: fileHandlers,
+  keys: keyHandlers,
+  lookups: lookupHandlers,
   search: searchHandlers,
 };

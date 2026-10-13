@@ -2,10 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import type { WorkOrderPriority, WorkOrderStatus } from "@prisma/client";
-import { requireUser, type CurrentUser } from "@/lib/auth/authorize";
-import { MaintenanceError } from "@sam/core/modules/maintenance/errors";
-import { addNote, assignWorkOrder, changeStatus, createWorkOrder, triageWorkOrder, type Actor } from "@sam/core/modules/maintenance/service";
+import { ApiError } from "@sam/contract/index";
+import { api } from "@/lib/api";
+import { requireUser } from "@/lib/auth/authorize";
 
 export type FormState = { error?: string; fieldErrors?: Record<string, string>; values?: Record<string, string> };
 export type ActionState = { error?: string; message?: string };
@@ -15,14 +14,11 @@ function str(formData: FormData, key: string): string {
   return typeof v === "string" ? v.trim() : "";
 }
 
-async function photoFrom(formData: FormData): Promise<{ bytes: Uint8Array; fileName: string } | null> {
+/** An attached photo, or undefined when none was chosen. */
+async function photoFrom(formData: FormData): Promise<{ bytes: Uint8Array; fileName: string } | undefined> {
   const file = formData.get("photo");
-  if (!(file instanceof File) || file.size === 0) return null;
+  if (!(file instanceof File) || file.size === 0) return undefined;
   return { bytes: new Uint8Array(await file.arrayBuffer()), fileName: file.name };
-}
-
-function actorOf(user: CurrentUser): Actor {
-  return { id: user.id, roles: user.roleAssignments.map((r) => r.role), vendorId: user.vendorId };
 }
 
 function revalidateMaintenance(id?: string) {
@@ -35,83 +31,75 @@ function revalidateMaintenance(id?: string) {
   }
 }
 
-export async function createWorkOrderAction(_prev: FormState, formData: FormData): Promise<FormState> {
-  const user = await requireUser("/my/maintenance/new");
-  const values: Record<string, string> = {};
-  for (const key of ["category", "priority", "description", "preferredContact", "locationNote", "roomId", "buildingId", "returnTo"]) values[key] = str(formData, key);
-  let id: string;
+/** Runs an API call and turns a refusal into a message; real failures still surface. */
+async function attempt<T>(call: () => Promise<T>): Promise<{ ok: true; value: T } | { ok: false; error: ApiError }> {
   try {
-    const created = await createWorkOrder({
-      requesterId: user.id,
-      roomId: values.roomId || null,
-      buildingId: values.buildingId || null,
-      locationNote: values.locationNote || null,
-      category: values.category,
-      description: values.description,
-      priority: (values.priority || "MEDIUM") as WorkOrderPriority,
-      preferredContact: values.preferredContact || null,
-      photo: await photoFrom(formData),
-    });
-    id = created.id;
+    return { ok: true, value: await call() };
   } catch (error) {
-    if (error instanceof MaintenanceError) return { error: error.message, fieldErrors: error.fieldErrors, values };
+    if (error instanceof ApiError && error.status < 500) return { ok: false, error };
     throw error;
   }
+}
+
+export async function createWorkOrderAction(_prev: FormState, formData: FormData): Promise<FormState> {
+  await requireUser("/my/maintenance/new");
+  const values: Record<string, string> = {};
+  for (const key of ["category", "priority", "description", "preferredContact", "locationNote", "roomId", "buildingId", "returnTo"]) values[key] = str(formData, key);
+  const result = await attempt(async () =>
+    api.maintenance.create({
+      category: values.category,
+      description: values.description,
+      priority: (values.priority || "MEDIUM") as "LOW" | "MEDIUM" | "HIGH" | "URGENT",
+      roomId: values.roomId || undefined,
+      buildingId: values.buildingId || undefined,
+      locationNote: values.locationNote || undefined,
+      preferredContact: values.preferredContact || undefined,
+      photo: await photoFrom(formData),
+    }),
+  );
+  if (!result.ok) return { error: result.error.message, fieldErrors: result.error.fieldErrors, values };
+  const id = result.value.id;
   revalidateMaintenance(id);
   redirect(values.returnTo === "ops" ? `/maintenance/${id}` : `/my/maintenance/${id}`);
 }
 
 export async function assignAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
-  const user = await requireUser("/maintenance");
-  const workOrderId = str(formData, "workOrderId");
-  const target = str(formData, "target"); // "user:<id>" | "vendor:<id>"
-  const [kind, id] = target.split(":");
-  try {
-    await assignWorkOrder({ workOrderId, actor: actorOf(user), assigneeId: kind === "user" ? id : null, vendorId: kind === "vendor" ? id : null, note: str(formData, "note") || null });
-  } catch (error) {
-    if (error instanceof MaintenanceError) return { error: error.message };
-    throw error;
-  }
-  revalidateMaintenance(workOrderId);
+  await requireUser("/maintenance");
+  const id = str(formData, "workOrderId");
+  const [kind, target] = str(formData, "target").split(":"); // "user:<id>" | "vendor:<id>"
+  const result = await attempt(() =>
+    api.maintenance.assign({ id, assigneeId: kind === "user" ? target : undefined, vendorId: kind === "vendor" ? target : undefined, note: str(formData, "note") || undefined }),
+  );
+  if (!result.ok) return { error: result.error.message };
+  revalidateMaintenance(id);
   return { message: "Assigned." };
 }
 
 export async function statusAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
-  const user = await requireUser("/maintenance");
-  const workOrderId = str(formData, "workOrderId");
-  const status = str(formData, "status") as WorkOrderStatus;
-  try {
-    await changeStatus({ workOrderId, actor: actorOf(user), status, note: str(formData, "note") || null });
-  } catch (error) {
-    if (error instanceof MaintenanceError) return { error: error.message };
-    throw error;
-  }
-  revalidateMaintenance(workOrderId);
+  await requireUser("/maintenance");
+  const id = str(formData, "workOrderId");
+  const status = str(formData, "status") as Parameters<typeof api.maintenance.changeStatus>[0]["status"];
+  const result = await attempt(() => api.maintenance.changeStatus({ id, status, note: str(formData, "note") || undefined }));
+  if (!result.ok) return { error: result.error.message };
+  revalidateMaintenance(id);
   return { message: `Updated to ${status.toLowerCase().replace(/_/g, " ")}.` };
 }
 
 export async function triageAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
-  const user = await requireUser("/maintenance");
-  const workOrderId = str(formData, "workOrderId");
-  try {
-    await triageWorkOrder({ workOrderId, actor: actorOf(user), category: str(formData, "category") || null, priority: (str(formData, "priority") || null) as WorkOrderPriority | null, markTriaged: true });
-  } catch (error) {
-    if (error instanceof MaintenanceError) return { error: error.message };
-    throw error;
-  }
-  revalidateMaintenance(workOrderId);
+  await requireUser("/maintenance");
+  const id = str(formData, "workOrderId");
+  const priority = str(formData, "priority") as "LOW" | "MEDIUM" | "HIGH" | "URGENT" | "";
+  const result = await attempt(() => api.maintenance.triage({ id, category: str(formData, "category") || undefined, priority: priority || undefined }));
+  if (!result.ok) return { error: result.error.message };
+  revalidateMaintenance(id);
   return { message: "Triage saved." };
 }
 
 export async function noteAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
-  const user = await requireUser("/maintenance");
-  const workOrderId = str(formData, "workOrderId");
-  try {
-    await addNote({ workOrderId, actor: actorOf(user), note: str(formData, "note"), internal: str(formData, "internal") === "on", photo: await photoFrom(formData) });
-  } catch (error) {
-    if (error instanceof MaintenanceError) return { error: error.message };
-    throw error;
-  }
-  revalidateMaintenance(workOrderId);
+  await requireUser("/maintenance");
+  const id = str(formData, "workOrderId");
+  const result = await attempt(async () => api.maintenance.addNote({ id, note: str(formData, "note"), internal: str(formData, "internal") === "on", photo: await photoFrom(formData) }));
+  if (!result.ok) return { error: result.error.message };
+  revalidateMaintenance(id);
   return { message: "Note added." };
 }

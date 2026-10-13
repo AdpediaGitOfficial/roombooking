@@ -2,8 +2,8 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { hasRole, requireRole } from "@/lib/auth/authorize";
 import { MAINTENANCE_AREA_ROLES, MAINTENANCE_COORDINATOR_ROLES } from "@sam/core/modules/maintenance/access";
-import { listWorkOrders, locationLabel, queueSummary, type QueueFilter } from "@sam/core/modules/maintenance/service";
-import { actorOf } from "@/modules/maintenance/context";
+import { locationLabel, type QueueFilter } from "@sam/core/modules/maintenance/rules";
+import { api } from "@/lib/api";
 import { PriorityLabel, SlaLabel, WorkOrderStatusBadge } from "@/modules/maintenance/components/views";
 import { PageHeader } from "@/components/shell/page-header";
 
@@ -13,12 +13,10 @@ const FILTERS: Array<[QueueFilter, string]> = [
 
 async function Queue({ searchParams }: { searchParams: Promise<{ filter?: string }> }) {
   const user = await requireRole(MAINTENANCE_AREA_ROLES, "/maintenance");
-  const actor = actorOf(user);
   const isCoordinator = hasRole(user, ...MAINTENANCE_COORDINATOR_ROLES);
   const { filter: raw } = await searchParams;
   const filter = (FILTERS.some(([f]) => f === raw) ? raw : "open") as QueueFilter;
-  const now = new Date();
-  const [orders, summary] = await Promise.all([listWorkOrders(actor, filter), queueSummary(actor, now)]);
+  const { orders, summary, now } = await api.maintenance.queue({ filter });
 
   const tiles: Array<[string, number, string, string]> = [
     ["Open", summary.open, "var(--deep)", "open"], ["Unassigned", summary.unassigned, "var(--warning)", "unassigned"], ["Overdue", summary.overdue, "var(--danger)", "open"], ["Waiting", summary.waiting, "var(--info)", "waiting"], ["To close", summary.awaitingClose, "var(--primary)", "resolved"],

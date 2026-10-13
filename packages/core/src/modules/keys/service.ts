@@ -1,42 +1,16 @@
 // Key management (SRS 5.6, 8.5). Issue/return history is append-only at the
 // database level; a key can have one open issue at a time.
-import type { KeyStatus, Prisma, PrismaClient } from "@prisma/client";
+import type { Prisma, PrismaClient } from "@prisma/client";
 import { prisma } from "../../lib/db";
 import { recordAudit } from "../../lib/audit";
 import { enqueueNotification } from "../../lib/notifications";
 import { KeyError } from "./errors";
+import { holderLabel, keyInclude, isOverdue, openIssue, type KeyFilter } from "./rules";
+
+export * from "./rules";
 
 type Tx = Prisma.TransactionClient;
 type Db = Tx | PrismaClient;
-
-export const keyInclude = {
-  site: true,
-  room: { include: { building: true } },
-  facility: true,
-  replaces: { select: { id: true, code: true } },
-  replacedBy: { select: { id: true, code: true } },
-  transactions: {
-    include: { holder: { select: { id: true, employeeId: true, firstName: true, lastName: true, userId: true } }, custodian: { select: { id: true, name: true } } },
-    orderBy: { createdAt: "desc" },
-  },
-} satisfies Prisma.KeyInclude;
-
-export type KeyRecord = Prisma.KeyGetPayload<{ include: typeof keyInclude }>;
-export type KeyTransactionRecord = KeyRecord["transactions"][number];
-
-export const CONDITIONS = ["Good", "Worn", "Damaged"] as const;
-
-export function openIssue(key: Pick<KeyRecord, "transactions">): KeyTransactionRecord | null {
-  return key.transactions.find((t) => t.type === "ISSUE" && t.returnedAt === null) ?? null;
-}
-
-export function holderLabel(t: Pick<KeyTransactionRecord, "holder" | "holderName">): string {
-  return t.holder ? `${t.holder.firstName} ${t.holder.lastName} (${t.holder.employeeId})` : (t.holderName ?? "Unknown holder");
-}
-
-export function isOverdue(t: Pick<KeyTransactionRecord, "expectedReturnAt" | "returnedAt">, now: Date = new Date()): boolean {
-  return t.returnedAt === null && !!t.expectedReturnAt && t.expectedReturnAt < now;
-}
 
 function translateDbError(error: unknown): never {
   const e = error as { code?: string; message?: string; meta?: { target?: unknown; modelName?: string } };
@@ -259,8 +233,6 @@ export async function retireKey(input: ExceptionInput) {
 // Queries and reports (KEY-03, KEY-05, KEY-06)
 // ---------------------------------------------------------------------------
 
-export type KeyFilter = "all" | "available" | "issued" | "overdue" | "exceptions" | "retired";
-
 export async function listKeys(filter: KeyFilter, siteId?: string | null, now: Date = new Date()) {
   const byStatus: Prisma.KeyWhereInput =
     filter === "available" ? { status: "AVAILABLE" }
@@ -300,12 +272,53 @@ export async function keySummary(siteId?: string | null, now: Date = new Date())
   };
 }
 
-export function describeKeyStatus(status: KeyStatus): string {
-  return { AVAILABLE: "Available", ISSUED: "Issued", LOST: "Lost", DAMAGED: "Damaged", UNDER_REPAIR: "Under repair", RETIRED: "Retired" }[status];
+// ---------------------------------------------------------------------------
+// Views for the API
+// ---------------------------------------------------------------------------
+
+/** The register for a filter together with its summary tiles. */
+export async function getRegister(filter: KeyFilter, now: Date = new Date()) {
+  const [rows, summary] = await Promise.all([listKeys(filter, null, now), keySummary(null, now)]);
+  return { rows, summary, now };
 }
 
-export function keyLocation(key: Pick<KeyRecord, "room" | "facility" | "site">): string {
-  if (key.room) return `${key.room.building.name} · Room ${key.room.code}`;
-  if (key.facility) return `Facility · ${key.facility.name}`;
-  return key.site.name;
+/** Sites, rooms and facilities a new key can be registered against. */
+export async function registerOptions() {
+  const [sites, rooms, facilities] = await Promise.all([
+    prisma.site.findMany({ where: { status: "ACTIVE" }, orderBy: { name: "asc" } }),
+    prisma.room.findMany({ where: { status: { not: "INACTIVE" } }, include: { building: true }, orderBy: [{ building: { code: "asc" } }, { code: "asc" }] }),
+    prisma.facility.findMany({ where: { status: "ACTIVE" }, orderBy: { name: "asc" } }),
+  ]);
+  return {
+    sites: sites.map((s) => ({ id: s.id, label: s.name })),
+    rooms: rooms.map((r) => ({ id: r.id, siteId: r.building.siteId, label: `${r.building.name} · Room ${r.code}` })),
+    facilities: facilities.map((f) => ({ id: f.id, siteId: f.siteId, label: f.name })),
+  };
+}
+
+export type KeyExceptionKind = "LOST" | "FOUND" | "DAMAGED" | "SEND_REPAIR" | "BACK_REPAIR" | "RETIRE";
+
+/** One entry point for the exception buttons on a key; returns the confirmation to show. */
+export async function applyKeyException(input: { keyId: string; actorId: string; kind: KeyExceptionKind; notes: string; incidentRef?: string | null }) {
+  const { keyId, actorId, notes } = input;
+  switch (input.kind) {
+    case "LOST":
+      await reportLost({ keyId, actorId, notes, incidentRef: input.incidentRef ?? null });
+      return { message: "Recorded as lost. The holder remains accountable until the key is replaced or found." };
+    case "FOUND":
+      await markFound({ keyId, actorId, notes });
+      return { message: "Recorded as found." };
+    case "DAMAGED":
+      await reportDamaged({ keyId, actorId, notes });
+      return { message: "Recorded as damaged." };
+    case "SEND_REPAIR":
+      await setRepairState({ keyId, actorId, state: "UNDER_REPAIR", notes });
+      return { message: "Sent for repair." };
+    case "BACK_REPAIR":
+      await setRepairState({ keyId, actorId, state: "AVAILABLE", notes });
+      return { message: "Back in service." };
+    case "RETIRE":
+      await retireKey({ keyId, actorId, notes });
+      return { message: "Key retired." };
+  }
 }
