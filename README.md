@@ -50,6 +50,7 @@ The seed creates three demo accounts, all with password `ChangeMe123!`
 | engineer@example.com | Maintenance engineer |
 | vendor@example.com | Vendor technician (CoolAir Services) |
 | custodian@example.com | Inventory / key custodian |
+| facility@example.com | Facility manager |
 
 ## Accommodation and bed management
 
@@ -159,6 +160,28 @@ permanent transaction history and the actions for its state. Rules in
 - custodians and administrators manage keys; officers issue and return, including from the allocation page at check-in and check-out; residents see the keys they hold in My stay.
 
 Demo custodian: `custodian@example.com`.
+
+## Facility booking
+
+Residents book shared facilities at `/my/facilities` (list, day-by-day
+availability grid, book, change, cancel, history). Facility managers,
+administrators and officers run `/facilities` (overview, approvals, 30-day
+utilisation) and `/facilities/:id` (day schedule, approve/decline, mark used or
+no-show, cancel with a reason, book on behalf, settings). Rules in
+`src/modules/facilities/service.ts` and `rules.ts`:
+
+- each facility has a capacity (people at once), per-day opening hours in the site's time zone, and booking rules: slot length, minimum and maximum duration, advance window, buffer before and after each booking, cancellation cut-off, maximum upcoming bookings and bookings per day per person;
+- availability is computed per slot from the bookings that hold capacity (awaiting approval, confirmed, in use), including the buffer; a booking is accepted only if the headcount fits for its whole duration;
+- the capacity check runs under a row lock on the facility, so two concurrent requests for the last place cannot both succeed; submissions carry an idempotency key, so a retried submission returns the same booking;
+- facilities flagged as needing approval create bookings as *awaiting approval* (they hold their place); managers approve or decline with a note, and pending requests expire when their start time passes;
+- bookers can cancel until the cut-off; after that only a manager can, and must give a reason, which the booker receives;
+- once a booking has started, staff mark it used or no-show; used bookings complete automatically at their end time (the sweep runs with the notifications job);
+- confirmations, pending notices, declines and manager cancellations go to the booker in-app and by email;
+- every change is audited; the overview reports bookings, attendance, no-shows, cancellations and utilisation (booked person-hours against capacity × opening hours) per facility.
+
+Demo facility manager: `facility@example.com`. The demo site has a gym (no
+approval, 30-minute slots) and a community hall (approval required, closed on
+Fridays, one group at a time).
 
 ## User and role administration
 

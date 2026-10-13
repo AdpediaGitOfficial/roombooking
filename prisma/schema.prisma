@@ -571,7 +571,10 @@ model Facility {
   code             String
   name             String
   location         String?
+  description      String?
   capacity         Int          @default(1)
+  // Per-day opening hours and booking rules in the site's timezone; see
+  // src/modules/facilities/rules.ts for the shapes and defaults (FAC-01, FAC-05).
   openingHours     Json?
   bookingRules     Json?
   requiresApproval Boolean      @default(false)
@@ -607,6 +610,12 @@ model FacilityBooking {
   status         BookingStatus @default(CONFIRMED)
   purpose        String?
   idempotencyKey String?       @unique
+  createdById    String?
+  decidedById    String?
+  decisionNote   String?
+  checkedInAt    DateTime?
+  cancelledAt    DateTime?
+  cancelReason   String?
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
 
@@ -614,6 +623,8 @@ model FacilityBooking {
   user     User     @relation(fields: [userId], references: [id])
 
   @@index([facilityId, startsAt, endsAt])
+  @@index([facilityId, status, startsAt])
+  @@index([userId, status, startsAt])
 }
 
 // ---------------------------------------------------------------------------

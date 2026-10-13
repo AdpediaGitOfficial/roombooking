@@ -5,6 +5,7 @@ const NAV = [
   ["/my/stay", "My stay"],
   ["/my/requests", "Requests"],
   ["/my/maintenance", "Maintenance"],
+  ["/my/facilities", "Facilities"],
   ["/my/profile", "Profile"],
 ] as const;
 
@@ -16,7 +17,7 @@ export default function MyLayout({ children }: LayoutProps<"/my">) {
         <ul className="mx-auto flex max-w-md">
           {NAV.map(([href, label]) => (
             <li key={href} className="flex-1">
-              <Link href={href} className="block px-2 py-3 text-center text-sm font-medium">{label}</Link>
+              <Link href={href} className="block px-1 py-3 text-center text-xs font-medium whitespace-nowrap">{label}</Link>
             </li>
           ))}
         </ul>

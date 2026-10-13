@@ -65,6 +65,7 @@ async function main() {
   await ensureUser("manager@example.com", "Line Manager", Role.APPROVER);
   const engineer = await ensureUser("engineer@example.com", "Maintenance Engineer", Role.MAINTENANCE);
   const custodian = await ensureUser("custodian@example.com", "Key Custodian", Role.INVENTORY_KEY_CUSTODIAN);
+  await ensureUser("facility@example.com", "Facility Manager", Role.FACILITY_MANAGER);
   const vendor = await prisma.vendor.upsert({
     where: { id: "demo-vendor-coolair" },
     update: {},
@@ -298,16 +299,37 @@ async function main() {
   await ensureTicket("Air conditioning blows warm air even on the lowest setting.", { requesterId: staffUser.id, roomId: roomA03.id, category: "Air conditioning", priority: "HIGH", status: "ASSIGNED", vendorId: vendor.id });
   await ensureTicket("Wardrobe door hinge is broken and the door will not close.", { requesterId: staffUser.id, roomId: roomA01.id, category: "Furniture", priority: "LOW", status: "RESOLVED", assigneeId: engineer.id, resolutionNote: "Hinge replaced and door realigned." });
 
+  const GYM_HOURS = { mon: { open: "06:00", close: "22:00" }, tue: { open: "06:00", close: "22:00" }, wed: { open: "06:00", close: "22:00" }, thu: { open: "06:00", close: "22:00" }, fri: { open: "08:00", close: "20:00" }, sat: { open: "06:00", close: "22:00" }, sun: { open: "06:00", close: "22:00" } };
+  const GYM_RULES = { slotMinutes: 30, minDurationMinutes: 30, maxDurationMinutes: 90, advanceDays: 7, bufferMinutes: 0, cancellationCutoffMinutes: 60, maxActivePerUser: 3, maxPerDayPerUser: 1 };
+  const HALL_HOURS = { mon: { open: "09:00", close: "21:00" }, tue: { open: "09:00", close: "21:00" }, wed: { open: "09:00", close: "21:00" }, thu: { open: "09:00", close: "21:00" }, fri: null, sat: { open: "09:00", close: "21:00" }, sun: { open: "09:00", close: "21:00" } };
+  const HALL_RULES = { slotMinutes: 60, minDurationMinutes: 60, maxDurationMinutes: 240, advanceDays: 30, bufferMinutes: 30, cancellationCutoffMinutes: 1440, maxActivePerUser: 2, maxPerDayPerUser: 1 };
   await prisma.facility.upsert({
     where: { siteId_code: { siteId: site.id, code: "GYM" } },
-    update: {},
+    update: { location: "Block A, ground floor", openingHours: GYM_HOURS, bookingRules: GYM_RULES },
     create: {
       siteId: site.id,
       code: "GYM",
       name: "Gymnasium",
       capacity: 10,
-      openingHours: { mon_sun: ["06:00", "22:00"] },
-      bookingRules: { maxDurationMinutes: 90, advanceDays: 7, bufferMinutes: 15 },
+      location: "Block A, ground floor",
+      description: "Cardio machines, free weights and a stretching area.",
+      openingHours: GYM_HOURS,
+      bookingRules: GYM_RULES,
+    },
+  });
+  await prisma.facility.upsert({
+    where: { siteId_code: { siteId: site.id, code: "HALL" } },
+    update: { openingHours: HALL_HOURS, bookingRules: HALL_RULES },
+    create: {
+      siteId: site.id,
+      code: "HALL",
+      name: "Community hall",
+      capacity: 1,
+      location: "Next to the canteen",
+      description: "One group at a time: events, training and gatherings. Bookings are approved by the facility manager.",
+      requiresApproval: true,
+      openingHours: HALL_HOURS,
+      bookingRules: HALL_RULES,
     },
   });
 

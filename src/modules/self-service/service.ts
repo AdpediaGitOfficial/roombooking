@@ -199,6 +199,14 @@ export function describeNotification(event: string, payload: unknown): { title: 
       return { title: "Accommodation confirmed", body: `Bed ${p.bed} in ${p.building}, room ${p.room}, from ${p.startDate}${p.endDate ? ` to ${p.endDate}` : ""}.` };
     case "allocation.checked_out":
       return { title: "Checked out", body: `Your stay in bed ${p.bed} ended on ${p.endDate}.` };
+    case "booking.confirmed":
+      return { title: "Booking confirmed", body: `${p.facility} on ${p.date}, ${p.startTime}–${p.endTime}.` };
+    case "booking.pending":
+      return { title: "Booking awaiting approval", body: `${p.facility} on ${p.date} at ${p.startTime}.` };
+    case "booking.rejected":
+      return { title: "Booking declined", body: `${p.facility} on ${p.date} at ${p.startTime}${p.reason ? `: ${p.reason}` : "."}` };
+    case "booking.cancelled":
+      return { title: "Booking cancelled", body: `${p.facility} on ${p.date} at ${p.startTime}${p.reason ? `: ${p.reason}` : "."}` };
     case "allocation.cancelled":
       return { title: "Allocation cancelled", body: `Bed ${p.bed} is no longer allocated to you${p.reason ? `: ${p.reason}` : "."}` };
     default:
