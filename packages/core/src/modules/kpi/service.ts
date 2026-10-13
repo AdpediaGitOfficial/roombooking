@@ -73,10 +73,12 @@ export const KPI_BY_KEY = new Map(KPI_CATALOG.map((k) => [k.key, k]));
 export const KPI_GROUPS = [...new Set(KPI_CATALOG.map((k) => k.group))];
 
 /** Writes any missing KPI definitions into the dictionary table (the definition shown in tooltips is the stored one, so owners can refine it). */
+const ensured = new Set<string>();
 export async function ensureKpiDictionary(organizationId: string) {
-  for (const k of KPI_CATALOG) {
-    await prisma.kpiDefinition.upsert({ where: { organizationId_key: { organizationId, key: k.key } }, update: {}, create: { organizationId, key: k.key, name: k.name, formula: k.formula, source: k.source, owner: k.owner, unit: k.unit, higherIsBetter: k.higherIsBetter } });
-  }
+  if (ensured.has(organizationId)) return;
+  // skipDuplicates keeps two requests that arrive together from racing on the unique key.
+  await prisma.kpiDefinition.createMany({ data: KPI_CATALOG.map((k) => ({ organizationId, key: k.key, name: k.name, formula: k.formula, source: k.source, owner: k.owner, unit: k.unit, higherIsBetter: k.higherIsBetter })), skipDuplicates: true });
+  ensured.add(organizationId);
 }
 
 export async function listDictionary(organizationId: string) {

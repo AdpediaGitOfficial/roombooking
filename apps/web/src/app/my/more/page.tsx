@@ -12,6 +12,8 @@ async function Content() {
     ["/my/lost-found", "Lost & found", "Report or claim an item", true],
     ["/my/charges", "Charges", "Charges against you", userCanAccess(user, "charges.own")],
     ["/my/sos", "Help / SOS", "Call for help in an emergency", userCanAccess(user, "sec.sos_raise")],
+    ["/my/house-rules", "House rules", "Read and acknowledge the rules for your site", true],
+    ["/my/privacy", "Privacy", "Download your data; ask for correction or erasure", true],
     ["/my/profile", "Profile", "Your details, consent and password", true],
   ];
   return <ul className="mt-4 divide-y divide-zinc-200 card">{links.filter((l) => l[3]).map(([href, label, hint]) => <li key={href}><Link href={href} className="flex items-center justify-between p-4"><span><b className="block">{label}</b><span className="text-xs text-zinc-500">{hint}</span></span><span aria-hidden="true">›</span></Link></li>)}</ul>;

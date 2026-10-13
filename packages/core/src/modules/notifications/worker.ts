@@ -52,7 +52,7 @@ export async function processOutbox(opts: { limit?: number; now?: Date; transpor
       const claim = await prisma.notification.updateMany({ where: { id: candidate.id, status: "QUEUED", lockedAt: candidate.lockedAt }, data: { lockedAt: now } });
       if (claim.count !== 1) { result.skipped++; continue; }
       result.claimed++;
-      const n = await prisma.notification.findUniqueOrThrow({ where: { id: candidate.id }, include: { recipient: { select: { id: true, name: true, email: true, status: true, whatsappNumber: true, whatsappNotifications: true, whatsappConsentAt: true } } } });
+      const n = await prisma.notification.findUniqueOrThrow({ where: { id: candidate.id }, include: { recipient: { select: { id: true, organizationId: true, name: true, email: true, status: true, whatsappNumber: true, whatsappNotifications: true, whatsappConsentAt: true } } } });
 
       // Recipient checks that no retry can fix.
       let blocked: string | null = null;
@@ -66,9 +66,17 @@ export async function processOutbox(opts: { limit?: number; now?: Date; transpor
         continue;
       }
 
+      // An administrator can switch an event off for a channel or reword it (document section 2: notification templates).
+      const override = await prisma.notificationTemplateOverride.findUnique({ where: { organizationId_event_channel: { organizationId: n.recipient.organizationId, event: n.event, channel } } });
+      if (override && !override.enabled) {
+        await prisma.notification.update({ where: { id: n.id }, data: { status: "SENT", sentAt: now, lockedAt: null, nextAttemptAt: null, subject: "(switched off in template settings)" } });
+        result.skipped++;
+        continue;
+      }
+
       let prepared: Prepared;
       if (channel === "EMAIL") {
-        const rendered = renderEmail(n.event, n.payload, n.recipient.name);
+        const rendered = renderEmail(n.event, n.payload, n.recipient.name, override);
         prepared = { kind: "email", subject: rendered.subject, to: n.recipient.email!, send: () => mail!.send({ to: n.recipient.email!, subject: rendered.subject, text: rendered.text, html: rendered.html }) };
       } else {
         const message = renderWhatsApp(n.event, n.payload, n.recipient.name, toWaId(n.recipient.whatsappNumber!));

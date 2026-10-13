@@ -1,10 +1,12 @@
 import { Suspense } from "react";
 import Link from "next/link";
-import { requireRole, userCan } from "@/lib/auth/authorize";
+import { requireRole, userAccess, userCan } from "@/lib/auth/authorize";
 import { sitesFor } from "@/lib/auth/scope";
 import { REPORT_VIEW_ROLES } from "@sam/core/modules/reports/access";
 import { ARRIVAL_WINDOW_DAYS, getDashboard, getOccupancyTrend, type MovementRow } from "@sam/core/modules/reports/service";
 import { OccupancyStackChart, OccupancyTrendChart } from "@/modules/reports/components/charts";
+import { computeKpis } from "@sam/core/modules/kpi/service";
+import { KpiGroups } from "@/modules/kpi/components";
 import { PageHeader } from "@/components/shell/page-header";
 
 type Severity = "danger" | "warning" | "info";
@@ -46,12 +48,15 @@ function MovementTable({ rows }: { rows: Array<MovementRow & { direction: "arriv
   );
 }
 
-async function Dashboard({ searchParams }: { searchParams: Promise<{ siteId?: string }> }) {
+async function Dashboard({ searchParams }: { searchParams: Promise<{ siteId?: string; days?: string }> }) {
   const user = await requireRole(REPORT_VIEW_ROLES, "/dashboard");
-  const { siteId: raw } = await searchParams;
+  const { siteId: raw, days: rawDays } = await searchParams;
+  const days = [7, 30, 90].includes(Number(rawDays)) ? Number(rawDays) : 30;
   const siteId = raw || null;
   const scope = await sitesFor(user, ["rep.l1", "rep.l2", "rep.l3", "rep.l4"], siteId);
-  const [d, trend] = await Promise.all([getDashboard(scope), getOccupancyTrend(scope, 30)]);
+  const exec = userAccess(user, "rep.l1") !== null;
+  const kpiScope = exec ? { siteIds: scope === null || scope === undefined ? null : Array.isArray(scope) ? scope : [scope] } : null;
+  const [d, trend, kpis] = await Promise.all([getDashboard(scope), getOccupancyTrend(scope, 30), kpiScope ? computeKpis(user.organizationId, kpiScope, { days }) : Promise.resolve(null)]);
   const s = d.summary;
   const p = d.pending;
   const pendingItems: Array<[string, string, number, string, Severity]> = [
@@ -117,6 +122,16 @@ async function Dashboard({ searchParams }: { searchParams: Promise<{ siteId?: st
         </div>
       </div>
 
+      {kpis && (
+        <section className="mt-6">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <div><h2 className="section-title">Executive 360</h2><p className="text-xs text-zinc-500">Live figures as of {kpis.asOf.toISOString().slice(0, 16).replace("T", " ")} UTC; changes compare the last {kpis.days} days with the {kpis.days} before. Hover a name for its definition.</p></div>
+            <nav className="flex gap-1.5">{[7, 30, 90].map((n) => <Link key={n} href={`/dashboard?days=${n}${siteId ? `&siteId=${siteId}` : ""}`} className={`pill${n === days ? " pill-on" : ""}`}>{n} days</Link>)}<Link href="/reports/dictionary" className="pill">KPI dictionary</Link></nav>
+          </div>
+          <div className="mt-3"><KpiGroups values={kpis.values} /></div>
+        </section>
+      )}
+
       <section className="panel mt-4">
         <div className="panel-head"><div><h2>Arrivals and departures, next {ARRIVAL_WINDOW_DAYS} days</h2><p>Confirmed allocations starting or ending, overdue first</p></div><Link href="/accommodation/allocations?filter=upcoming" className="btn btn-small">All allocations</Link></div>
         <MovementTable rows={movements} />
@@ -129,7 +144,7 @@ export default function DashboardPage({ searchParams }: PageProps<"/dashboard">)
   return (
     <main>
       <Suspense fallback={<p className="text-sm text-zinc-500">Loading…</p>}>
-        <Dashboard searchParams={searchParams as Promise<{ siteId?: string }>} />
+        <Dashboard searchParams={searchParams as Promise<{ siteId?: string; days?: string }>} />
       </Suspense>
     </main>
   );

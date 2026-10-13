@@ -21,7 +21,7 @@ async function Log({ searchParams }: { searchParams: Promise<{ entityType?: stri
       <div className="mt-4 overflow-x-auto card">
         <table className="w-full text-sm">
           <thead className="bg-zinc-50 text-left text-xs uppercase tracking-wide text-zinc-500">
-            <tr><th className="px-3 py-2">When</th><th className="px-3 py-2">Actor</th><th className="px-3 py-2">Action</th><th className="px-3 py-2">Entity</th><th className="px-3 py-2">Change</th></tr>
+            <tr><th className="px-3 py-2">When</th><th className="px-3 py-2">Actor</th><th className="px-3 py-2">Action</th><th className="px-3 py-2">Entity</th><th className="px-3 py-2">Reason</th><th className="px-3 py-2">Device</th><th className="px-3 py-2">Change</th></tr>
           </thead>
           <tbody className="divide-y divide-zinc-200">
             {events.map((e) => (
@@ -29,11 +29,12 @@ async function Log({ searchParams }: { searchParams: Promise<{ entityType?: stri
                 <td className="px-3 py-2 text-xs tabular-nums">{e.createdAt.toISOString().replace("T", " ").slice(0, 19)}</td>
                 <td className="px-3 py-2 text-xs">{e.actor?.name ?? <span className="text-zinc-400">system / anonymous</span>}</td>
                 <td className="px-3 py-2 font-medium">{e.action.toLowerCase().replace(/_/g, " ")}</td>
-                <td className="px-3 py-2 text-xs">{e.entityType} <span className="text-zinc-500">{e.entityId.slice(-8)}</span></td>
+                <td className="px-3 py-2 text-xs"><a className="underline" href={`/reports/timeline?entityType=${encodeURIComponent(e.entityType)}&entityId=${encodeURIComponent(e.entityId)}`}>{e.entityType} <span className="text-zinc-500">{e.entityId.slice(-8)}</span></a></td>
+                <td className="px-3 py-2 text-xs">{e.reason ?? "—"}</td><td className="px-3 py-2 text-xs" title={e.userAgent ?? ""}>{e.ip ?? "—"}</td>
                 <td className="max-w-md px-3 py-2 font-mono text-xs text-zinc-600">{e.before ? <div className="truncate">− {JSON.stringify(e.before)}</div> : null}{e.after ? <div className="truncate">+ {JSON.stringify(e.after)}</div> : null}</td>
               </tr>
             ))}
-            {events.length === 0 && <tr><td colSpan={5} className="px-3 py-6 text-center text-zinc-500">No events match.</td></tr>}
+            {events.length === 0 && <tr><td colSpan={7} className="px-3 py-6 text-center text-zinc-500">No events match.</td></tr>}
           </tbody>
         </table>
       </div>

@@ -70,11 +70,12 @@ async function main() {
     if (!existing) await prisma.permissionGrant.create({ data: { organizationId: org.id, role, capability, reason, grantedById } });
   }
 
+  // (Demo accounts have already accepted the privacy notice; real accounts accept it at first sign-in.)
   // Two Super Admins plus a break-glass account (document section 12).
   const adminUser = await ensureUser("admin@example.com", "Super Admin", Role.SYSTEM_ADMIN);
   await ensureUser("admin2@example.com", "Second Super Admin", Role.SYSTEM_ADMIN);
   await ensureUser("breakglass@example.com", "Break-glass Admin", Role.SYSTEM_ADMIN);
-  await ensureUser("accadmin@example.com", "Accommodation Admin", Role.ACCOMMODATION_ADMIN);
+  const accAdmin = await ensureUser("accadmin@example.com", "Accommodation Admin", Role.ACCOMMODATION_ADMIN);
   const officer = await ensureUser("officer@example.com", "Reception Officer", Role.ACCOMMODATION_OFFICER);
   await ensureUser("manager@example.com", "Line Manager", Role.LINE_MANAGER);
   await ensureUser("coordinator@example.com", "Maintenance Coordinator", Role.MAINTENANCE_COORDINATOR);
@@ -83,6 +84,7 @@ async function main() {
   await ensureUser("readonly@example.com", "Read-only Manager", Role.READONLY_MANAGER);
   // A senior officer holds the Key supervisor and Inventory supervisor sets; another leads the facilities.
   const custodian = await ensureUser("custodian@example.com", "Senior Officer (keys & stock)", Role.ACCOMMODATION_OFFICER);
+  await ensureSetGrant(accAdmin.id, "COMPLIANCE", "Accommodation Admin is the data protection lead", adminUser.id);
   await ensureRoleCapability(Role.STAFF, "sec.preregister", "Residents may register their own visitors at go-live", adminUser.id);
   await ensureSetGrant(custodian.id, "KEY_SUPERVISOR", "Senior officer keeps the key register", adminUser.id);
   await ensureSetGrant(custodian.id, "INVENTORY_SUPERVISOR", "Senior officer keeps the stores", adminUser.id);
@@ -425,6 +427,8 @@ async function main() {
     inventoryItems: await prisma.inventoryItem.count(),
     lostFound: await prisma.lostFoundItem.count(),
   };
+  // Demo accounts have already accepted the current privacy notice, so sign-in goes straight to the work.
+  await prisma.user.updateMany({ where: { organizationId: org.id, consentAcceptedAt: null }, data: { consentAcceptedAt: new Date(), consentVersion: process.env.CONSENT_VERSION ?? "2026-10" } });
   console.log("Seed complete", counts);
 }
 

@@ -1,6 +1,7 @@
 import "server-only";
 import "./audit-context";
 import { redirect } from "next/navigation";
+import { consentNeeded } from "@sam/core/modules/privacy/service";
 import type { Role } from "@prisma/client";
 import { getCurrentUser } from "@/lib/auth/session";
 import { accessTo, can, canAccess, canAccessAny, type Access, type Principal, type ScopeContext } from "@sam/core/lib/permissions/engine";
@@ -48,6 +49,8 @@ export async function requireUser(returnTo?: string): Promise<CurrentUser> {
     redirect(target);
   }
   if (user.mustChangePassword) redirect("/change-password");
+  // Consent is captured at first sign-in and again whenever the privacy notice changes (DPDP Act 2023).
+  if (consentNeeded(user)) redirect(`/consent?next=${encodeURIComponent(returnTo ?? "/")}`);
   return user;
 }
 

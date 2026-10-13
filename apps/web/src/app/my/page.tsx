@@ -5,6 +5,7 @@ import { prisma } from "@sam/core/lib/db";
 import Link from "next/link";
 import { markReadAction } from "@/modules/self-service/actions";
 import { isoDate } from "@sam/core/modules/accommodation/occupancy";
+import { pendingHouseRules } from "@sam/core/modules/masters/service";
 
 async function HomeContent() {
   const { user, staff } = await requireResident("/my");
@@ -13,6 +14,7 @@ async function HomeContent() {
     listMyNotifications(user.id),
     prisma.request.findMany({ where: { requesterId: user.id, status: "CHANGES_REQUESTED" }, include: { requestType: true } }),
   ]);
+  const rulesPending = await pendingHouseRules(user.id, user.organizationId);
   const ticketsNeedingMe = await prisma.workOrder.findMany({ where: { requesterId: user.id, status: { in: ["RESOLVED", "WAITING_STAFF"] } }, orderBy: { updatedAt: "desc" } });
   const firstName = staff?.firstName ?? user.name.split(" ")[0];
   const unread = notifications.filter((n) => !n.readAt);
@@ -20,6 +22,7 @@ async function HomeContent() {
   const current = stay?.current ?? null;
   const todos: Array<{ key: string; sev: "danger" | "warning" | "info"; title: React.ReactNode; hint: string; attr: string }> = [
     ...ticketsNeedingMe.map((t) => ({ key: t.id, sev: t.status === "RESOLVED" ? ("danger" as const) : ("warning" as const), attr: "TICKET", title: <Link href={`/my/maintenance/${t.id}`}>{t.status === "RESOLVED" ? `Confirm the ${t.category.toLowerCase()} fix` : `${t.category} needs a reply from you`}</Link>, hint: `${t.ticketNumber} · ${t.status === "RESOLVED" ? "marked resolved" : "waiting for you"}` })),
+    ...(rulesPending.length ? [{ key: "rules", sev: "warning" as const, attr: "RULES", title: <Link href="/my/house-rules">Read and acknowledge the house rules</Link>, hint: `${rulesPending.length} new or updated` }] : []),
     ...returned.map((r) => ({ key: r.id, sev: "warning" as const, attr: "REQUEST", title: <Link href={`/my/requests/${r.id}`}>{r.requestType.name} needs changes</Link>, hint: "Returned by the approver · edit and resubmit" })),
     ...(stay?.pendingActions ?? []).map((a) => ({ key: `${a.kind}-${a.date}`, sev: "info" as const, attr: a.kind, title: a.text, hint: `${a.kind.toLowerCase()} · ${a.date}` })),
   ];

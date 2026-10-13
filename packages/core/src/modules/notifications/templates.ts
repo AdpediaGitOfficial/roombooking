@@ -89,12 +89,20 @@ const TEMPLATES: Record<string, Template> = {
   "user.password_reset": { subject: () => "Reset your password", lines: () => ["A password reset was requested for your account. Use the link below to choose a new password. If you did not ask for this, ignore this email.", "The link works once and expires."], path: (p) => str(p, "path"), cta: "Set a new password" },
 };
 
-export function renderEmail(event: string, payload: unknown, recipientName: string): Rendered {
+export type TemplateOverride = { subject?: string | null; body?: string | null } | null | undefined;
+
+/** Replaces {{key}} with the payload's value (unknown keys become empty) for administrator-edited templates. */
+export function interpolate(text: string, payload: Payload, name: string): string {
+  return text.replace(/\{\{\s*([\w.]+)\s*\}\}/g, (_m, k: string) => (k === "name" ? name : str(payload, k)));
+}
+
+export function renderEmail(event: string, payload: unknown, recipientName: string, override?: TemplateOverride): Rendered {
   const p = (payload ?? {}) as Payload;
   const t = TEMPLATES[event];
   const base = appBaseUrl();
-  const subject = t ? t.subject(p) : event.replace(/[._]/g, " ");
-  const lines = (t ? t.lines(p) : ["You have a new notification."]).filter(Boolean);
+  const first = recipientName.split(" ")[0] || "there";
+  const subject = override?.subject?.trim() ? interpolate(override.subject, p, first) : t ? t.subject(p) : event.replace(/[._]/g, " ");
+  const lines = (override?.body?.trim() ? override.body.split(/\r?\n/).map((l) => interpolate(l, p, first)) : t ? t.lines(p) : ["You have a new notification."]).filter(Boolean);
   const link = `${base}${t ? t.path(p) : "/my"}`;
   const cta = t?.cta ?? "Open the app";
   const firstName = recipientName.split(" ")[0] || "there";
