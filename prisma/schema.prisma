@@ -199,7 +199,13 @@ model User {
   inventoryTransactions InventoryTransaction[]
   assetAssignments      AssetAssignment[]      @relation("AssetAssignedBy")
   assetAssignmentsEnded AssetAssignment[]      @relation("AssetEndedBy")
-  lostFoundCustody      LostFoundItem[]
+  lostFoundCustody      LostFoundItem[]        @relation("LostFoundCustody")
+  lostFoundRegistered   LostFoundItem[]        @relation("LostFoundRegistered")
+  lostFoundHandedOver   LostFoundItem[]        @relation("LostFoundHandedOver")
+  lostFoundDisposed     LostFoundItem[]        @relation("LostFoundDisposed")
+  lostFoundClaims       LostFoundClaim[]       @relation("LostFoundClaimant")
+  lostFoundDecisions    LostFoundClaim[]       @relation("LostFoundClaimDecided")
+  lostFoundEvents       LostFoundEvent[]       @relation("LostFoundEvents")
   notifications         Notification[]
   auditEvents           AuditEvent[]
   attachments           Attachment[]
@@ -835,43 +841,94 @@ enum LostFoundStatus {
 }
 
 model LostFoundItem {
-  id            String          @id @default(cuid())
-  siteId        String
-  reference     String          @unique
-  description   String
-  category      String?
-  foundLocation String?
-  foundAt       DateTime
-  custodianId   String
-  status        LostFoundStatus @default(REPORTED)
-  handedOverAt  DateTime?
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
+  id                     String          @id @default(cuid())
+  siteId                 String
+  reference              String          @unique
+  description            String
+  category               String?
+  foundLocation          String?
+  foundAt                DateTime
+  foundByName            String?
+  custodianId            String
+  registeredById         String
+  storageLocation        String?
+  status                 LostFoundStatus @default(REPORTED)
+  notes                  String?
+  // Retention policy (LF-05): unclaimed items are due for disposal after this date.
+  retainUntil            DateTime?
+  handedOverAt           DateTime?
+  handedOverToName       String?
+  handedOverById         String?
+  handoverNote           String?
+  disposedAt             DateTime?
+  disposalMethod         String?
+  disposalAuthorisedById String?
+  disposalNote           String?
+  resolvedClaimId        String?         @unique
+  createdAt              DateTime        @default(now())
+  updatedAt              DateTime        @updatedAt
 
-  site      Site             @relation(fields: [siteId], references: [id])
-  custodian User             @relation(fields: [custodianId], references: [id])
-  claims    LostFoundClaim[]
+  site                 Site             @relation(fields: [siteId], references: [id])
+  custodian            User             @relation("LostFoundCustody", fields: [custodianId], references: [id])
+  registeredBy         User             @relation("LostFoundRegistered", fields: [registeredById], references: [id])
+  handedOverBy         User?            @relation("LostFoundHandedOver", fields: [handedOverById], references: [id])
+  disposalAuthorisedBy User?            @relation("LostFoundDisposed", fields: [disposalAuthorisedById], references: [id])
+  resolvedClaim        LostFoundClaim?  @relation("ResolvedClaim", fields: [resolvedClaimId], references: [id])
+  claims               LostFoundClaim[] @relation("ItemClaims")
+  events               LostFoundEvent[]
+
+  @@index([siteId, status])
+  @@index([foundAt])
+  @@index([status, retainUntil])
 }
 
 enum ClaimOutcome {
   PENDING
   VERIFIED
   REJECTED
+  WITHDRAWN
 }
 
+// Claimant details and verification outcome (LF-03). Rows are never deleted.
 model LostFoundClaim {
   id              String       @id @default(cuid())
   itemId          String
   claimantId      String?
+  claimantUserId  String?
   claimantName    String?
   claimantContact String?
-  evidence        String?
+  evidence        String
   outcome         ClaimOutcome @default(PENDING)
+  decidedById     String?
   decidedAt       DateTime?
+  decisionNote    String?
   createdAt       DateTime     @default(now())
 
-  item     LostFoundItem @relation(fields: [itemId], references: [id])
-  claimant StaffProfile? @relation(fields: [claimantId], references: [id])
+  item         LostFoundItem  @relation("ItemClaims", fields: [itemId], references: [id])
+  claimant     StaffProfile?  @relation(fields: [claimantId], references: [id])
+  claimantUser User?          @relation("LostFoundClaimant", fields: [claimantUserId], references: [id])
+  decidedBy    User?          @relation("LostFoundClaimDecided", fields: [decidedById], references: [id])
+  resolvedFor  LostFoundItem? @relation("ResolvedClaim")
+
+  @@index([itemId, outcome])
+  @@index([claimantUserId])
+}
+
+// Timeline of an item: registration, storage, claims, decisions, handover, disposal (LF-04).
+model LostFoundEvent {
+  id         String           @id @default(cuid())
+  itemId     String
+  type       String
+  fromStatus LostFoundStatus?
+  toStatus   LostFoundStatus?
+  actorId    String
+  notes      String?
+  createdAt  DateTime         @default(now())
+
+  item  LostFoundItem @relation(fields: [itemId], references: [id])
+  actor User          @relation("LostFoundEvents", fields: [actorId], references: [id])
+
+  @@index([itemId, createdAt])
 }
 
 // ---------------------------------------------------------------------------

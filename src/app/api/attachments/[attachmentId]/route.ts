@@ -17,6 +17,10 @@ export async function GET(_req: Request, { params }: { params: Promise<{ attachm
     const wo = await prisma.workOrder.findUnique({ where: { id: attachment.entityId }, select: { requesterId: true, assigneeId: true, vendorId: true } });
     allowed = !!wo && accessFor(wo, { id: user.id, roles: user.roleAssignments.map((r) => r.role), vendorId: user.vendorId }) !== null;
   }
+  if (attachment.entityType === "LostFoundItem") {
+    // Photos of found items are visible to every signed-in user (residents browse them to find their things).
+    allowed = !!(await prisma.lostFoundItem.findUnique({ where: { id: attachment.entityId }, select: { id: true } }));
+  }
   if (!allowed) return NextResponse.json({ error: "not found" }, { status: 404 });
 
   const bytes = await readStoredFile(attachment.storageKey);

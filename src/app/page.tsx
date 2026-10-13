@@ -14,7 +14,7 @@ const modules: Array<[string, string, string?]> = [
   ["Facility booking", "Shared facilities, calendars and approvals", "/facilities"],
   ["Keys", "Issue, return, lost and damaged keys", "/keys"],
   ["Inventory", "Stock, serialised assets, issues and returns", "/inventory"],
-  ["Lost & found", "Items, claims and handover"],
+  ["Lost & found", "Found items, claims, handover and disposal", "/lost-found"],
   ["Notifications", "In-app, email and WhatsApp"],
   ["Reports", "Occupancy, movements, maintenance, utilisation", "/dashboard"],
   ["Administration", "Users, roles, audit, configuration", "/admin/users"],

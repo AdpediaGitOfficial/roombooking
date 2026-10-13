@@ -61,7 +61,7 @@ async function main() {
   if (!(await prisma.roleAssignment.findFirst({ where: { userId: adminUser.id, role: Role.ACCOMMODATION_ADMIN, siteId: null, buildingId: null } }))) {
     await prisma.roleAssignment.create({ data: { userId: adminUser.id, role: Role.ACCOMMODATION_ADMIN } });
   }
-  await ensureUser("officer@example.com", "Reception Officer", Role.ACCOMMODATION_OFFICER);
+  const officer = await ensureUser("officer@example.com", "Reception Officer", Role.ACCOMMODATION_OFFICER);
   await ensureUser("manager@example.com", "Line Manager", Role.APPROVER);
   const engineer = await ensureUser("engineer@example.com", "Maintenance Engineer", Role.MAINTENANCE);
   const custodian = await ensureUser("custodian@example.com", "Key Custodian", Role.INVENTORY_KEY_CUSTODIAN);
@@ -373,6 +373,21 @@ async function main() {
     ]);
   }
 
+  // Lost and found: a few found items in different states.
+  const ensureFound = async (description: string, data: { category: string; foundLocation: string; daysAgo: number; storageLocation?: string; retentionDays?: number }) => {
+    const existing = await prisma.lostFoundItem.findFirst({ where: { siteId: site.id, description } });
+    if (existing) return existing;
+    const [{ nextval }] = await prisma.$queryRaw<[{ nextval: bigint }]>`SELECT nextval('"LostFoundItem_ref_seq"')`;
+    const foundAt = new Date(Date.now() - data.daysAgo * 86400000);
+    const item = await prisma.lostFoundItem.create({ data: { siteId: site.id, reference: `LF-${String(nextval).padStart(6, "0")}`, description, category: data.category, foundLocation: data.foundLocation, foundAt, custodianId: officer.id, registeredById: officer.id, storageLocation: data.storageLocation ?? null, status: data.storageLocation ? "STORED" : "REPORTED", retainUntil: new Date(foundAt.getTime() + (data.retentionDays ?? 90) * 86400000) } });
+    await prisma.lostFoundEvent.create({ data: { itemId: item.id, type: "REGISTERED", actorId: officer.id, toStatus: item.status, notes: data.storageLocation ? `Stored at ${data.storageLocation}` : null } });
+    return item;
+  };
+  await ensureFound("Black leather wallet, no cash, two bank cards", { category: "Wallet / cards / ID", foundLocation: "Canteen", daysAgo: 2, storageLocation: "Reception safe" });
+  await ensureFound("Blue umbrella with wooden handle", { category: "Other", foundLocation: "Block A lobby", daysAgo: 5, storageLocation: "Reception cupboard" });
+  await ensureFound("Grey hoodie, size M", { category: "Clothing", foundLocation: "Gym", daysAgo: 1 });
+  await ensureFound("Single silver earring", { category: "Jewellery / watch", foundLocation: "Villa 1 bathroom", daysAgo: 120, storageLocation: "Reception safe", retentionDays: 90 });
+
   const counts = {
     buildings: await prisma.building.count(),
     rooms: await prisma.room.count(),
@@ -383,6 +398,7 @@ async function main() {
     requestTypes: await prisma.requestType.count(),
     facilities: await prisma.facility.count(),
     inventoryItems: await prisma.inventoryItem.count(),
+    lostFound: await prisma.lostFoundItem.count(),
   };
   console.log("Seed complete", counts);
 }

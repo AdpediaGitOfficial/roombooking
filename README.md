@@ -161,6 +161,25 @@ permanent transaction history and the actions for its state. Rules in
 
 Demo custodian: `custodian@example.com`.
 
+## Lost and found
+
+Reception, custodians and administrators run the register at `/lost-found`
+(summary, filters, search, register with photos) and each item at
+`/lost-found/:id` (storage, photos, claims, verification, handover, disposal,
+edit, permanent timeline). Residents browse found items and submit claims at
+`/my/lost-found`. Rules in `src/modules/lost-found/service.ts`:
+
+- every found item gets a unique reference (`LF-000001`, …) with description, category, where and when found, finder, custodian and optional photos; it is *reported* until a storage location is recorded, then *in storage*;
+- a retention date is set at registration (default 90 days, `LOST_FOUND_RETENTION_DAYS`); items past it are flagged *due for disposal*;
+- on registration and on each open item the register shows possibly matching open items (same category or shared description words, found within 14 days) so duplicates are spotted;
+- claims record the claimant (resident or named walk-in), contact and the ownership details they gave; a person has one pending claim per item, several people may claim the same item, and the item is *claim pending* while any claim is open. Claimant details and the storage location are shown only to lost and found staff; residents see the public description, photos and their own claims;
+- staff verify or reject a claim (rejection needs a reason); verifying one claim rejects the others and the claimant is notified in-app and by email. If all claims are rejected or withdrawn the item returns to storage;
+- handover needs a verified claim and records the recipient, who handed it over, a note and optional evidence photo; the owner is notified;
+- disposal needs an accommodation administrator, no pending claim and an expired retention date, and records method, reason and authoriser;
+- claims and the timeline cannot be deleted; every change is audited.
+
+Demo data: four found items at the demo site, one past its retention date.
+
 ## Inventory
 
 Custodians and administrators keep the register at `/inventory` (summary,

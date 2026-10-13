@@ -56,6 +56,13 @@ async function HomeContent() {
         </section>
       )}
 
+      <section className="mt-6" data-shortcuts>
+        <div className="grid grid-cols-2 gap-2 text-sm">
+          <Link href="/my/facilities" className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800"><div className="font-medium">Facilities</div><div className="text-xs text-zinc-500">Book the gym or hall</div></Link>
+          <Link href="/my/lost-found" className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800"><div className="font-medium">Lost &amp; found</div><div className="text-xs text-zinc-500">Found items and your claims</div></Link>
+        </div>
+      </section>
+
       <section className="mt-6">
         <h2 className="text-lg font-semibold">Notifications{unread.length > 0 && <span className="ml-2 rounded-full bg-zinc-900 px-2 py-0.5 text-xs text-white dark:bg-zinc-100 dark:text-zinc-900">{unread.length} new</span>}</h2>
         {notifications.length === 0 ? (

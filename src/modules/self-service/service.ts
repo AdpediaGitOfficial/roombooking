@@ -207,6 +207,12 @@ export function describeNotification(event: string, payload: unknown): { title: 
       return { title: "Booking declined", body: `${p.facility} on ${p.date} at ${p.startTime}${p.reason ? `: ${p.reason}` : "."}` };
     case "booking.cancelled":
       return { title: "Booking cancelled", body: `${p.facility} on ${p.date} at ${p.startTime}${p.reason ? `: ${p.reason}` : "."}` };
+    case "lostfound.claim_verified":
+      return { title: "Lost and found claim verified", body: `${p.reference}: ${p.description}. Collect it from the accommodation office${p.storageLocation ? ` (${p.storageLocation})` : ""} with your ID.` };
+    case "lostfound.claim_rejected":
+      return { title: "Lost and found claim not verified", body: `${p.reference}${p.reason ? `: ${p.reason}` : "."}` };
+    case "lostfound.returned":
+      return { title: "Found item handed over", body: `${p.reference}: ${p.description}.` };
     case "allocation.cancelled":
       return { title: "Allocation cancelled", body: `Bed ${p.bed} is no longer allocated to you${p.reason ? `: ${p.reason}` : "."}` };
     default:
