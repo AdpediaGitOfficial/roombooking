@@ -1,0 +1,13 @@
+# /etc/systemd/system/staff-accommodation-jobs.service
+# One run of the scheduled jobs (outbox delivery, booking and request
+# sweeps). Started by staff-accommodation-jobs.timer.
+[Unit]
+Description=Staff Accommodation scheduled jobs
+After=staff-accommodation.service
+
+[Service]
+Type=oneshot
+User=sam
+WorkingDirectory=/srv/staff-accommodation
+Environment=PORT=3000
+ExecStart=/usr/bin/node scripts/jobs.mjs

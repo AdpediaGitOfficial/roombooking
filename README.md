@@ -28,7 +28,7 @@ itself; see `prisma/migrations/*/migration.sql`.
 
 ```bash
 cp .env.example .env            # DATABASE_URL
-docker compose up -d db         # PostgreSQL 16 on localhost:5432
+docker compose up -d db         # PostgreSQL 16 on localhost:5432 (or point DATABASE_URL at your own)
 npm install                     # also runs prisma generate
 npm run db:deploy               # apply migrations
 npm run db:seed                 # demo organisation, site, rooms, beds, forms
@@ -439,35 +439,53 @@ MFA (client decision), and per-site scoping of role checks.
 
 ## Deployment
 
-The repository ships a production image and a compose stack. The image is a
-Next.js standalone server running as the unprivileged `node` user; the only
-state outside PostgreSQL is the photo store under `UPLOAD_DIR`, which the
-stack keeps on a named volume.
+One Linux server with Node.js 22, PostgreSQL 16 and nginx is enough. The
+files under `deploy/` are the service definitions; `scripts/deploy.sh` is
+the update command.
+
+First-time setup (Ubuntu shown; paths match the unit files):
 
 ```bash
-cp .env.example .env                           # then set the values below
-docker compose --profile app up -d --build     # db, migrate, app, scheduler
-docker compose --profile app run --rm migrate npm run db:seed   # optional demo data
-curl -fsS http://localhost:3000/api/health     # {"status":"ok","database":"up"}
+# packages
+curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - && sudo apt install -y nodejs postgresql nginx certbot python3-certbot-nginx
+
+# database and deploy user
+sudo -u postgres psql -c "CREATE USER sam WITH PASSWORD 'choose-a-password';" -c "CREATE DATABASE sam OWNER sam;"
+sudo useradd -r -m -d /srv/staff-accommodation sam
+sudo -iu sam git clone <repository-url> /srv/staff-accommodation
+sudo -iu sam cp /srv/staff-accommodation/.env.example /srv/staff-accommodation/.env   # then edit, see below
+
+# services
+sudo cp /srv/staff-accommodation/deploy/staff-accommodation*.service /srv/staff-accommodation/deploy/staff-accommodation-jobs.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now staff-accommodation staff-accommodation-jobs.timer
+
+# first build (and every later update)
+sudo -iu sam /srv/staff-accommodation/scripts/deploy.sh
+sudo -iu sam bash -c "cd /srv/staff-accommodation && npm run db:seed"   # optional demo data
+
+# TLS
+sudo cp /srv/staff-accommodation/deploy/nginx.conf /etc/nginx/sites-available/staff-accommodation
+sudo ln -s /etc/nginx/sites-available/staff-accommodation /etc/nginx/sites-enabled/
+sudo certbot --nginx -d accommodation.example.com
 ```
 
-Services in the `app` profile:
+`deploy.sh` installs dependencies, applies pending migrations, builds, restarts
+the service and waits for `/api/health`. Each step stops on error, so a
+failed migration or build leaves the running version in place. Updating is
+`git pull` followed by `deploy.sh`.
 
-| Service | Role |
-|---------|------|
-| `db` | PostgreSQL 16 on the `pgdata` volume (also used alone for development) |
-| `migrate` | One-shot `prisma migrate deploy`; the app waits for it to finish |
-| `app` | The web app on `APP_PORT` (default 3000) with the `uploads` volume mounted at `/app/uploads` |
-| `scheduler` | Calls `POST /api/jobs/notifications` every `JOBS_INTERVAL_SECONDS` (default 60): outbox delivery plus booking and request sweeps |
+The jobs timer runs `npm run jobs` every minute. That calls
+`POST /api/jobs/notifications`, which delivers the email and WhatsApp outbox
+and runs the booking and request sweeps (reminders, escalation, expiry). A
+cron entry (`* * * * * cd /srv/staff-accommodation && npm run jobs`) does
+the same where systemd timers are not wanted.
 
 Before go-live, set in `.env`:
 
-- `POSTGRES_PASSWORD`: a real password; the compose default `sam`/`sam` is
-  for development only. Inside the stack the app and migrations reach the
-  database as `db` with the `POSTGRES_*` values, so `DATABASE_URL` in `.env`
-  only matters for commands run on the host.
-- `JOBS_SECRET`: random, at least 32 characters; the scheduler refuses to
-  start without it and the jobs endpoint rejects every call without it.
+- `DATABASE_URL` with the real password.
+- `JOBS_SECRET`: random, at least 32 characters; the jobs endpoint rejects
+  every call without it and the jobs script refuses to run.
 - `APP_BASE_URL`: the public `https://` origin, used in email and WhatsApp
   links.
 - `MAIL_FROM` and the `SMTP_*` settings, or `EMAIL_TRANSPORT=disabled`.
@@ -476,30 +494,20 @@ Before go-live, set in `.env`:
 - `SEED_PASSWORD` only if the demo accounts are seeded on a shared
   environment; change those passwords or delete the accounts afterwards.
 
-Run the app behind a TLS-terminating reverse proxy. Session cookies carry the
-`Secure` flag in production, so sign-in over plain HTTP will not keep a
-session. The WhatsApp webhook must be reachable at
-`APP_BASE_URL/api/webhooks/whatsapp`.
+Notes:
 
-Operational notes:
-
-- Migrations run on every `up`; a failed migration stops the stack before
-  the app starts, and nothing is applied twice.
-- Run exactly one scheduler. The app itself is stateless and can be scaled
-  behind the proxy as long as every replica mounts the same `uploads`
-  volume (or a shared filesystem).
-- Back up the `pgdata` volume and the `uploads` volume together; the
-  database holds the attachment metadata and the volume holds the files.
-- `GET /api/health` reports `503` when the database is unreachable; the
-  container health check uses it.
-- Logs go to stdout. The notification worker inside the jobs endpoint
-  retries failed deliveries up to `EMAIL_MAX_ATTEMPTS` and the admin page
-  at `/admin/notifications` shows what failed permanently.
-
-Without Docker, the same steps are `npm ci`, `npm run db:deploy`,
-`npm run build`, then `npm start` with `NODE_ENV=production`, plus a cron
-entry or `npm run notifications:worker` for delivery (the worker delivers
-the outbox but does not run the sweeps; the jobs endpoint does both).
+- Serve the app over HTTPS. Session cookies carry the `Secure` flag in
+  production, so sign-in over plain HTTP will not keep a session. The
+  WhatsApp webhook must be reachable at `APP_BASE_URL/api/webhooks/whatsapp`.
+- Photos live under `UPLOAD_DIR` (default `uploads/` in the checkout). Back
+  it up together with the database: the database holds the attachment
+  metadata and the directory holds the files.
+- `GET /api/health` returns `503` when the database is unreachable.
+- Logs: `journalctl -u staff-accommodation -f` for the app and
+  `journalctl -u staff-accommodation-jobs` for the jobs; permanently failed
+  deliveries are listed at `/admin/notifications`.
+- Database backups: `pg_dump sam | gzip > sam-$(date +%F).sql.gz` on a
+  daily cron, kept off the server.
 
 ## Scripts
 
@@ -515,7 +523,8 @@ the outbox but does not run the sweeps; the jobs endpoint does both).
 | `npm run db:seed` | Seed demo data (idempotent) |
 | `npm run db:studio` | Browse the database |
 | `npm run db:reset` | Drop, recreate, migrate and seed (dev only) |
-| `npm run notifications:worker` | Email delivery worker (long-running) |
+| `npm run notifications:worker` | Email delivery worker (long-running, development) |
+| `npm run jobs` | One run of the scheduled jobs via the jobs endpoint (timer or cron) |
 
 ## Project layout
 
@@ -546,8 +555,9 @@ scripts/notifications-worker.ts  standalone delivery process
   lib/audit.ts         append-only audit writer
   proxy.ts             request gate (redirect to /login)
 tests/                 vitest suites
-Dockerfile             production image (standalone server, node user)
-docker-compose.yml     db for development; --profile app adds migrate, app, scheduler
+deploy/                systemd units and nginx site for a single-server deployment
+scripts/deploy.sh      install, migrate, build, restart
+scripts/jobs.mjs       calls the jobs endpoint (timer or cron)
 docs/
   requirements-analysis.md
 ```

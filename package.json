@@ -15,7 +15,8 @@
     "db:reset": "prisma migrate reset",
     "postinstall": "prisma generate",
     "test": "vitest run",
-    "notifications:worker": "tsx scripts/notifications-worker.ts"
+    "notifications:worker": "tsx scripts/notifications-worker.ts",
+    "jobs": "node scripts/jobs.mjs"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",

@@ -1,0 +1,21 @@
+# /etc/systemd/system/staff-accommodation.service
+# The web app. Next.js reads .env from WorkingDirectory itself.
+# Adjust User, WorkingDirectory and the npm path for the server.
+[Unit]
+Description=Staff Accommodation Management
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=simple
+User=sam
+WorkingDirectory=/srv/staff-accommodation
+Environment=NODE_ENV=production
+Environment=PORT=3000
+ExecStart=/usr/bin/npm start
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target
