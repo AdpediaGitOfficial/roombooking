@@ -5,7 +5,7 @@ import { actorOf } from "../actor";
 import type { Handlers } from "../register";
 
 export const maintenanceHandlers: Handlers<ApiContract>["maintenance"] = {
-  queue: (ctx, input) => getQueue(actorOf(ctx.user), input.filter),
+  queue: (ctx, input) => getQueue(actorOf(ctx.user), input.filter, { page: input.page, pageSize: input.pageSize }),
   mine: (ctx) => listMyWorkOrders(ctx.user.id),
   get: (ctx, input) => getWorkOrderView(actorOf(ctx.user), input.id, "ops"),
   getMine: (ctx, input) => getWorkOrderView(actorOf(ctx.user), input.id, "mine"),

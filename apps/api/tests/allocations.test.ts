@@ -94,6 +94,7 @@ describe("allocations API", () => {
     expect(out.json().status).toBe("CHECKED_OUT");
     const history = await call("GET", `/v1/allocations?filter=history&staffId=${ids.person}`, admin);
     expect(history.statusCode).toBe(200);
-    expect(history.json().length).toBeGreaterThanOrEqual(1);
+    expect(history.json().rows.length).toBeGreaterThanOrEqual(1);
+    expect(history.json().total).toBeGreaterThanOrEqual(1);
   });
 });

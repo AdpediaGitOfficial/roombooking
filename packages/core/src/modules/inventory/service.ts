@@ -5,6 +5,7 @@
 import type { AssetCondition, InventoryTransactionType, Prisma, PrismaClient } from "@prisma/client";
 import { prisma } from "../../lib/db";
 import { recordAudit } from "../../lib/audit";
+import { pageArgs, toPaged, type PageRequest } from "../../lib/paging";
 import { InventoryError } from "./errors";
 import { itemInclude, transactionInclude, isLowStock, targetLabel, type ItemFilter, type MovementFilter, type Outstanding, type OutstandingRow, type StockBalanceRow, type AllocatedRow, type ConditionRow, type HeldItem, type Target, type ItemRecord } from "./rules";
 
@@ -351,8 +352,18 @@ export async function itemsHeldBy(target: Target, db: Db = prisma): Promise<Held
 // Queries, warnings and reports (INV-05, INV-06)
 // ---------------------------------------------------------------------------
 
-export async function listItems(opts: { filter?: ItemFilter; q?: string | null; siteId?: string | null; category?: string | null } = {}) {
+/** Ids of active stock lines at or below their reorder level; the database compares the two columns. */
+async function lowStockIds(siteId?: string | null): Promise<string[]> {
+  const rows = siteId
+    ? await prisma.$queryRaw<Array<{ id: string }>>`SELECT id FROM "InventoryItem" WHERE status = 'ACTIVE' AND "trackingType" = 'STOCK' AND "reorderThreshold" IS NOT NULL AND quantity <= "reorderThreshold" AND "siteId" = ${siteId}`
+    : await prisma.$queryRaw<Array<{ id: string }>>`SELECT id FROM "InventoryItem" WHERE status = 'ACTIVE' AND "trackingType" = 'STOCK' AND "reorderThreshold" IS NOT NULL AND quantity <= "reorderThreshold"`;
+  return rows.map((r) => r.id);
+}
+
+/** One page of the register, ordered by category and name. */
+export async function listItems(opts: { filter?: ItemFilter; q?: string | null; siteId?: string | null; category?: string | null } = {}, req: PageRequest = {}) {
   const filter = opts.filter ?? "all";
+  const paging = pageArgs(req);
   const where: Prisma.InventoryItemWhereInput = {
     ...(opts.siteId ? { siteId: opts.siteId } : {}),
     ...(opts.category ? { category: opts.category } : {}),
@@ -362,9 +373,13 @@ export async function listItems(opts: { filter?: ItemFilter; q?: string | null; 
     ...(filter === "assets" ? { trackingType: "SERIALIZED" } : {}),
     ...(filter === "issued" ? { trackingType: "SERIALIZED", assignments: { some: { endedAt: null } } } : {}),
     ...(filter === "damaged" ? { condition: "DAMAGED" } : {}),
+    ...(filter === "low" ? { id: { in: await lowStockIds(opts.siteId) } } : {}),
   };
-  const items = await prisma.inventoryItem.findMany({ where, include: itemInclude, orderBy: [{ category: "asc" }, { name: "asc" }, { serialNumber: "asc" }] });
-  return filter === "low" ? items.filter(isLowStock) : items;
+  const [rows, total] = await Promise.all([
+    prisma.inventoryItem.findMany({ where, include: itemInclude, orderBy: [{ category: "asc" }, { name: "asc" }, { serialNumber: "asc" }, { id: "asc" }], skip: paging.skip, take: paging.take }),
+    prisma.inventoryItem.count({ where }),
+  ]);
+  return toPaged(rows, total, paging);
 }
 
 export async function getItem(id: string) {
@@ -397,14 +412,14 @@ export async function categories(siteId?: string | null): Promise<string[]> {
 
 export async function inventorySummary(siteId?: string | null) {
   const where = siteId ? { siteId } : {};
-  const [stockLines, assets, issued, damaged, lowCandidates] = await Promise.all([
+  const [stockLines, assets, issued, damaged, lowIds] = await Promise.all([
     prisma.inventoryItem.count({ where: { ...where, status: "ACTIVE", trackingType: "STOCK" } }),
     prisma.inventoryItem.count({ where: { ...where, status: "ACTIVE", trackingType: "SERIALIZED" } }),
     prisma.assetAssignment.count({ where: { endedAt: null, item: where } }),
     prisma.inventoryItem.count({ where: { ...where, status: "ACTIVE", condition: "DAMAGED" } }),
-    prisma.inventoryItem.findMany({ where: { ...where, status: "ACTIVE", trackingType: "STOCK", reorderThreshold: { not: null } }, select: { trackingType: true, status: true, quantity: true, reorderThreshold: true } }),
+    lowStockIds(siteId),
   ]);
-  return { stockLines, assets, issued, damaged, lowStock: lowCandidates.filter(isLowStock).length };
+  return { stockLines, assets, issued, damaged, lowStock: lowIds.length };
 }
 
 export async function movementReport(filter: MovementFilter, limit = 500) {
@@ -536,8 +551,8 @@ export async function applyMovement(input: MovementInput): Promise<{ message: st
 }
 
 /** The register for a filter with its tiles and the categories to filter by. */
-export async function getRegister(opts: { filter?: ItemFilter; q?: string | null; category?: string | null }) {
-  const [items, summary, cats] = await Promise.all([listItems(opts), inventorySummary(), categories()]);
+export async function getRegister(opts: { filter?: ItemFilter; q?: string | null; category?: string | null }, req: PageRequest = {}) {
+  const [items, summary, cats] = await Promise.all([listItems(opts, req), inventorySummary(), categories()]);
   return { items, summary, categories: cats };
 }
 

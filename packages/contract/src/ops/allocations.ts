@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { ALLOCATION_ADMIN_ROLES, ALLOCATION_OPERATE_ROLES, ALLOCATION_VIEW_ROLES } from "@sam/core/modules/allocations/access";
 import type * as svc from "@sam/core/modules/allocations/service";
-import { cuid, isoDate, op, out, type Ret } from "../define";
+import { cuid, isoDate, op, out, pageInput, type Ret } from "../define";
 
 const note = z.string().max(2000).optional();
 
@@ -10,10 +10,10 @@ export const allocations = {
     id: "allocations.list",
     method: "GET",
     path: "/v1/allocations",
-    summary: "Allocations by state, optionally for one person (latest 200)",
+    summary: "Allocations by state, optionally for one person, one page at a time",
     tag: "Allocations",
     access: ALLOCATION_VIEW_ROLES,
-    input: z.object({ filter: z.enum(["active", "upcoming", "history", "all"]).default("active"), staffId: cuid().optional() }),
+    input: z.object({ filter: z.enum(["active", "upcoming", "history", "all"]).default("active"), staffId: cuid().optional(), ...pageInput }),
     output: out<Ret<typeof svc.listAllocations>>(),
   }),
   formOptions: op({

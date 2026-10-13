@@ -64,8 +64,11 @@ export async function getSitesOverview() {
       const roomSummaries = building.rooms.map((room) =>
         summarize(room.beds.map((b) => classifyBed(b, today, room.status))),
       );
-      return { building, roomCount: building.rooms.length, summary: mergeSummaries(roomSummaries) };
+      // Only what the overview lists: the room and bed detail was needed to count, not to send.
+      return { building: { id: building.id, code: building.code, name: building.name, type: building.type, status: building.status }, roomCount: building.rooms.length, summary: mergeSummaries(roomSummaries) };
     });
-    return { site, today, buildings, summary: mergeSummaries(buildings.map((b) => b.summary)) };
+    const { buildings: _nested, ...siteFields } = site;
+    void _nested;
+    return { site: siteFields, today, buildings, summary: mergeSummaries(buildings.map((b) => b.summary)) };
   });
 }

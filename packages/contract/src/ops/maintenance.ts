@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { MAINTENANCE_AREA_ROLES, MAINTENANCE_COORDINATOR_ROLES } from "@sam/core/modules/maintenance/access";
 import type * as svc from "@sam/core/modules/maintenance/service";
-import { cuid, fileInput, fileOp, op, out, type Ret } from "../define";
+import { cuid, fileInput, fileOp, op, out, pageInput, type Ret } from "../define";
 
 const priority = z.enum(["LOW", "MEDIUM", "HIGH", "URGENT"]);
 const status = z.enum(["NEW", "TRIAGED", "ASSIGNED", "IN_PROGRESS", "WAITING_STAFF", "WAITING_PARTS", "WAITING_ACCESS", "RESOLVED", "CLOSED", "REOPENED", "CANCELLED"]);
@@ -15,7 +15,7 @@ export const maintenance = {
     summary: "Operations queue for the signed-in coordinator, engineer, vendor or auditor, with summary counts",
     tag: "Maintenance",
     access: MAINTENANCE_AREA_ROLES,
-    input: z.object({ filter: z.enum(["open", "unassigned", "mine", "waiting", "resolved", "closed", "all"]).default("open") }),
+    input: z.object({ filter: z.enum(["open", "unassigned", "mine", "waiting", "resolved", "closed", "all"]).default("open"), ...pageInput }),
     output: out<Ret<typeof svc.getQueue>>(),
   }),
   mine: op({

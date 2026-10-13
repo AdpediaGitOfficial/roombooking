@@ -5,6 +5,7 @@ import { requireRole } from "@/lib/auth/authorize";
 import { ADMIN_VIEW_ROLES, ALL_ROLES } from "@sam/core/modules/admin/access";
 import { scopeLabel } from "@sam/core/modules/admin/rules";
 import { api } from "@/lib/api";
+import { Pager, pageHref } from "@/components/shell/pager";
 import { PageHeader } from "@/components/shell/page-header";
 
 const STATUSES: UserStatus[] = ["INVITED", "ACTIVE", "SUSPENDED", "DEACTIVATED"];
@@ -20,10 +21,10 @@ export function UserStatusBadge({ status }: { status: UserStatus }) {
   return <span data-status={status} className={`chip ${STATUS_STYLE[status]}`}>{status.toLowerCase()}</span>;
 }
 
-async function Users({ searchParams }: { searchParams: Promise<{ q?: string; status?: string; role?: string }> }) {
+async function Users({ searchParams }: { searchParams: Promise<{ q?: string; status?: string; role?: string; page?: string }> }) {
   await requireRole(ADMIN_VIEW_ROLES, "/admin/users");
-  const { q, status, role } = await searchParams;
-  const users = await api.users.list({ q: q || undefined, status: STATUSES.includes(status as UserStatus) ? (status as UserStatus) : undefined, role: ALL_ROLES.includes(role as Role) ? (role as Role) : undefined });
+  const { q, status, role, page: rawPage } = await searchParams;
+  const { rows: users, total, page, pages, pageSize } = await api.users.list({ q: q || undefined, status: STATUSES.includes(status as UserStatus) ? (status as UserStatus) : undefined, role: ALL_ROLES.includes(role as Role) ? (role as Role) : undefined, page: Number(rawPage) || 1 });
   return (
     <>
       <form method="get" className="grid gap-3 sm:grid-cols-[1fr_160px_200px_auto]">
@@ -50,6 +51,7 @@ async function Users({ searchParams }: { searchParams: Promise<{ q?: string; sta
             {users.length === 0 && <tr><td colSpan={5} className="px-3 py-6 text-center text-zinc-500">No users match.</td></tr>}
           </tbody>
         </table>
+      <Pager page={page} pages={pages} total={total} pageSize={pageSize} hrefFor={pageHref("/admin/users", { q, status, role })} />
       </div>
     </>
   );

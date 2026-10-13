@@ -4,8 +4,9 @@ import type { Prisma, PrismaClient } from "@prisma/client";
 import { prisma } from "../../lib/db";
 import { recordAudit } from "../../lib/audit";
 import { enqueueNotification } from "../../lib/notifications";
+import { pageArgs, toPaged, type PageRequest } from "../../lib/paging";
 import { KeyError } from "./errors";
-import { holderLabel, keyInclude, isOverdue, openIssue, type KeyFilter } from "./rules";
+import { holderLabel, keyInclude, keyListInclude, isOverdue, openIssue, type KeyFilter } from "./rules";
 
 export * from "./rules";
 
@@ -233,16 +234,28 @@ export async function retireKey(input: ExceptionInput) {
 // Queries and reports (KEY-03, KEY-05, KEY-06)
 // ---------------------------------------------------------------------------
 
-export async function listKeys(filter: KeyFilter, siteId?: string | null, now: Date = new Date()) {
+const OPEN_ISSUE = { type: "ISSUE", returnedAt: null } as const;
+
+function keyListWhere(filter: KeyFilter, siteId: string | null | undefined, now: Date): Prisma.KeyWhereInput {
   const byStatus: Prisma.KeyWhereInput =
     filter === "available" ? { status: "AVAILABLE" }
-    : filter === "issued" || filter === "overdue" ? { status: { in: ["ISSUED", "LOST"] }, transactions: { some: { type: "ISSUE", returnedAt: null } } }
+    : filter === "issued" ? { status: { in: ["ISSUED", "LOST"] }, transactions: { some: OPEN_ISSUE } }
+    : filter === "overdue" ? { status: { in: ["ISSUED", "LOST"] }, transactions: { some: { ...OPEN_ISSUE, expectedReturnAt: { lt: now } } } }
     : filter === "exceptions" ? { status: { in: ["LOST", "DAMAGED", "UNDER_REPAIR"] } }
     : filter === "retired" ? { status: "RETIRED" }
     : { status: { not: "RETIRED" } };
-  const keys = await prisma.key.findMany({ where: { ...byStatus, ...(siteId ? { siteId } : {}) }, include: keyInclude, orderBy: [{ site: { code: "asc" } }, { code: "asc" }] });
-  const rows = keys.map((key) => ({ key, issue: openIssue(key) }));
-  return filter === "overdue" ? rows.filter((r) => r.issue && isOverdue(r.issue, now)) : rows;
+  return { ...byStatus, ...(siteId ? { siteId } : {}) };
+}
+
+/** One page of the register for a filter; each row carries the key and its open issue, if any. */
+export async function listKeys(filter: KeyFilter, siteId?: string | null, now: Date = new Date(), req: PageRequest = {}) {
+  const paging = pageArgs(req);
+  const where = keyListWhere(filter, siteId, now);
+  const [keys, total] = await Promise.all([
+    prisma.key.findMany({ where, include: keyListInclude, orderBy: [{ site: { code: "asc" } }, { code: "asc" }, { id: "asc" }], skip: paging.skip, take: paging.take }),
+    prisma.key.count({ where }),
+  ]);
+  return toPaged(keys.map((key) => ({ key, issue: openIssue(key) })), total, paging);
 }
 
 export async function getKey(id: string, db: Db = prisma) {
@@ -256,20 +269,21 @@ export async function keysHeldBy(staffId: string, db: Db = prisma) {
 
 /** Keys linked to a room, with their open issue, for handover at check-in/out (KEY-05). */
 export async function keysForRoom(roomId: string, db: Db = prisma) {
-  const keys = await db.key.findMany({ where: { roomId, status: { not: "RETIRED" } }, include: keyInclude, orderBy: { code: "asc" } });
+  const keys = await db.key.findMany({ where: { roomId, status: { not: "RETIRED" } }, include: keyListInclude, orderBy: { code: "asc" } });
   return keys.map((key) => ({ key, issue: openIssue(key) }));
 }
 
 export async function keySummary(siteId?: string | null, now: Date = new Date()) {
-  const all = await listKeys("all", siteId, now);
-  const issued = all.filter((r) => r.issue);
-  return {
-    total: all.length,
-    available: all.filter((r) => r.key.status === "AVAILABLE").length,
-    issued: issued.length,
-    overdue: issued.filter((r) => isOverdue(r.issue!, now)).length,
-    exceptions: all.filter((r) => ["LOST", "DAMAGED", "UNDER_REPAIR"].includes(r.key.status)).length,
-  };
+  const site = siteId ? { siteId } : {};
+  const live: Prisma.KeyWhereInput = { ...site, status: { not: "RETIRED" } };
+  const [total, available, issued, overdue, exceptions] = await Promise.all([
+    prisma.key.count({ where: live }),
+    prisma.key.count({ where: { ...site, status: "AVAILABLE" } }),
+    prisma.key.count({ where: { ...live, transactions: { some: OPEN_ISSUE } } }),
+    prisma.key.count({ where: { ...live, transactions: { some: { ...OPEN_ISSUE, expectedReturnAt: { lt: now } } } } }),
+    prisma.key.count({ where: { ...live, status: { in: ["LOST", "DAMAGED", "UNDER_REPAIR"] } } }),
+  ]);
+  return { total, available, issued, overdue, exceptions };
 }
 
 // ---------------------------------------------------------------------------
@@ -277,8 +291,8 @@ export async function keySummary(siteId?: string | null, now: Date = new Date())
 // ---------------------------------------------------------------------------
 
 /** The register for a filter together with its summary tiles. */
-export async function getRegister(filter: KeyFilter, now: Date = new Date()) {
-  const [rows, summary] = await Promise.all([listKeys(filter, null, now), keySummary(null, now)]);
+export async function getRegister(filter: KeyFilter, req: PageRequest = {}, now: Date = new Date()) {
+  const [rows, summary] = await Promise.all([listKeys(filter, null, now, req), keySummary(null, now)]);
   return { rows, summary, now };
 }
 

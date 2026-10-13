@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { KEY_MANAGE_ROLES, KEY_OPERATE_ROLES, KEY_VIEW_ROLES } from "@sam/core/modules/keys/access";
 import type * as svc from "@sam/core/modules/keys/service";
-import { bool, cuid, op, out, type Ret } from "../define";
+import { bool, cuid, op, out, pageInput, type Ret } from "../define";
 
 const text = (max: number) => z.string().max(max).optional();
 
@@ -13,7 +13,7 @@ export const keys = {
     summary: "The key register for a filter, with summary counts",
     tag: "Keys",
     access: KEY_VIEW_ROLES,
-    input: z.object({ filter: z.enum(["all", "available", "issued", "overdue", "exceptions", "retired"]).default("all") }),
+    input: z.object({ filter: z.enum(["all", "available", "issued", "overdue", "exceptions", "retired"]).default("all"), ...pageInput }),
     output: out<Ret<typeof svc.getRegister>>(),
   }),
   registerOptions: op({

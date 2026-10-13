@@ -1,9 +1,9 @@
 import type { ApiContract } from "@sam/contract/index";
-import { addRole, auditView, createUser, getUserView, issueToken, listUsers, newUserOptions, removeRole, setUserStatus, signOutEverywhere, updateUser } from "@sam/core/modules/admin/users-service";
+import { addRole, auditEntityTypes, createUser, getUserView, issueToken, listAudit, listUsers, newUserOptions, removeRole, setUserStatus, signOutEverywhere, updateUser } from "@sam/core/modules/admin/users-service";
 import type { Handlers } from "../register";
 
 export const userHandlers: Handlers<ApiContract>["users"] = {
-  list: (ctx, input) => listUsers(ctx.user.organizationId, { q: input.q, status: input.status ?? null, role: input.role ?? null }),
+  list: (ctx, input) => listUsers(ctx.user.organizationId, { q: input.q, status: input.status ?? null, role: input.role ?? null }, { page: input.page, pageSize: input.pageSize }),
   options: (ctx) => newUserOptions(ctx.user.organizationId),
   get: (ctx, input) => getUserView(ctx.user.organizationId, input.id, input.invited),
   async create(ctx, input) {
@@ -24,5 +24,12 @@ export const userHandlers: Handlers<ApiContract>["users"] = {
 };
 
 export const auditHandlers: Handlers<ApiContract>["audit"] = {
-  list: (_ctx, input) => auditView({ entityType: input.entityType, action: input.action, entityId: input.entityId, actorId: input.actorId }),
+  async list(ctx, input) {
+    // The entity-type filter list changes rarely and costs a scan of the whole log, so it is shared.
+    const [events, types] = await Promise.all([
+      listAudit({ entityType: input.entityType, action: input.action, entityId: input.entityId, actorId: input.actorId }, { page: input.page, pageSize: input.pageSize }),
+      ctx.cache.get("audit:entity-types", () => auditEntityTypes()),
+    ]);
+    return { events, types };
+  },
 };

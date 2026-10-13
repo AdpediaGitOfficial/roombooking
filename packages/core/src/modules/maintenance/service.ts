@@ -4,9 +4,10 @@ import { prisma } from "../../lib/db";
 import { recordAudit } from "../../lib/audit";
 import { enqueueNotification } from "../../lib/notifications";
 import { storeImage, UploadError } from "../../lib/uploads";
+import { pageArgs, toPaged, type PageRequest } from "../../lib/paging";
 import { MaintenanceError } from "./errors";
 import { MAINTENANCE_COORDINATOR_ROLES } from "./access";
-import { CATEGORIES, PRIORITIES, REOPEN_WINDOW_DAYS, OPEN_STATUSES, WAITING_STATUSES, allowedTransitions, accessFor, isOverdue, reopenWindowOpen, slaDueAt, visibleNotes, workOrderInclude, type Actor, type QueueFilter, type WorkOrderAccess } from "./rules";
+import { CATEGORIES, PRIORITIES, REOPEN_WINDOW_DAYS, OPEN_STATUSES, WAITING_STATUSES, allowedTransitions, accessFor, reopenWindowOpen, slaDueAt, visibleNotes, workOrderInclude, workOrderListInclude, type Actor, type QueueFilter, type WorkOrderAccess } from "./rules";
 
 export * from "./rules";
 
@@ -269,43 +270,54 @@ export async function listAttachments(workOrderId: string, db: Db = prisma) {
 }
 
 
-/** Operations queue, scoped by what the actor may see. */
-export async function listWorkOrders(actor: Actor, filter: QueueFilter) {
+/** Which tickets an actor may see at all: coordinators and auditors everything, vendors their own, others only what they raised or are assigned. */
+function visibilityFor(actor: Actor): Prisma.WorkOrderWhereInput {
   const isCoordinator = actor.roles.some((r) => MAINTENANCE_COORDINATOR_ROLES.includes(r)) || actor.roles.includes("AUDITOR");
-  const scope: Prisma.WorkOrderWhereInput = isCoordinator
-    ? {}
-    : actor.vendorId && actor.roles.includes("VENDOR")
-      ? { vendorId: actor.vendorId }
-      : { OR: [{ assigneeId: actor.id }, { requesterId: actor.id }] };
-  const byFilter: Prisma.WorkOrderWhereInput =
-    filter === "open" ? { status: { in: OPEN_STATUSES } }
-    : filter === "unassigned" ? { status: { in: ["NEW", "TRIAGED", "REOPENED"] }, assigneeId: null, vendorId: null }
-    : filter === "mine" ? { assigneeId: actor.id, status: { in: OPEN_STATUSES } }
-    : filter === "waiting" ? { status: { in: WAITING_STATUSES } }
-    : filter === "resolved" ? { status: "RESOLVED" }
-    : filter === "closed" ? { status: { in: TERMINAL } }
-    : {};
-  return prisma.workOrder.findMany({
-    where: { AND: [scope, byFilter] },
-    include: workOrderInclude,
-    orderBy: [{ status: "asc" }, { slaDueAt: "asc" }, { createdAt: "desc" }],
-    take: 300,
-  });
+  if (isCoordinator) return {};
+  if (actor.vendorId && actor.roles.includes("VENDOR")) return { vendorId: actor.vendorId };
+  return { OR: [{ assigneeId: actor.id }, { requesterId: actor.id }] };
+}
+
+function queueFilter(actor: Actor, filter: QueueFilter): Prisma.WorkOrderWhereInput {
+  switch (filter) {
+    case "open": return { status: { in: OPEN_STATUSES } };
+    case "unassigned": return { status: { in: ["NEW", "TRIAGED", "REOPENED"] }, assigneeId: null, vendorId: null };
+    case "mine": return { assigneeId: actor.id, status: { in: OPEN_STATUSES } };
+    case "waiting": return { status: { in: WAITING_STATUSES } };
+    case "resolved": return { status: "RESOLVED" };
+    case "closed": return { status: { in: TERMINAL } };
+    default: return {};
+  }
+}
+
+/** One page of the operations queue, scoped by what the actor may see. Rows carry what the list shows, not the full history. */
+export async function listWorkOrders(actor: Actor, filter: QueueFilter, req: PageRequest = {}) {
+  const paging = pageArgs(req);
+  const where = { AND: [visibilityFor(actor), queueFilter(actor, filter)] };
+  const [rows, total] = await Promise.all([
+    prisma.workOrder.findMany({ where, include: workOrderListInclude, orderBy: [{ status: "asc" }, { slaDueAt: "asc" }, { createdAt: "desc" }, { id: "asc" }], skip: paging.skip, take: paging.take }),
+    prisma.workOrder.count({ where }),
+  ]);
+  return toPaged(rows, total, paging);
 }
 
 export async function listMyWorkOrders(requesterId: string) {
-  return prisma.workOrder.findMany({ where: { requesterId }, include: workOrderInclude, orderBy: { createdAt: "desc" } });
+  return prisma.workOrder.findMany({ where: { requesterId }, include: workOrderListInclude, orderBy: { createdAt: "desc" }, take: 200 });
 }
 
+/** Queue tile counts, counted in the database over everything the actor can see. */
 export async function queueSummary(actor: Actor, now: Date = new Date()) {
-  const open = await listWorkOrders(actor, "open");
-  return {
-    open: open.length,
-    unassigned: open.filter((w) => !w.assigneeId && !w.vendorId).length,
-    overdue: open.filter((w) => isOverdue(w, now)).length,
-    waiting: open.filter((w) => WAITING_STATUSES.includes(w.status)).length,
-    awaitingClose: (await listWorkOrders(actor, "resolved")).length,
-  };
+  const visible = visibilityFor(actor);
+  const count = (where: Prisma.WorkOrderWhereInput) => prisma.workOrder.count({ where: { AND: [visible, where] } });
+  const open = { status: { in: OPEN_STATUSES } };
+  const [openCount, unassigned, overdue, waiting, awaitingClose] = await Promise.all([
+    count(open),
+    count({ ...open, assigneeId: null, vendorId: null }),
+    count({ ...open, slaDueAt: { lt: now } }),
+    count({ status: { in: WAITING_STATUSES } }),
+    count({ status: "RESOLVED" }),
+  ]);
+  return { open: openCount, unassigned, overdue, waiting, awaitingClose };
 }
 
 export async function listAssignees(db: Db = prisma) {
@@ -351,8 +363,8 @@ export async function getWorkOrderView(actor: Actor, id: string, perspective: Wo
 }
 
 /** The operations queue with its summary counts. */
-export async function getQueue(actor: Actor, filter: QueueFilter, now: Date = new Date()) {
-  const [orders, summary] = await Promise.all([listWorkOrders(actor, filter), queueSummary(actor, now)]);
+export async function getQueue(actor: Actor, filter: QueueFilter, req: PageRequest = {}, now: Date = new Date()) {
+  const [orders, summary] = await Promise.all([listWorkOrders(actor, filter, req), queueSummary(actor, now)]);
   return { orders, summary, now };
 }
 

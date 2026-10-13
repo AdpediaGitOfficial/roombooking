@@ -84,12 +84,15 @@ export type FileInput = { bytes: Uint8Array; fileName: string };
 export const fileInput = z.custom<FileInput>((v) => !!v && typeof v === "object" && "bytes" in v && "fileName" in v, "Expected a file");
 /** Zero to `max` files sent under one field name (a single file is accepted as a one-item list). */
 export const fileList = (max = 5) => z.preprocess((v) => (v === undefined || v === null ? [] : Array.isArray(v) ? v : [v]), z.array(fileInput).max(max)) as unknown as z.ZodType<FileInput[], FileInput[] | undefined>;
-export const int = (opts: { min?: number; max?: number; default?: number } = {}) => {
+export function int(opts: { min?: number; max?: number; default: number }): z.ZodDefault<z.ZodNumber>;
+export function int(opts?: { min?: number; max?: number }): z.ZodNumber;
+export function int(opts: { min?: number; max?: number; default?: number } = {}) {
   let s = z.coerce.number().int();
   if (opts.min !== undefined) s = s.min(opts.min);
   if (opts.max !== undefined) s = s.max(opts.max);
+  // Typed as a plain number so callers may omit a defaulted field; at runtime strings from a query still coerce.
   return opts.default !== undefined ? s.default(opts.default) : s;
-};
+}
 export const bool = () => z.union([z.boolean(), z.stringbool()]);
 /** A calendar date as YYYY-MM-DD. */
 export const isoDate = () => z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use the format YYYY-MM-DD");
@@ -98,3 +101,6 @@ export const timestamp = () => z.coerce.date();
 export const cuid = () => z.string().min(1).max(64);
 /** A JSON value sent as text in a multipart form. */
 export const jsonField = <T extends z.ZodType>(schema: T) => z.preprocess((v) => (typeof v === "string" ? JSON.parse(v) : v), schema);
+
+/** Page controls shared by every long list. */
+export const pageInput = { page: int({ min: 1, default: 1 }), pageSize: int({ min: 1, max: 100, default: 50 }) };

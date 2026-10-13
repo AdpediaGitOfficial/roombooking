@@ -116,7 +116,7 @@ describe("issue and return", () => {
     expect(isOverdue({ expectedReturnAt: null, returnedAt: null })).toBe(false);
     const k = (await registerKey({ siteId, code: uniq("OD"), roomId, actorId })).id;
     await issueKey({ keyId: k, actorId, holderStaffId: staff2Id, expectedReturnAt: plus(-2) });
-    expect((await listKeys("overdue", siteId)).map((r) => r.key.id)).toContain(k);
+    expect((await listKeys("overdue", siteId)).rows.map((r) => r.key.id)).toContain(k);
     await returnKey({ keyId: k, actorId });
   });
 });
@@ -161,7 +161,7 @@ describe("lost, found, replace, retire", () => {
     await retireKey({ keyId: k, actorId, notes: "Beyond repair" });
     expect((await getKey(k))?.status).toBe("RETIRED");
     await expect(prisma.keyTransaction.deleteMany({ where: { keyId: k } })).rejects.toThrow(/cannot be deleted/);
-    expect((await listKeys("all", siteId)).map((r) => r.key.id)).not.toContain(k);
-    expect((await listKeys("retired", siteId)).map((r) => r.key.id)).toContain(k);
+    expect((await listKeys("all", siteId)).rows.map((r) => r.key.id)).not.toContain(k);
+    expect((await listKeys("retired", siteId)).rows.map((r) => r.key.id)).toContain(k);
   });
 });

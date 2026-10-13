@@ -5,7 +5,7 @@ import { allocate, allocationFormOptions, cancel, checkIn, checkOut, findAvailab
 import type { Handlers } from "../register";
 
 export const allocationHandlers: Handlers<ApiContract>["allocations"] = {
-  list: (_ctx, input) => listAllocations(input.filter, input.staffId ?? null),
+  list: (_ctx, input) => listAllocations(input.filter, input.staffId ?? null, { page: input.page, pageSize: input.pageSize }),
   formOptions: () => allocationFormOptions(),
   availableBeds: (_ctx, input) => findAvailableBeds({ ...input, endDate: input.endDate ?? null }),
   async get(_ctx, input) {

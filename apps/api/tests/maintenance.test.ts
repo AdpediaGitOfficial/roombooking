@@ -94,7 +94,7 @@ describe("maintenance API", () => {
 
     const queue = await call("GET", "/v1/maintenance/queue?filter=mine", "eng");
     expect(queue.statusCode).toBe(200);
-    expect(queue.json().orders.map((o: { id: string }) => o.id)).toContain(id);
+    expect(queue.json().orders.rows.map((o: { id: string }) => o.id)).toContain(id);
 
     const started = await call("POST", `/v1/maintenance/orders/${id}/status`, "eng", { status: "IN_PROGRESS" });
     expect(started.statusCode).toBe(200);

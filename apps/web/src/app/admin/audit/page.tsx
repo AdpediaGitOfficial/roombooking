@@ -3,13 +3,15 @@ import { requireRole } from "@/lib/auth/authorize";
 import { ADMIN_VIEW_ROLES } from "@sam/core/modules/admin/access";
 import { api } from "@/lib/api";
 import { PageHeader } from "@/components/shell/page-header";
+import { Pager, pageHref } from "@/components/shell/pager";
 
 const input = "mt-1 block w-full rounded-md border border-zinc-300 px-3 py-2 text-sm";
 
-async function Log({ searchParams }: { searchParams: Promise<{ entityType?: string; action?: string; entityId?: string }> }) {
+async function Log({ searchParams }: { searchParams: Promise<{ entityType?: string; action?: string; entityId?: string; page?: string }> }) {
   await requireRole(ADMIN_VIEW_ROLES, "/admin/audit");
-  const { entityType, action, entityId } = await searchParams;
-  const { events, types } = await api.audit.list({ entityType: entityType || undefined, action: action || undefined, entityId: entityId || undefined });
+  const { entityType, action, entityId, page: rawPage } = await searchParams;
+  const { events: log, types } = await api.audit.list({ entityType: entityType || undefined, action: action || undefined, entityId: entityId || undefined, page: Number(rawPage) || 1 });
+  const events = log.rows;
   return (
     <>
       <form method="get" className="grid gap-3 sm:grid-cols-[200px_1fr_1fr_auto]">
@@ -36,8 +38,9 @@ async function Log({ searchParams }: { searchParams: Promise<{ entityType?: stri
             {events.length === 0 && <tr><td colSpan={5} className="px-3 py-6 text-center text-zinc-500">No events match.</td></tr>}
           </tbody>
         </table>
+        <Pager page={log.page} pages={log.pages} total={log.total} pageSize={log.pageSize} hrefFor={pageHref("/admin/audit", { entityType, action, entityId })} />
       </div>
-      <p className="mt-2 text-xs text-zinc-500">Showing the latest {events.length} events. Audit rows are append-only at the database level.</p>
+      <p className="mt-2 text-xs text-zinc-500">Newest first. Audit rows are append-only at the database level.</p>
     </>
   );
 }

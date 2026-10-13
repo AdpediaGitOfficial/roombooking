@@ -34,6 +34,18 @@ describe("user administration API", () => {
     expect((await call("POST", "/v1/admin/users", "auditor", { name: "X", email: `x-${tag}@apitest.local`, roles: [] })).statusCode).toBe(403);
   });
 
+  it("pages long lists and bounds the page size", async () => {
+    const one = (await call("GET", "/v1/admin/users?pageSize=1", "sysadmin")).json();
+    expect(one.rows).toHaveLength(1);
+    expect(one.total).toBeGreaterThan(1);
+    expect(one.pages).toBe(one.total);
+    const two = (await call("GET", "/v1/admin/users?pageSize=1&page=2", "sysadmin")).json();
+    expect(two.rows[0].id).not.toBe(one.rows[0].id);
+    expect((await call("GET", `/v1/admin/users?pageSize=1&page=${one.pages + 5}`, "sysadmin")).json().rows).toEqual([]);
+    expect((await call("GET", "/v1/admin/users?pageSize=1000", "sysadmin")).statusCode).toBe(422);
+    expect((await call("GET", "/v1/admin/users?page=0", "sysadmin")).statusCode).toBe(422);
+  });
+
   it("creates an invited user, returns the invite path, and never exposes secrets", async () => {
     const bad = await call("POST", "/v1/admin/users", "sysadmin", { name: "", email: "nope", roles: [] });
     expect(bad.statusCode).toBe(422);
@@ -69,7 +81,7 @@ describe("user administration API", () => {
 
   it("records the changes in the audit log, filtered by entity", async () => {
     const log = (await call("GET", `/v1/admin/audit?entityType=User&entityId=${ids.user}`, "auditor")).json();
-    const actions = log.events.map((e: { action: string }) => e.action);
+    const actions = log.events.rows.map((e: { action: string }) => e.action);
     expect(actions, JSON.stringify(actions)).toEqual(expect.arrayContaining(["USER_CREATED", "USER_STATUS_CHANGED"]));
     expect(log.types).toContain("User");
     expect((await call("GET", "/v1/admin/audit", "officer")).statusCode).toBe(403);

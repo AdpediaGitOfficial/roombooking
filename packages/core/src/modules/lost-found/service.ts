@@ -7,6 +7,7 @@ import { prisma } from "../../lib/db";
 import { recordAudit } from "../../lib/audit";
 import { enqueueNotification } from "../../lib/notifications";
 import { storeImage, UploadError } from "../../lib/uploads";
+import { pageArgs, toPaged, type PageRequest } from "../../lib/paging";
 import { LostFoundError } from "./errors";
 import { OPEN, RETENTION_DAYS, claimantLabel, itemInclude, keywords, type Actor, type ItemFilter } from "./rules";
 
@@ -247,15 +248,20 @@ export async function disposeItem(input: { itemId: string; actor: Actor; method:
 // Queries (LF-05 similar search, register, resident view)
 // ---------------------------------------------------------------------------
 
-export async function listItems(opts: { filter?: ItemFilter; q?: string | null; siteId?: string | null; now?: Date } = {}) {
+export async function listItems(opts: { filter?: ItemFilter; q?: string | null; siteId?: string | null; now?: Date } = {}, req: PageRequest = {}) {
   const now = opts.now ?? new Date();
+  const paging = pageArgs(req);
   const filter = opts.filter ?? "open";
   const where: Prisma.LostFoundItemWhereInput = {
     ...(opts.siteId ? { siteId: opts.siteId } : {}),
     ...(opts.q ? { OR: [{ reference: { contains: opts.q, mode: "insensitive" } }, { description: { contains: opts.q, mode: "insensitive" } }, { category: { contains: opts.q, mode: "insensitive" } }, { foundLocation: { contains: opts.q, mode: "insensitive" } }] } : {}),
     ...(filter === "open" ? { status: { in: OPEN } } : filter === "reported" ? { status: "REPORTED" } : filter === "stored" ? { status: "STORED" } : filter === "claims" ? { status: "CLAIM_PENDING" } : filter === "returned" ? { status: "RETURNED" } : filter === "disposed" ? { status: "DISPOSED" } : filter === "due" ? { status: { in: ["REPORTED", "STORED"] }, retainUntil: { lte: now } } : {}),
   };
-  return prisma.lostFoundItem.findMany({ where, include: { site: { select: { name: true } }, custodian: { select: { name: true } }, claims: { where: { outcome: "PENDING" }, select: { id: true } } }, orderBy: { foundAt: "desc" }, take: 500 });
+  const [rows, total] = await Promise.all([
+    prisma.lostFoundItem.findMany({ where, include: { site: { select: { name: true } }, custodian: { select: { name: true } }, claims: { where: { outcome: "PENDING" }, select: { id: true } } }, orderBy: [{ foundAt: "desc" }, { id: "asc" }], skip: paging.skip, take: paging.take }),
+    prisma.lostFoundItem.count({ where }),
+  ]);
+  return toPaged(rows, total, paging);
 }
 
 export async function getItem(id: string, db: Db = prisma) {
@@ -316,8 +322,8 @@ export async function lostFoundSummary(siteId?: string | null, now: Date = new D
 // ---------------------------------------------------------------------------
 
 /** The register for a filter together with its summary tiles. */
-export async function getRegisterView(opts: { filter?: ItemFilter; q?: string | null }, now: Date = new Date()) {
-  const [items, summary] = await Promise.all([listItems({ ...opts, now }), lostFoundSummary(null, now)]);
+export async function getRegisterView(opts: { filter?: ItemFilter; q?: string | null }, req: PageRequest = {}, now: Date = new Date()) {
+  const [items, summary] = await Promise.all([listItems({ ...opts, now }, req), lostFoundSummary(null, now)]);
   return { items, summary, now };
 }
 

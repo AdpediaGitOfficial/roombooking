@@ -5,7 +5,7 @@ import { MANAGER_MOVEMENTS, applyMovement, createItem, getItem, getRegister, mov
 import type { Handlers } from "../register";
 
 export const inventoryHandlers: Handlers<ApiContract>["inventory"] = {
-  register: (_ctx, input) => getRegister({ filter: input.filter, q: input.q || null, category: input.category || null }),
+  register: (_ctx, input) => getRegister({ filter: input.filter, q: input.q || null, category: input.category || null }, { page: input.page, pageSize: input.pageSize }),
   targetOptions: () => targetOptions(),
   reports: (_ctx, input) => reportsView({ siteId: input.siteId ?? null, from: input.from, to: input.to, type: input.type }),
   async movementsCsv(ctx, input) {

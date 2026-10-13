@@ -7,15 +7,17 @@ import { api } from "@/lib/api";
 import { ConditionBadge, ItemStateBadge } from "@/modules/inventory/components/views";
 import { CreateItemForm } from "@/modules/inventory/components/forms";
 import { PageHeader } from "@/components/shell/page-header";
+import { Pager, pageHref } from "@/components/shell/pager";
 
-type Search = Promise<{ filter?: string; q?: string; category?: string }>;
+type Search = Promise<{ filter?: string; q?: string; category?: string; page?: string }>;
 
 async function Register({ searchParams }: { searchParams: Search }) {
   const user = await requireRole(INVENTORY_VIEW_ROLES, "/inventory");
   const canManage = hasRole(user, ...INVENTORY_MANAGE_ROLES);
-  const { filter: raw, q, category } = await searchParams;
+  const { filter: raw, q, category, page: rawPage } = await searchParams;
   const filter = (ITEM_FILTERS.some(([f]) => f === raw) ? raw : "all") as ItemFilter;
-  const [{ items, summary, categories: cats }, options] = await Promise.all([api.inventory.register({ filter, q: q || undefined, category: category || undefined }), canManage ? api.inventory.targetOptions() : null]);
+  const [{ items: list, summary, categories: cats }, options] = await Promise.all([api.inventory.register({ filter, q: q || undefined, category: category || undefined, page: Number(rawPage) || 1 }), canManage ? api.inventory.targetOptions() : null]);
+  const items = list.rows;
   const query = (f: ItemFilter) => `/inventory?filter=${f}${q ? `&q=${encodeURIComponent(q)}` : ""}${category ? `&category=${encodeURIComponent(category)}` : ""}`;
   return (
     <>
@@ -54,6 +56,7 @@ async function Register({ searchParams }: { searchParams: Search }) {
             {items.length === 0 && <tr><td colSpan={6} className="px-3 py-6 text-center text-zinc-500">No items match.</td></tr>}
           </tbody>
         </table>
+        <Pager page={list.page} pages={list.pages} total={list.total} pageSize={list.pageSize} hrefFor={pageHref("/inventory", { filter, q, category })} />
       </div>
       {options && <div className="mt-6"><CreateItemForm sites={options.sites} categories={cats} /></div>}
     </>

@@ -1,11 +1,12 @@
+import type { ReadCache } from "./cache";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { z } from "zod";
 import type { Access, Contract, FileInput, OpDef, OutputOf, ParsedOf } from "@sam/contract/define";
 import { HttpError } from "./http-error";
 import { bearerToken, hasAnyRole, unauthenticated, type AuthUser, type Authenticator } from "./auth";
 
-export interface PublicCtx { user: null; token: null; ip: string; requestId: string; request: FastifyRequest; auth: Authenticator }
-export interface AuthedCtx { user: AuthUser; token: string; ip: string; requestId: string; request: FastifyRequest; auth: Authenticator }
+export interface PublicCtx { user: null; token: null; ip: string; requestId: string; request: FastifyRequest; auth: Authenticator; cache: ReadCache }
+export interface AuthedCtx { user: AuthUser; token: string; ip: string; requestId: string; request: FastifyRequest; auth: Authenticator; cache: ReadCache }
 export type Ctx<A extends Access> = A extends "public" ? PublicCtx : AuthedCtx;
 
 export type Handler<D> = D extends OpDef<z.ZodType, unknown, infer A>
@@ -61,6 +62,7 @@ async function collectInput(request: FastifyRequest, def: OpDef, maxUploadBytes:
 }
 
 export interface RegisterOptions {
+  cache: ReadCache;
   authenticator: Authenticator;
   maxUploadBytes: number;
 }
@@ -95,8 +97,10 @@ export function registerOps<C extends Contract>(app: FastifyInstance, contract: 
           const raw = await collectInput(request, def, options.maxUploadBytes);
           const parsed = def.input.safeParse(raw);
           if (!parsed.success) throw parsed.error;
-          const ctx = { user, token: user ? token : null, ip: request.ip, requestId: request.id, request, auth: options.authenticator };
+          const ctx = { user, token: user ? token : null, ip: request.ip, requestId: request.id, request, auth: options.authenticator, cache: options.cache };
           const result = await handler(ctx, parsed.data);
+          // Anything that changes data makes cached aggregate views suspect.
+          if (def.method !== "GET") options.cache.clear();
           if (def.kind === "file") {
             const file = result as { body: Uint8Array; contentType: string; fileName?: string };
             reply.header("content-type", file.contentType);

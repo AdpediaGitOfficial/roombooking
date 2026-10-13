@@ -4,7 +4,7 @@ import { KeyError } from "@sam/core/modules/keys/errors";
 import type { Handlers } from "../register";
 
 export const keyHandlers: Handlers<ApiContract>["keys"] = {
-  register: (_ctx, input) => getRegister(input.filter),
+  register: (_ctx, input) => getRegister(input.filter, { page: input.page, pageSize: input.pageSize }),
   registerOptions: () => registerOptions(),
   forRoom: (_ctx, input) => keysForRoom(input.roomId),
   async get(_ctx, input) {

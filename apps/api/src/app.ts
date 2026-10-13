@@ -9,6 +9,7 @@ import { contract } from "@sam/contract/index";
 import type { Contract } from "@sam/contract/define";
 import { prisma } from "@sam/core/lib/db";
 import { bearerToken, createAuthenticator } from "./auth";
+import { ReadCache } from "./cache";
 import { loadConfig, type Config } from "./config";
 import { toHttpError } from "./errors";
 import { handlers } from "./handlers";
@@ -39,6 +40,7 @@ export async function buildApp(options: BuildOptions = {}): Promise<FastifyInsta
 
   const authenticator = createAuthenticator(config.sessionCacheTtlMs, config.sessionCacheMax);
   const metrics = createMetrics();
+  const cache = new ReadCache(config.readCacheTtlMs);
 
   await app.register(helmet, { contentSecurityPolicy: false });
   if (config.corsOrigins.length > 0) await app.register(cors, { origin: config.corsOrigins, credentials: false, maxAge: 600 });
@@ -106,8 +108,8 @@ export async function buildApp(options: BuildOptions = {}): Promise<FastifyInsta
   app.get("/openapi.json", open, async () => openApi);
   app.get("/docs", open, async (_req, reply) => reply.header("content-type", "text/html; charset=utf-8").send(DOCS_HTML));
 
-  registerOps(app, contract, handlers, { authenticator, maxUploadBytes: config.maxUploadBytes });
-  if (options.extraOps) registerOps(app, options.extraOps.contract, options.extraOps.handlers as never, { authenticator, maxUploadBytes: config.maxUploadBytes });
-  await registerRawRoutes(app);
+  registerOps(app, contract, handlers, { authenticator, cache, maxUploadBytes: config.maxUploadBytes });
+  if (options.extraOps) registerOps(app, options.extraOps.contract, options.extraOps.handlers as never, { authenticator, cache, maxUploadBytes: config.maxUploadBytes });
+  await registerRawRoutes(app, cache);
   return app;
 }

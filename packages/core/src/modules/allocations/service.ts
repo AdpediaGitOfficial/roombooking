@@ -8,6 +8,7 @@ import { enqueueNotification } from "../../lib/notifications";
 import { OCCUPYING_STATUSES, isoDate, todayInTimezone } from "../accommodation/occupancy-rules";
 import { itemsHeldBy } from "../inventory/service";
 import { AllocationError } from "./errors";
+import { pageArgs, toPaged, type PageRequest } from "../../lib/paging";
 import { isIsoDate, type AllocationListFilter, type ClearanceBlocker } from "./rules";
 import { fulfilRoomChangeTx } from "../requests/service";
 
@@ -451,7 +452,8 @@ export async function getAllocation(id: string) {
 
 export type { AllocationListFilter };
 
-export async function listAllocations(filter: AllocationListFilter, staffId?: string | null) {
+export async function listAllocations(filter: AllocationListFilter, staffId?: string | null, req: PageRequest = {}) {
+  const paging = pageArgs(req);
   const byStatus: Prisma.AllocationWhereInput =
     filter === "active"
       ? { status: "CHECKED_IN" }
@@ -461,12 +463,21 @@ export async function listAllocations(filter: AllocationListFilter, staffId?: st
           ? { status: { in: ["CHECKED_OUT", "CANCELLED", "REJECTED", "EXPIRED"] } }
           : {};
   const where: Prisma.AllocationWhereInput = staffId ? { ...byStatus, staffId } : byStatus;
-  return prisma.allocation.findMany({
+  const [rows, total] = await Promise.all([
+    prisma.allocation.findMany({
     where,
-    include: { staff: true, bed: { include: bedWithLocation } },
-    orderBy: [{ startDate: "desc" }, { createdAt: "desc" }],
-    take: 200,
-  });
+    // A list row needs the person's name and the bed's place, not their whole profile and site record.
+    include: {
+      staff: { select: { id: true, employeeId: true, firstName: true, lastName: true } },
+      bed: { select: { id: true, code: true, room: { select: { id: true, code: true, building: { select: { id: true, name: true } } } } } },
+    },
+    orderBy: [{ startDate: "desc" }, { createdAt: "desc" }, { id: "asc" }],
+    skip: paging.skip,
+    take: paging.take,
+    }),
+    prisma.allocation.count({ where }),
+  ]);
+  return toPaged(rows, total, paging);
 }
 
 /** One allocation with its resident, bed, transfer chain and (when checked in) outstanding check-out blockers. */

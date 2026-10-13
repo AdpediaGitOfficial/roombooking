@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { INVENTORY_MANAGE_ROLES, INVENTORY_OPERATE_ROLES, INVENTORY_VIEW_ROLES } from "@sam/core/modules/inventory/access";
 import type * as svc from "@sam/core/modules/inventory/service";
-import { cuid, fileOp, isoDate, op, out, type Ret } from "../define";
+import { cuid, fileOp, isoDate, op, out, pageInput, type Ret } from "../define";
 
 const text = (max: number) => z.string().max(max).optional();
 const count = () => z.number().int().optional();
@@ -16,7 +16,7 @@ export const inventory = {
     summary: "The inventory register for a filter, with summary counts and categories",
     tag: "Inventory",
     access: INVENTORY_VIEW_ROLES,
-    input: z.object({ filter: z.enum(["all", "stock", "assets", "low", "issued", "damaged", "retired"]).default("all"), q: text(200), category: text(100) }),
+    input: z.object({ filter: z.enum(["all", "stock", "assets", "low", "issued", "damaged", "retired"]).default("all"), q: text(200), category: text(100), ...pageInput }),
     output: out<Ret<typeof svc.getRegister>>(),
   }),
   targetOptions: op({

@@ -6,6 +6,7 @@ import { recordAudit } from "../../lib/audit";
 import { enqueueNotification } from "../../lib/notifications";
 import { hashPassword, validatePasswordStrength } from "../../lib/auth/password";
 import { revokeUserSessions } from "../../lib/auth/session-store";
+import { pageArgs, toPaged, type PageRequest } from "../../lib/paging";
 import { AdminError } from "./errors";
 import { ALL_ROLES } from "./access";
 import { userInclude, type RoleGrant } from "./rules";
@@ -247,19 +248,20 @@ export async function acceptToken(input: { token: string; password: string }) {
 
 export type UserFilter = { q?: string | null; status?: UserStatus | null; role?: Role | null };
 
-export async function listUsers(organizationId: string, filter: UserFilter) {
+export async function listUsers(organizationId: string, filter: UserFilter, req: PageRequest = {}) {
   const q = filter.q?.trim();
-  return prisma.user.findMany({
-    where: {
-      organizationId,
-      ...(filter.status ? { status: filter.status } : {}),
-      ...(filter.role ? { roleAssignments: { some: { role: filter.role } } } : {}),
-      ...(q ? { OR: [{ name: { contains: q, mode: "insensitive" } }, { email: { contains: q, mode: "insensitive" } }, { staffProfile: { employeeId: { contains: q, mode: "insensitive" } } }] } : {}),
-    },
-    include: userInclude,
-    orderBy: [{ status: "asc" }, { name: "asc" }],
-    take: 300,
-  });
+  const paging = pageArgs(req);
+  const where: Prisma.UserWhereInput = {
+    organizationId,
+    ...(filter.status ? { status: filter.status } : {}),
+    ...(filter.role ? { roleAssignments: { some: { role: filter.role } } } : {}),
+    ...(q ? { OR: [{ name: { contains: q, mode: "insensitive" } }, { email: { contains: q, mode: "insensitive" } }, { staffProfile: { employeeId: { contains: q, mode: "insensitive" } } }] } : {}),
+  };
+  const [rows, total] = await Promise.all([
+    prisma.user.findMany({ where, include: userInclude, orderBy: [{ status: "asc" }, { name: "asc" }, { id: "asc" }], skip: paging.skip, take: paging.take }),
+    prisma.user.count({ where }),
+  ]);
+  return toPaged(rows, total, paging);
 }
 
 export async function getUser(id: string) {
@@ -281,18 +283,19 @@ export async function scopeOptions() {
 
 export type AuditFilter = { entityType?: string | null; action?: string | null; actorId?: string | null; entityId?: string | null };
 
-export async function listAudit(filter: AuditFilter, take = 200) {
-  return prisma.auditEvent.findMany({
-    where: {
-      ...(filter.entityType ? { entityType: filter.entityType } : {}),
-      ...(filter.action ? { action: { contains: filter.action.toUpperCase() } } : {}),
-      ...(filter.actorId ? { actorId: filter.actorId } : {}),
-      ...(filter.entityId ? { entityId: filter.entityId } : {}),
-    },
-    include: { actor: { select: { id: true, name: true, email: true } } },
-    orderBy: { createdAt: "desc" },
-    take,
-  });
+export async function listAudit(filter: AuditFilter, req: PageRequest = {}) {
+  const paging = pageArgs(req);
+  const where: Prisma.AuditEventWhereInput = {
+    ...(filter.entityType ? { entityType: filter.entityType } : {}),
+    ...(filter.action ? { action: { contains: filter.action.toUpperCase() } } : {}),
+    ...(filter.actorId ? { actorId: filter.actorId } : {}),
+    ...(filter.entityId ? { entityId: filter.entityId } : {}),
+  };
+  const [rows, total] = await Promise.all([
+    prisma.auditEvent.findMany({ where, include: { actor: { select: { id: true, name: true, email: true } } }, orderBy: [{ createdAt: "desc" }, { id: "asc" }], skip: paging.skip, take: paging.take }),
+    prisma.auditEvent.count({ where }),
+  ]);
+  return toPaged(rows, total, paging);
 }
 
 export async function auditEntityTypes() {
@@ -308,11 +311,11 @@ export async function auditEntityTypes() {
 export async function getUserView(organizationId: string, userId: string, withInviteLink: boolean) {
   const user = await getUser(userId);
   if (!user || user.organizationId !== organizationId) throw new AdminError("NOT_FOUND", "User not found.");
-  const [options, staff, audit] = await Promise.all([scopeOptions(), unlinkedStaff(organizationId, user.id), listAudit({ entityId: user.id, entityType: "User" }, 30)]);
+  const [options, staff, audit] = await Promise.all([scopeOptions(), unlinkedStaff(organizationId, user.id), listAudit({ entityId: user.id, entityType: "User" }, { pageSize: 30 })]);
   // The invite link is only recoverable right after creation, from the queued email payload.
   const pending = withInviteLink && user.status === "INVITED" ? await prisma.notification.findFirst({ where: { recipientId: user.id, event: "user.invited" }, orderBy: { createdAt: "desc" } }) : null;
   const inviteLink = (pending?.payload as { invitePath?: string } | null)?.invitePath ?? null;
-  return { user, hasPassword: !!user.passwordHash, options, staff, audit, inviteLink };
+  return { user, hasPassword: !!user.passwordHash, options, staff, audit: audit.rows, inviteLink };
 }
 
 /** Pick-lists for the new-user form. */
@@ -322,7 +325,7 @@ export async function newUserOptions(organizationId: string) {
 }
 
 /** The audit log with the entity types to filter by. */
-export async function auditView(filter: AuditFilter) {
-  const [events, types] = await Promise.all([listAudit(filter), auditEntityTypes()]);
+export async function auditView(filter: AuditFilter, req: PageRequest = {}) {
+  const [events, types] = await Promise.all([listAudit(filter, req), auditEntityTypes()]);
   return { events, types };
 }

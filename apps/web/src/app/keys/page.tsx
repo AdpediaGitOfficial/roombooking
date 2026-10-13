@@ -7,15 +7,17 @@ import { api } from "@/lib/api";
 import { HolderCell, KeyStatusBadge } from "@/modules/keys/components/views";
 import { RegisterKeyForm } from "@/modules/keys/components/forms";
 import { PageHeader } from "@/components/shell/page-header";
+import { Pager, pageHref } from "@/components/shell/pager";
 
 const FILTERS: Array<[KeyFilter, string]> = [["all", "All"], ["available", "Available"], ["issued", "Issued"], ["overdue", "Overdue"], ["exceptions", "Lost / damaged / repair"], ["retired", "Retired"]];
 
-async function Register({ searchParams }: { searchParams: Promise<{ filter?: string }> }) {
+async function Register({ searchParams }: { searchParams: Promise<{ filter?: string; page?: string }> }) {
   const user = await requireRole(KEY_VIEW_ROLES, "/keys");
   const canManage = hasRole(user, ...KEY_MANAGE_ROLES);
-  const { filter: raw } = await searchParams;
+  const { filter: raw, page: rawPage } = await searchParams;
   const filter = (FILTERS.some(([f]) => f === raw) ? raw : "all") as KeyFilter;
-  const [{ rows, summary, now }, options] = await Promise.all([api.keys.register({ filter }), canManage ? api.keys.registerOptions() : null]);
+  const [{ rows: list, summary, now }, options] = await Promise.all([api.keys.register({ filter, page: Number(rawPage) || 1 }), canManage ? api.keys.registerOptions() : null]);
+  const rows = list.rows;
   return (
     <>
       <dl className="grid grid-cols-2 gap-3 sm:grid-cols-5">
@@ -43,6 +45,7 @@ async function Register({ searchParams }: { searchParams: Promise<{ filter?: str
             {rows.length === 0 && <tr><td colSpan={4} className="px-3 py-6 text-center text-zinc-500">No keys match.</td></tr>}
           </tbody>
         </table>
+        <Pager page={list.page} pages={list.pages} total={list.total} pageSize={list.pageSize} hrefFor={pageHref("/keys", { filter })} />
       </div>
       {options && <div className="mt-6"><RegisterKeyForm sites={options.sites} rooms={options.rooms} facilities={options.facilities} /></div>}
     </>
@@ -54,7 +57,7 @@ export default function KeysPage({ searchParams }: PageProps<"/keys">) {
     <main>
       <PageHeader title="Keys" subtitle="Register, issue and return, outstanding keys and exceptions." crumbs={[["Keys"]]} />
       <Suspense fallback={<p className="text-sm text-zinc-500">Loading…</p>}>
-        <Register searchParams={searchParams as Promise<{ filter?: string }>} />
+        <Register searchParams={searchParams as Promise<{ filter?: string; page?: string }>} />
       </Suspense>
     </main>
   );

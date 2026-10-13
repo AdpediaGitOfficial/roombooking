@@ -5,7 +5,7 @@ import { addBeds, setBedStatus, setRoomStatus } from "@sam/core/modules/accommod
 import type { Handlers } from "../register";
 
 export const accommodationHandlers: Handlers<ApiContract>["accommodation"] = {
-  overview: () => getSitesOverview(),
+  overview: (ctx) => ctx.cache.get("accommodation:overview", () => getSitesOverview()),
   async building(_ctx, input) {
     const building = await getBuildingOccupancy(input.buildingId);
     if (!building) throw new AccommodationError("NOT_FOUND", "Building not found.");

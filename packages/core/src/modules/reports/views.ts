@@ -24,7 +24,14 @@ export async function overviewView(user: Holder) {
     facilityReport(scope, { siteId, range }),
     keyReport(scope, { siteId, range }),
   ]);
-  return { dash, moves, maint, fac, keys };
+  // The landing page shows headline numbers only, so send those rather than every report row.
+  return {
+    dash: { occupancyRate: dash.occupancyRate, summary: dash.summary },
+    moves: { summary: moves.summary },
+    maint: { backlogByStatus: maint.backlogByStatus, overdue: maint.overdue, resolution: { medianHours: maint.resolution.medianHours } },
+    fac,
+    keys: { outstanding: keys.outstanding.map((k) => ({ overdue: k.overdue })), register: keys.register.map((r) => ({ lost: r.lost })) },
+  };
 }
 
 export async function movementsView(user: Holder, f: Dates & { siteId?: string | null; buildingId?: string | null; status?: AllocationStatus | null; q?: string | null }) {

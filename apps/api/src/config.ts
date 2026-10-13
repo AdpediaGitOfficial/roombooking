@@ -16,6 +16,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
     /** How long a resolved session is reused before the database is asked again. */
     sessionCacheTtlMs: Number(env.SESSION_CACHE_TTL_MS ?? 10000),
     sessionCacheMax: int("SESSION_CACHE_MAX", 20000),
+    /** How long shared dashboard and pick-list views are reused; 0 turns the cache off. */
+    readCacheTtlMs: Number(env.READ_CACHE_TTL_MS ?? 5000),
     maxUploadBytes: int("MAX_UPLOAD_BYTES", 5 * 1024 * 1024),
     metricsToken: env.METRICS_TOKEN ?? "",
     bodyLimitBytes: int("API_BODY_LIMIT_BYTES", 12 * 1024 * 1024),

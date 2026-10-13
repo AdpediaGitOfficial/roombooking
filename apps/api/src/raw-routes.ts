@@ -7,12 +7,13 @@ import { runScheduledJobs } from "@sam/core/modules/jobs/service";
 import { parseStatusWebhook, verifyWebhookSignature } from "@sam/core/modules/notifications/whatsapp";
 import { applyStatusUpdates } from "@sam/core/modules/notifications/worker";
 import { bearerToken } from "./auth";
+import type { ReadCache } from "./cache";
 
 function safeEqual(a: string, b: string): boolean {
   return a.length === b.length && timingSafeEqual(Buffer.from(a), Buffer.from(b));
 }
 
-export async function registerRawRoutes(app: FastifyInstance) {
+export async function registerRawRoutes(app: FastifyInstance, cache: ReadCache) {
   // Webhook bodies must reach the handler as the exact text the provider signed.
   await app.register(async (scope) => {
     scope.addContentTypeParser("application/json", { parseAs: "string" }, (_req, body, done) => done(null, body));
@@ -38,7 +39,9 @@ export async function registerRawRoutes(app: FastifyInstance) {
       } catch {
         return reply.code(400).send({ error: { code: "BAD_REQUEST", message: "invalid json" } });
       }
-      return applyStatusUpdates(parseStatusWebhook(body));
+      const result = await applyStatusUpdates(parseStatusWebhook(body));
+      cache.clear();
+      return result;
     });
   });
 
@@ -48,6 +51,8 @@ export async function registerRawRoutes(app: FastifyInstance) {
     const provided = bearerToken(request) ?? "";
     if (!secret || !safeEqual(provided, secret)) return reply.code(401).send({ error: { code: "UNAUTHENTICATED", message: "unauthorized" } });
     const limit = Number((request.query as { limit?: string }).limit ?? 50);
-    return runScheduledJobs({ limit: Number.isFinite(limit) ? limit : 50 });
+    const result = await runScheduledJobs({ limit: Number.isFinite(limit) ? limit : 50 });
+    cache.clear();
+    return result;
   });
 }

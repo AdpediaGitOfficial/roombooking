@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { Role } from "@prisma/client";
 import { ADMIN_VIEW_ROLES, ALL_ROLES, USER_ADMIN_ROLES } from "@sam/core/modules/admin/access";
 import type * as svc from "@sam/core/modules/admin/users-service";
-import { bool, cuid, op, out, type Ret } from "../define";
+import { bool, cuid, op, out, pageInput, type Ret } from "../define";
 
 const role = z.enum(ALL_ROLES as [Role, ...Role[]]);
 const text = (max: number) => z.string().max(max).optional();
@@ -17,7 +17,7 @@ export const users = {
     summary: "Users in the caller's organisation, filtered",
     tag: "Administration",
     access: ADMIN_VIEW_ROLES,
-    input: z.object({ q: text(200), status: userStatus.optional(), role: role.optional() }),
+    input: z.object({ q: text(200), status: userStatus.optional(), role: role.optional(), ...pageInput }),
     output: out<Ret<typeof svc.listUsers>>(),
   }),
   options: op({
@@ -120,7 +120,7 @@ export const audit = {
     summary: "The audit log, filtered, with the entity types to filter by",
     tag: "Administration",
     access: ADMIN_VIEW_ROLES,
-    input: z.object({ entityType: text(60), action: text(80), entityId: text(80), actorId: cuid().optional() }),
+    input: z.object({ entityType: text(60), action: text(80), entityId: text(80), actorId: cuid().optional(), ...pageInput }),
     output: out<Ret<typeof svc.auditView>>(),
   }),
 };

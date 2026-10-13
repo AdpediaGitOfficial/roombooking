@@ -35,6 +35,16 @@ export const workOrderInclude = {
 
 export type WorkOrderRecord = Prisma.WorkOrderGetPayload<{ include: typeof workOrderInclude }>;
 
+/** What a list row shows: no notes, no requester details. */
+export const workOrderListInclude = {
+  site: { select: { id: true, name: true } },
+  building: { select: { id: true, name: true } },
+  room: { select: { id: true, code: true } },
+  assignee: { select: { id: true, name: true } },
+  vendor: { select: { id: true, name: true } },
+} satisfies Prisma.WorkOrderInclude;
+export type WorkOrderListItem = Prisma.WorkOrderGetPayload<{ include: typeof workOrderListInclude }>;
+
 // ---------------------------------------------------------------------------
 // Access
 // ---------------------------------------------------------------------------
@@ -102,7 +112,7 @@ export function describeStatus(status: WorkOrderStatus): string {
   return map[status];
 }
 
-export function locationLabel(wo: Pick<WorkOrderRecord, "site" | "building" | "room" | "locationNote">): string {
+export function locationLabel(wo: { site: { name: string }; building: { name: string } | null; room: { code: string } | null; locationNote: string | null }): string {
   const parts = [wo.building?.name, wo.room ? `Room ${wo.room.code}` : null, wo.locationNote].filter(Boolean);
   return parts.length ? parts.join(" · ") : wo.site.name;
 }

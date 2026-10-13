@@ -157,9 +157,9 @@ describe("transitions and roles", () => {
 describe("vendors and visibility", () => {
   it("vendor users see only tickets assigned to their vendor, with internal notes hidden", async () => {
     const wo = await createWorkOrder({ requesterId: actors.other.id, roomId, category: "Air conditioning", description: "AC unit leaks water onto the floor", priority: "MEDIUM" });
-    expect((await listWorkOrders(actors.vendor, "all")).map((w) => w.id)).not.toContain(wo.id);
+    expect((await listWorkOrders(actors.vendor, "all")).rows.map((w) => w.id)).not.toContain(wo.id);
     await assignWorkOrder({ workOrderId: wo.id, actor: actors.coordinator, vendorId });
-    expect((await listWorkOrders(actors.vendor, "open")).map((w) => w.id)).toContain(wo.id);
+    expect((await listWorkOrders(actors.vendor, "open")).rows.map((w) => w.id)).toContain(wo.id);
     await addNote({ workOrderId: wo.id, actor: actors.coordinator, note: "Resident complained twice before", internal: true });
     await addNote({ workOrderId: wo.id, actor: actors.coordinator, note: "Please attend tomorrow morning" });
     const full = (await getWorkOrder(wo.id))!;
@@ -174,7 +174,7 @@ describe("vendors and visibility", () => {
   });
 
   it("residents only see their own tickets in the queue scope and overdue is computed from the SLA", async () => {
-    const mine = await listWorkOrders(actors.resident, "all");
+    const mine = (await listWorkOrders(actors.resident, "all")).rows;
     expect(mine.every((w) => w.requesterId === actors.resident.id)).toBe(true);
     expect(isOverdue({ status: "ASSIGNED", slaDueAt: new Date(Date.now() - 1000) })).toBe(true);
     expect(isOverdue({ status: "CLOSED", slaDueAt: new Date(Date.now() - 1000) })).toBe(false);

@@ -57,7 +57,7 @@ describe("keys API", () => {
     expect(detail.transactions[0].holder.lastName).toBe("Holder");
 
     const held = await call("GET", "/v1/keys?filter=issued", "officer");
-    expect(held.json().rows.some((r: { key: { id: string } }) => r.key.id === ids.key)).toBe(true);
+    expect(held.json().rows.rows.some((r: { key: { id: string } }) => r.key.id === ids.key)).toBe(true);
 
     expect((await call("POST", `/v1/keys/${ids.key}/return`, "officer", { condition: "Good" })).statusCode).toBe(200);
     expect((await call("GET", `/v1/keys/${ids.key}`, "officer")).json().status).toBe("AVAILABLE");

@@ -227,6 +227,7 @@ model User {
   auditEvents               AuditEvent[]
   attachments               Attachment[]
   allocations               Allocation[]
+  @@index([organizationId, status])
 }
 
 // Server-side sessions (ADM-05). The cookie carries a random token; only its
@@ -311,6 +312,7 @@ model StaffProfile {
   lostFoundClaims       LostFoundClaim[]
 
   @@unique([organizationId, employeeId])
+  @@index([organizationId, employmentStatus, lastName])
 }
 
 model Vendor {
@@ -373,6 +375,7 @@ model Allocation {
 
   @@index([staffId, status])
   @@index([bedId, status])
+  @@index([status, startDate(sort: Desc)])
 }
 
 // ---------------------------------------------------------------------------
@@ -623,6 +626,8 @@ model WorkOrder {
 
   @@index([status, siteId])
   @@index([assigneeId, status])
+  @@index([requesterId, createdAt(sort: Desc)])
+  @@index([status, createdAt(sort: Desc)])
 }
 
 enum WorkOrderNoteType {
@@ -643,6 +648,7 @@ model WorkOrderNote {
 
   workOrder WorkOrder @relation(fields: [workOrderId], references: [id])
   author    User      @relation(fields: [authorId], references: [id])
+  @@index([workOrderId, createdAt])
 }
 
 // ---------------------------------------------------------------------------
@@ -711,6 +717,7 @@ model FacilityBooking {
   @@index([facilityId, startsAt, endsAt])
   @@index([facilityId, status, startsAt])
   @@index([userId, status, startsAt])
+  @@index([status, startsAt])
 }
 
 // ---------------------------------------------------------------------------
@@ -782,6 +789,8 @@ model KeyTransaction {
   custodian User          @relation(fields: [custodianId], references: [id])
 
   @@index([keyId, createdAt])
+  @@index([type, returnedAt])
+  @@index([holderId, returnedAt])
 }
 
 // ---------------------------------------------------------------------------
@@ -1135,6 +1144,7 @@ model Notification {
   @@index([status, channel, nextAttemptAt])
   @@index([recipientId, readAt])
   @@index([providerMessageId])
+  @@index([recipientId, channel, createdAt(sort: Desc)])
 }
 
 // Append-only (trigger in migration SQL blocks UPDATE/DELETE).
@@ -1153,4 +1163,5 @@ model AuditEvent {
 
   @@index([entityType, entityId])
   @@index([actorId, createdAt])
+  @@index([createdAt(sort: Desc)])
 }

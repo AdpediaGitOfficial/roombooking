@@ -4,11 +4,15 @@ import { facilityCsv, keyCsv, maintenanceCsv, movementCsv, parseRange, scopeFor 
 import { dashboardView, facilitiesView, keysView, maintenanceView, movementsView, overviewView } from "@sam/core/modules/reports/views";
 import type { Handlers } from "../register";
 
+const scopeKey = (user: { roleAssignments: Array<{ role: string; siteId: string | null; buildingId: string | null }> }) =>
+  user.roleAssignments.map((r) => `${r.role}:${r.siteId ?? ""}:${r.buildingId ?? ""}`).sort().join("|");
+
 const csvFile = (csv: string, name: string) => ({ body: new TextEncoder().encode(csv), contentType: "text/csv; charset=utf-8", fileName: `${name}-${new Date().toISOString().slice(0, 10)}.csv` });
 
 export const reportHandlers: Handlers<ApiContract>["reports"] = {
-  dashboard: (_ctx, input) => dashboardView(input.siteId ?? null),
-  overview: (ctx) => overviewView(ctx.user),
+  dashboard: (ctx, input) => ctx.cache.get(`reports:dashboard:${input.siteId ?? "all"}`, () => dashboardView(input.siteId ?? null)),
+  // The overview depends on the caller's site scope, so the cache key is the scope itself.
+  overview: (ctx) => ctx.cache.get(`reports:overview:${scopeKey(ctx.user)}`, () => overviewView(ctx.user)),
   movements: (ctx, input) => movementsView(ctx.user, input),
   maintenance: (ctx, input) => maintenanceView(ctx.user, input),
   facilities: (ctx, input) => facilitiesView(ctx.user, input),

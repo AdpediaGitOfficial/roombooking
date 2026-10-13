@@ -75,7 +75,8 @@ describe("inventory API", () => {
 
   it("filters the register and downloads the audited movement CSV", async () => {
     const found = (await call("GET", `/v1/inventory?q=${sku}`, "officer")).json();
-    expect(found.items).toHaveLength(1);
+    expect(found.items.rows).toHaveLength(1);
+    expect(found.items.total).toBe(1);
     expect(found.summary.stockLines).toBeGreaterThanOrEqual(1);
     const csv = await call("GET", `/v1/inventory/movements.csv?itemId=${ids.item}`, "custodian");
     expect(csv.statusCode).toBe(200);

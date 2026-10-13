@@ -13,6 +13,14 @@ export const keyInclude = {
   },
 } satisfies Prisma.KeyInclude;
 
+/** For register lists: just the place, the key and its open issue, not the whole history or full site records. */
+export const keyListInclude = {
+  site: { select: { id: true, code: true, name: true } },
+  room: { select: { id: true, code: true, building: { select: { id: true, name: true } } } },
+  facility: { select: { id: true, name: true } },
+  transactions: { ...keyInclude.transactions, where: { type: "ISSUE", returnedAt: null } },
+} satisfies Prisma.KeyInclude;
+
 export type KeyRecord = Prisma.KeyGetPayload<{ include: typeof keyInclude }>;
 export type KeyTransactionRecord = KeyRecord["transactions"][number];
 
@@ -36,7 +44,7 @@ export function describeKeyStatus(status: KeyStatus): string {
   return { AVAILABLE: "Available", ISSUED: "Issued", LOST: "Lost", DAMAGED: "Damaged", UNDER_REPAIR: "Under repair", RETIRED: "Retired" }[status];
 }
 
-export function keyLocation(key: Pick<KeyRecord, "room" | "facility" | "site">): string {
+export function keyLocation(key: { room: { code: string; building: { name: string } } | null; facility: { name: string } | null; site: { name: string } }): string {
   if (key.room) return `${key.room.building.name} · Room ${key.room.code}`;
   if (key.facility) return `Facility · ${key.facility.name}`;
   return key.site.name;

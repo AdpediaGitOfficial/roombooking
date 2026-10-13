@@ -11,7 +11,7 @@ function actorFor(user: SessionUser): Actor {
 }
 
 export const lostFoundHandlers: Handlers<ApiContract>["lostFound"] = {
-  register: (_ctx, input) => getRegisterView({ filter: input.filter, q: input.q || null }),
+  register: (_ctx, input) => getRegisterView({ filter: input.filter, q: input.q || null }, { page: input.page, pageSize: input.pageSize }),
   options: () => registerOptions(),
   mine: (ctx, input) => getMyPortal(ctx.user.id, input.q),
   getMine: (ctx, input) => getMyItemView(ctx.user.id, input.id),

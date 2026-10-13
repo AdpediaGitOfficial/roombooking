@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { LOST_FOUND_MANAGE_ROLES, LOST_FOUND_OPERATE_ROLES, LOST_FOUND_VIEW_ROLES } from "@sam/core/modules/lost-found/access";
 import type * as svc from "@sam/core/modules/lost-found/service";
-import { cuid, fileInput, fileList, op, out, type Ret } from "../define";
+import { cuid, fileInput, fileList, op, out, pageInput, type Ret } from "../define";
 
 const text = (max: number) => z.string().max(max).optional();
 
@@ -13,7 +13,7 @@ export const lostFound = {
     summary: "The found-items register for a filter, with summary counts",
     tag: "Lost and found",
     access: LOST_FOUND_VIEW_ROLES,
-    input: z.object({ filter: z.enum(["open", "reported", "stored", "claims", "due", "returned", "disposed", "all"]).default("open"), q: text(200) }),
+    input: z.object({ filter: z.enum(["open", "reported", "stored", "claims", "due", "returned", "disposed", "all"]).default("open"), q: text(200), ...pageInput }),
     output: out<Ret<typeof svc.getRegisterView>>(),
   }),
   options: op({
