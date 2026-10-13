@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
+import { apiUrl } from "@/lib/api-url";
 
 // The provider's webhook lands here when it is pointed at the web address. The API owns the
 // logic (signature check, status updates); this only relays the raw request. In production
 // the reverse proxy can route /api/webhooks/whatsapp straight to the API's /webhooks/whatsapp.
-const API_URL = process.env.API_URL ?? "http://127.0.0.1:4000";
+const API_URL = apiUrl();
 
 async function relay(upstream: Response) {
   return new NextResponse(await upstream.text(), { status: upstream.status, headers: { "Content-Type": upstream.headers.get("content-type") ?? "application/json" } });

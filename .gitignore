@@ -49,3 +49,4 @@ uploads/
 # build and cache output of the workspaces
 dist/
 .cache/
+scripts/loadtest/tokens.json

@@ -7,6 +7,11 @@ const eslintConfig = defineConfig([
   ...nextTs,
   { settings: { next: { rootDir: ["apps/web"] } } },
   {
+    // CommonJS tooling files (PM2 process file, load-test data generator) use require() by design.
+    files: ["**/*.cjs"],
+    rules: { "@typescript-eslint/no-require-imports": "off" },
+  },
+  {
     // The web app is a client of the API: it may share pure rules, role lists and types with the
     // core package, but never reach the database or a data service directly.
     files: ["apps/web/**/*.{ts,tsx}"],

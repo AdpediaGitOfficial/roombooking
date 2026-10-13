@@ -12,17 +12,32 @@ Requirements and the release plan are in [docs/requirements-analysis.md](docs/re
 | Layer | Choice |
 |-------|--------|
 | Runtime | Node.js 22 |
-| Framework | Next.js 16 (App Router, TypeScript, Tailwind CSS 4) |
+| Web | Next.js 16 (App Router, TypeScript, Tailwind CSS 4) |
+| API | Fastify 5, zod-validated operations, OpenAPI at `/docs` |
+| Worker | Node process: email and WhatsApp delivery, scheduled sweeps |
 | Database | PostgreSQL 16 |
 | ORM / migrations | Prisma 6 |
 | Lint / types | ESLint 9, TypeScript 5 |
 
-The application is a modular monolith: Next.js serves both the UI and the
-API (route handlers and server actions) against one PostgreSQL database.
+The system is three services in an npm-workspaces monorepo, built for 500+
+users and able to scale each tier separately (details in
+[docs/architecture.md](docs/architecture.md)):
+
+- **`apps/web`**: the Next.js UI. It has no database access; every page and
+  action calls the API through a typed client (an ESLint rule enforces this).
+- **`apps/api`**: all business operations over HTTP, with authentication, role
+  policy, validation, rate limiting, caching and file storage. Reference at
+  `/docs` once running.
+- **`apps/worker`**: delivers email and WhatsApp messages and runs the
+  booking and request sweeps.
+- **`packages/core`**: Prisma schema and migrations plus the domain services
+  shared by the API and worker. **`packages/contract`**: the API definition
+  (operations, schemas, roles) shared by the API and the web client.
+
 Business rules that must hold under concurrency (no double-booked beds,
 one open key issue per key, one open assignment per serialised asset,
 non-negative stock, append-only audit log) are enforced in the database
-itself; see `prisma/migrations/*/migration.sql`.
+itself; see `packages/core/prisma/migrations/*/migration.sql`.
 
 ## Getting started
 
@@ -32,11 +47,15 @@ docker compose up -d db         # PostgreSQL 16 on localhost:5432 (or point DATA
 npm install                     # also runs prisma generate
 npm run db:deploy               # apply migrations
 npm run db:seed                 # demo organisation, site, rooms, beds, forms
-npm run dev                     # http://localhost:3000
+npm run dev:api                 # API on http://localhost:4000 (docs at /docs)
+npm run dev:web                 # web app on http://localhost:3000 (second terminal)
+npm run dev:worker              # optional: deliver email/WhatsApp, run sweeps (third terminal)
 ```
 
-`GET /api/health` returns `{"status":"ok","database":"up"}` when the app can
-reach the database.
+The web app finds the API through `API_URL` (default `http://127.0.0.1:4000`).
+`GET /api/health` on the web app returns `{"status":"ok","api":"up","database":"up"}`
+when the API is ready; the API's own probes are `/health` (alive) and `/ready`
+(database reachable).
 
 The seed creates three demo accounts, all with password `ChangeMe123!`
 (override with `SEED_PASSWORD`):
@@ -57,7 +76,7 @@ The seed creates three demo accounts, all with password `ChangeMe123!`
 
 A room is a container for individually tracked bed spaces. Capacity is the
 count of beds in service; each bed's availability is derived from
-allocations as of the site's local date (`src/modules/accommodation/occupancy.ts`):
+allocations as of the site's local date (`packages/core/src/modules/accommodation/occupancy.ts`):
 
 | Bed state | Meaning |
 |-----------|---------|
@@ -75,7 +94,7 @@ change writes an audit event.
 
 ## Allocation engine
 
-`src/modules/allocations/service.ts` owns every change to who holds a bed.
+`packages/core/src/modules/allocations/service.ts` owns every change to who holds a bed.
 Each operation runs in one database transaction, writes an audit event and
 queues an in-app notification to the resident's user account where one
 exists. The exclusion constraint on `Allocation` is the final guard against
@@ -106,7 +125,7 @@ a mobile-first portal with bottom navigation:
 | `/my/stay` | Site, building, room, bed, dates, room sharing (counts only, never other residents' details), next bed if a transfer is booked, previous stays, accommodation office contact |
 | `/my/profile` | Employment record read-only; editable phone and emergency contact; password change that signs out other sessions |
 
-All queries in `src/modules/self-service/service.ts` are scoped to the
+All queries in `packages/core/src/modules/self-service/service.ts` are scoped to the
 signed-in user's own staff record and notifications (SRS 3.1, SS-01..03).
 
 ## Digital forms and approvals
@@ -114,7 +133,7 @@ signed-in user's own staff record and notifications (SRS 3.1, SS-01..03).
 Request types carry a JSON form schema (`WorkflowVersion.formSchema`) and an
 ordered approval route (`ApprovalStep`). A request pins the workflow version
 current at submission, so changing a form or route never affects requests in
-flight. `src/modules/requests/service.ts` enforces the SRS rules:
+flight. `packages/core/src/modules/requests/service.ts` enforces the SRS rules:
 
 - validation on the server from the schema plus per-type rules (for example departure after arrival);
 - submit with an idempotency token, so a double click returns the existing request;
@@ -184,7 +203,7 @@ when cover starts, is arranged for them, or ends.
 Residents report issues from the portal (`/my/maintenance`) with location,
 category, urgency, description, preferred contact and an optional photo.
 Coordinators work the queue at `/maintenance`. Rules in
-`src/modules/maintenance/service.ts`:
+`packages/core/src/modules/maintenance/service.ts`:
 
 - ticket numbers come from a database sequence (`MR-<year>-<n>`), and each urgency carries an SLA target (urgent 4 h, high 24 h, medium 72 h, low 168 h) used for overdue flags;
 - statuses follow the SRS model: new → triaged → assigned → in progress → waiting for resident, parts or access → resolved → closed, with reopen (within 7 days, by the requester) and cancel; each transition is checked against who may make it and audited;
@@ -200,7 +219,7 @@ Demo accounts: `engineer@example.com` (maintenance) and `vendor@example.com` (Co
 `/keys` lists every key with its status and current holder, summary tiles
 (available, issued, overdue, exceptions) and filters; `/keys/:id` shows the
 permanent transaction history and the actions for its state. Rules in
-`src/modules/keys/service.ts`:
+`packages/core/src/modules/keys/service.ts`:
 
 - keys are registered per site against a room or a facility; copies are separate key records;
 - issue records holder (resident or named outsider), custodian, condition, expected return and notes; a key has one open issue at a time (database constraint) and overdue keys are flagged;
@@ -217,7 +236,7 @@ Reception, custodians and administrators run the register at `/lost-found`
 (summary, filters, search, register with photos) and each item at
 `/lost-found/:id` (storage, photos, claims, verification, handover, disposal,
 edit, permanent timeline). Residents browse found items and submit claims at
-`/my/lost-found`. Rules in `src/modules/lost-found/service.ts`:
+`/my/lost-found`. Rules in `packages/core/src/modules/lost-found/service.ts`:
 
 - every found item gets a unique reference (`LF-000001`, …) with description, category, where and when found, finder, custodian and optional photos; it is *reported* until a storage location is recorded, then *in storage*;
 - a retention date is set at registration (default 90 days, `LOST_FOUND_RETENTION_DAYS`); items past it are flagged *due for disposal*;
@@ -237,7 +256,7 @@ filters, search, add item), work each item at `/inventory/:id` (receive, issue,
 return, damage, count adjustment, transfer, retire, edit, permanent history)
 and read `/inventory/reports` (stock balance by category, asset condition,
 allocated items by location, movements with filters and CSV export). Rules in
-`src/modules/inventory/service.ts`:
+`packages/core/src/modules/inventory/service.ts`:
 
 - two kinds of item: a *stock line* (SKU, counted units, unit of measure, reorder threshold) and a *serialised asset* (one unit tracked by serial number or asset tag with a condition). A site has one stock line per SKU; serial numbers are unique;
 - every change to the on-hand figure is a logged movement with actor, timestamp, signed quantity, balance after, destination, condition, reference and notes. The log cannot be deleted;
@@ -260,7 +279,7 @@ availability grid, book, change, cancel, history). Facility managers,
 administrators and officers run `/facilities` (overview, approvals, 30-day
 utilisation) and `/facilities/:id` (day schedule, approve/decline, mark used or
 no-show, cancel with a reason, book on behalf, settings). Rules in
-`src/modules/facilities/service.ts` and `rules.ts`:
+`packages/core/src/modules/facilities/service.ts` and `rules.ts`:
 
 - each facility has a capacity (people at once), per-day opening hours in the site's time zone, and booking rules: slot length, minimum and maximum duration, advance window, buffer before and after each booking, cancellation cut-off, maximum upcoming bookings and bookings per day per person;
 - availability is computed per slot from the bookings that hold capacity (awaiting approval, confirmed, in use), including the buffer; a booking is accepted only if the headcount fits for its whole duration;
@@ -279,7 +298,7 @@ Fridays, one group at a time).
 
 System administrators manage accounts at `/admin/users`; administrators and
 auditors read the audit log at `/admin/audit`. Rules in
-`src/modules/admin/users-service.ts`:
+`packages/core/src/modules/admin/users-service.ts`:
 
 - users are created as *invited* with roles scoped to all sites, a site or a building, optionally linked to a staff record (one user per record) or a vendor (required for the vendor role, with an access expiry);
 - invites and password resets are one-time links (`/invite/:token`) with an expiry; only a hash of the token is stored; using a link sets the password, activates the account and ends other sessions. Until email delivery exists the link is shown to the administrator and queued in the outbox;
@@ -298,7 +317,7 @@ with overdue arrivals and overstays flagged, and pending-action counts
 awaiting approval, overdue keys, unassigned maintenance) that link to the
 relevant queue. `GET /api/reports/occupancy.csv?siteId=` exports the bed list;
 every export is audited (RPT-07). Chart colours come from the validated
-reference palette in `src/app/globals.css` with light and dark steps, legends
+reference palette in `apps/web/src/app/globals.css` with light and dark steps, legends
 and table views.
 
 ## Bulk import and export
@@ -340,7 +359,7 @@ empty report. Auditors see employee IDs only; names appear for administrators
 and officers. Every page explains its formulas and time-zone boundaries
 (RPT-08): a report day runs midnight to midnight in the selected site's time
 zone, or UTC when all sites are shown; facility days follow the facility
-site's calendar. `src/modules/reports/suite.ts` holds the definitions.
+site's calendar. `packages/core/src/modules/reports/suite.ts` holds the definitions.
 
 ## Email delivery
 
@@ -350,16 +369,18 @@ allocation, approval or ticket change (COM-06). In-app notifications also
 queue an email copy for people who have an address and have not switched
 email off in their profile (COM-01).
 
-- `src/modules/notifications/worker.ts` claims due emails one by one (two
+- `packages/core/src/modules/notifications/worker.ts` claims due emails one by one (two
   workers never send the same one), renders the template, sends, and records
   subject, recipient, provider message id, attempts and the last error.
   Failures retry after 1, 5, 30, 120 and 720 minutes, then fail permanently
   with an audit event; administrators can retry from `/admin/notifications`.
 - Transports: SMTP via nodemailer (`SMTP_*`, `MAIL_FROM`), a log transport
   for development, or disabled. Links use `APP_BASE_URL`.
-- Run delivery with `npm run notifications:worker` (polls every
-  `EMAIL_WORKER_INTERVAL_SECONDS`) or have a scheduler call
-  `POST /api/jobs/notifications` with `Authorization: Bearer $JOBS_SECRET`.
+- Delivery is the worker's job: `npm run start:worker` (or `dev:worker`)
+  polls the outbox every `OUTBOX_INTERVAL_SECONDS` (default 20) and runs the
+  sweeps every `SWEEP_INTERVAL_SECONDS` (default 60). Instead of the worker,
+  a scheduler can call `POST /api/jobs/notifications` on the web app with
+  `Authorization: Bearer $JOBS_SECRET`.
 - `/admin/notifications` shows transport health, queue counts, recent
   emails with failure reasons, retry, run-now and a test email.
 
@@ -374,7 +395,7 @@ WhatsApp is a second transport on the same outbox (COM-02, COM-04, COM-05):
 - in-app notifications fan out to a WhatsApp copy (`WHATSAPP_FANOUT`) with
   its own idempotency key, so a retried business action never queues twice;
 - messages are provider-approved **templates** (business-initiated messages
-  must be). `src/modules/notifications/whatsapp-templates.ts` maps each
+  must be). `packages/core/src/modules/notifications/whatsapp-templates.ts` maps each
   event to a template name (`WHATSAPP_TEMPLATE_PREFIX` + name, overridable
   per event with `WHATSAPP_TEMPLATE_MAP`) and body parameters in
   `WHATSAPP_LANGUAGE`. Parameters carry no room or bed codes, reasons or
@@ -417,7 +438,7 @@ Sessions are owned by the application, not a third-party provider, so the
 SRS rules on session expiry, revocation and auditing can be enforced
 directly:
 
-- Passwords are hashed with scrypt (`src/lib/auth/password.ts`); the hash
+- Passwords are hashed with scrypt (`packages/core/src/lib/auth/password.ts`); the hash
   string is self-describing so parameters can be raised later.
 - A login creates a `Session` row and sets an `HttpOnly`, `SameSite=Lax`
   cookie containing a random token. Only the SHA-256 hash of the token is
@@ -428,11 +449,15 @@ directly:
 - Deactivating or suspending a user ends their access on the next request;
   `revokeUserSessions()` ends all sessions immediately (ADM-05).
 - Every sign-in, failure, lockout and sign-out writes an `AuditEvent`.
-- `src/proxy.ts` sends unauthenticated page requests to `/login` and
-  returns 401 for API routes. It only checks that a cookie exists; real
-  validation is done server-side by `requireUser()` / `requireRole()` in
-  `src/lib/auth/authorize.ts`, which every page and action must call.
-- `GET /api/auth/me` returns the signed-in user and role assignments.
+- The web app keeps the token in the cookie and forwards it to the API as a
+  bearer token. `apps/web/src/proxy.ts` only redirects page requests without
+  a cookie to `/login`; real validation happens in the API, which resolves the
+  token to a user and checks the role on every operation (a short in-memory
+  cache bounds database lookups; a sign-out or deactivation takes effect
+  within `SESSION_CACHE_TTL_MS`).
+- `GET /v1/auth/me` returns the signed-in user and role assignments. API
+  clients other than the web app sign in with `POST /v1/auth/login` and send
+  `Authorization: Bearer <token>`.
 
 Not yet implemented: password reset / account recovery (SS-08), SSO and
 MFA (client decision), and per-site scoping of role checks.
@@ -441,97 +466,97 @@ MFA (client decision), and per-site scoping of role checks.
 
 Two ways to go live:
 
-- **Your own Linux server** (Node, PostgreSQL, PM2, nginx, cron): follow
-  [docs/deployment.md](docs/deployment.md), step by step.
+- **Your own Linux server** (Node, PostgreSQL, PM2, nginx): follow
+  [docs/deployment.md](docs/deployment.md), step by step. PM2 runs the three
+  services from `ecosystem.config.cjs`; `deploy/` has the nginx and PgBouncer
+  examples.
 - **Render**: `render.yaml` describes the whole stack for [Render](https://render.com):
-the PostgreSQL database, the web app with a persistent disk for photos, and
-a cron job that runs the scheduled jobs every minute. No Docker and no
-server to manage.
+  the PostgreSQL database, the API as a private service with a persistent disk
+  for photos, the public web app, and the worker. No Docker and no server to manage.
 
 1. Push this repository to GitHub and sign in to Render.
 2. **New → Blueprint**, pick the repository, and apply. Render creates the
-   database, builds the app, applies the migrations and starts it; the app
-   is live at the `onrender.com` address the dashboard shows.
-3. Optional demo data: open the web service's **Shell** tab and run
+   database, builds the services, applies the migrations and starts them; the
+   app is live at the `onrender.com` address the dashboard shows for the web service.
+3. Optional demo data: open the API service's **Shell** tab and run
    `npm run db:seed` (accounts and password in "Getting started").
-4. In the web service's **Environment** tab fill in the SMTP values and set
+4. In the **worker's** Environment tab fill in the SMTP values and set
    `EMAIL_TRANSPORT=smtp`; for WhatsApp fill in the `WHATSAPP_*` values and
-   set `WHATSAPP_TRANSPORT=meta`. Until then email is logged, not sent, and
-   WhatsApp is off.
-5. Add a custom domain under **Settings → Custom Domains** if wanted;
-   `APP_BASE_URL` (used in email links) follows the Render address, so set
-   it to the custom domain afterwards.
+   set `WHATSAPP_TRANSPORT=meta` (the verify token and app secret also go on
+   the API service, which receives the webhook). Until then email is logged,
+   not sent, and WhatsApp is off.
+5. Add a custom domain to the web service under **Settings → Custom Domains** if
+   wanted; `APP_BASE_URL` (used in email links) follows the Render address, so
+   set it to the custom domain afterwards.
 
 Every push to the deployed branch redeploys automatically. Migrations run
-before each new version starts, and a failed migration or build keeps the
-previous version running.
+before the new API starts, and a failed migration or build keeps the previous
+version running.
 
 What the blueprint sets up:
 
 | Resource | Purpose |
 |----------|---------|
 | `staff-accommodation-db` | PostgreSQL 16 with daily backups managed by Render |
-| `staff-accommodation` | The web app; health check on `/api/health`; `uploads` disk mounted at `UPLOAD_DIR` for photos |
-| `staff-accommodation-jobs` | Cron job calling `POST /api/jobs/notifications` with the generated `JOBS_SECRET`: outbox delivery plus booking and request sweeps |
+| `staff-accommodation-api` | Private API service; health check on `/ready`; `uploads` disk mounted at `UPLOAD_DIR` for photos |
+| `staff-accommodation` | The public web app; health check on `/api/health`; reaches the API over Render's private network through `API_URL` |
+| `staff-accommodation-worker` | Email and WhatsApp delivery plus the booking and request sweeps. Keep at one instance |
 
 Any other Node host works the same way: run `npm ci && npm run build`,
-`npx prisma migrate deploy`, then `npm start` with the variables from
-`.env.example`, keep `UPLOAD_DIR` on persistent storage, and schedule
-`npm run jobs` every minute with `APP_BASE_URL` and `JOBS_SECRET` set.
+`npm run db:deploy`, then start `npm run start:api`, `npm run start:web` and
+`npm run start:worker` with the variables from `.env.example`, keeping
+`UPLOAD_DIR` on persistent storage.
+
+Capacity: one API process handled 500 simulated residents plus staff
+(about 108 page views per second, no errors); see
+[docs/load-testing.md](docs/load-testing.md) to reproduce and
+[docs/architecture.md](docs/architecture.md) for how to scale out.
 
 ## Scripts
 
 | Script | Purpose |
 |--------|---------|
-| `npm run dev` | Development server |
-| `npm run build` / `npm start` | Production build and serve |
-| `npm run lint` | ESLint |
-| `npm run typecheck` | Next type generation + `tsc --noEmit` |
-| `npm test` | Vitest unit tests and database integration tests (needs `DATABASE_URL`) |
+| `npm run dev:api` / `dev:web` / `dev:worker` | Development servers (`npm run dev` starts the web app only) |
+| `npm run build` | Generate the Prisma client and build every service |
+| `npm run start:api` / `start:web` / `start:worker` | Run a built service |
+| `npm run lint` | ESLint, including the rule that keeps database code out of the web app |
+| `npm run typecheck` | `tsc --noEmit` in every workspace (web includes Next type generation) |
+| `npm test` | Vitest: domain tests (`packages/core`) and API tests (`apps/api`), which need `DATABASE_URL` |
 | `npm run db:migrate` | Create and apply a new migration from schema changes (dev) |
 | `npm run db:deploy` | Apply pending migrations (CI/production) |
 | `npm run db:seed` | Seed demo data (idempotent) |
 | `npm run db:studio` | Browse the database |
 | `npm run db:reset` | Drop, recreate, migrate and seed (dev only) |
-| `npm run notifications:worker` | Email delivery worker (long-running, development) |
-| `npm run jobs` | One run of the scheduled jobs via the jobs endpoint (cron) |
+| `npm run jobs` | One run of the scheduled jobs through the web app's jobs endpoint (for an external scheduler; the worker normally does this) |
+| `npm run loadtest:data` / `loadtest:tokens` / `loadtest:bench` / `loadtest:simulate` | Load testing against a `*_load` database ([docs/load-testing.md](docs/load-testing.md)) |
 
 ## Project layout
 
 ```
-prisma/
-  schema.prisma        data model (SRS section 4 and 8)
-  migrations/          SQL migrations incl. constraints Prisma cannot express
-  seed.ts              demo data
-src/
-  app/globals.css      design tokens and component classes (Fynix minimal system)
-  components/shell/    deep-green sidebar shell, top bar, page header, role-gated navigation
-  app/search/          global search over people, beds and tickets
-  app/                 Next.js App Router pages and API routes
-    login/             sign-in page, server actions (login/logout)
-    api/health/        liveness + database check
-    api/auth/me/       current user
-  lib/db.ts            Prisma client singleton
-  lib/auth/            password hashing, session store, cookie session, authorisation
-  modules/accommodation/  occupancy rules and queries, server actions, components
-  modules/allocations/    allocation engine (service), server actions, components
-  modules/self-service/   resident portal: stay, profile, password, notifications
-  modules/requests/       form schemas, approval workflow service, actions, components
-  modules/maintenance/    work order service, actions, components
-  modules/keys/           key register service, actions, components
-  modules/admin/          users and roles administration, audit log
-  modules/reports/        occupancy dashboard, trend, CSV export, chart components
-  modules/notifications/  email templates, transports, outbox worker, admin actions
-scripts/notifications-worker.ts  standalone delivery process
-  lib/uploads.ts          photo validation and storage
-  lib/notifications.ts   notification outbox writer
-  lib/audit.ts         append-only audit writer
-  proxy.ts             request gate (redirect to /login)
-tests/                 vitest suites
-render.yaml            Render blueprint: database, web app with photo disk, jobs cron
-scripts/jobs.mjs       calls the jobs endpoint (cron)
-docs/
-  requirements-analysis.md
+apps/
+  web/                   Next.js UI (no database access)
+    src/app/             App Router pages, server actions, relay routes (CSV, photos, webhooks, health)
+    src/components/      shell, forms, charts
+    src/modules/         per-feature components and server actions that call the API
+    src/lib/api.ts       typed API client (forwards the session cookie as a bearer token)
+    src/proxy.ts         redirects visitors without a session to /login
+  api/                   Fastify API
+    src/handlers/        one file per area, one handler per contract operation
+    src/{app,auth,cache,errors,raw-routes}.ts   pipeline: auth, policy, validation, caching, error mapping
+    tests/               API integration tests
+  worker/                outbox delivery and sweeps
+packages/
+  contract/              operation definitions (zod), roles, typed client, OpenAPI source
+  core/
+    prisma/              schema.prisma, migrations (incl. constraints Prisma cannot express), seed.ts
+    src/lib/             db client, auth, audit writer, notification outbox, uploads, paging
+    src/modules/         domain services per area (accommodation, allocations, maintenance, ...)
+    tests/               domain tests
+deploy/                  nginx and PgBouncer examples
+ecosystem.config.cjs     PM2 process file for web, API and worker
+render.yaml              Render blueprint
+scripts/                 jobs.mjs (external scheduler) and loadtest/
+docs/                    requirements-analysis.md, architecture.md, deployment.md, load-testing.md
 ```
 
 ## Conventions
@@ -540,7 +565,7 @@ docs/
   levels (tinted canvas, white panels, soft sub-surfaces), a deep-green
   sidebar, one primary green for actions and semantic colours only for
   status. Tokens and component classes (`panel`, `kpi`, `chip`, `pill`,
-  `btn`, `table`, `steps`, `timeline`, `att`) live in `src/app/globals.css`;
+  `btn`, `table`, `steps`, `timeline`, `att`) live in `apps/web/src/app/globals.css`;
   every page opens with `PageHeader` (breadcrumb, title, purpose, actions).
 - Store timestamps in UTC; each site carries an IANA timezone for display and
   report boundaries.
@@ -549,5 +574,9 @@ docs/
 - Notifications are written to the `Notification` outbox in the same
   transaction as the business action and delivered by a worker; a delivery
   failure never rolls back the action.
-- Authorisation is checked on the server for every mutation, scoped by
-  organisation, site and building through `RoleAssignment`.
+- Authorisation is checked in the API for every operation (the contract
+  declares who may call it), scoped by organisation, site and building
+  through `RoleAssignment`. The web app never decides roles for itself.
+- New API operations are defined once in `packages/contract`; the API must
+  provide a handler (the build fails otherwise) and the web calls it through
+  the typed client.

@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
+import { apiUrl } from "@/lib/api-url";
 
 // Scheduler entry point kept at its original address: relays to the API, which checks the secret.
-const API_URL = process.env.API_URL ?? "http://127.0.0.1:4000";
+const API_URL = apiUrl();
 
 export async function POST(request: Request) {
   const limit = new URL(request.url).searchParams.get("limit");

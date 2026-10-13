@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
+import { apiUrl } from "@/lib/api-url";
 
 /** The web app is up when it answers; it is healthy when the API behind it is ready. */
-const API_URL = process.env.API_URL ?? "http://127.0.0.1:4000";
+const API_URL = apiUrl();
 
 export async function GET() {
   try {

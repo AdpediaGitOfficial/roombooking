@@ -1,7 +1,10 @@
 # Render blueprint: https://render.com/docs/blueprint-spec
-# Creates everything the app needs from this repository in one step:
-# a PostgreSQL database, the web app with a persistent disk for photos, and a
-# cron job that runs the scheduled jobs every minute. See README, "Deployment".
+# Creates the three services and the database from this repository:
+#   staff-accommodation-db   PostgreSQL
+#   staff-accommodation-api  private service (API + uploaded photos on a disk)
+#   staff-accommodation      public web app, calls the API over the private network
+#   staff-accommodation-worker  background worker (email, WhatsApp, sweeps)
+# See docs/deployment.md for the same layout on a plain Linux server.
 databases:
   - name: staff-accommodation-db
     databaseName: sam
@@ -9,14 +12,14 @@ databases:
     plan: basic-256mb
 
 services:
-  - type: web
-    name: staff-accommodation
+  - type: pserv
+    name: staff-accommodation-api
     runtime: node
     plan: starter
     buildCommand: npm ci && npm run build
-    preDeployCommand: npx prisma migrate deploy
-    startCommand: npm start
-    healthCheckPath: /api/health
+    preDeployCommand: npm run db:deploy
+    startCommand: npm run start:api
+    healthCheckPath: /ready
     autoDeploy: true
     disk:
       name: uploads
@@ -27,6 +30,8 @@ services:
         value: "22"
       - key: NODE_ENV
         value: production
+      - key: API_PORT
+        value: "10000"
       - key: DATABASE_URL
         fromDatabase:
           name: staff-accommodation-db
@@ -40,6 +45,60 @@ services:
           envVarKey: RENDER_EXTERNAL_URL
       - key: JOBS_SECRET
         generateValue: true
+      - key: WHATSAPP_VERIFY_TOKEN
+        sync: false
+      - key: WHATSAPP_APP_SECRET
+        sync: false
+      - key: DEFAULT_COUNTRY_CODE     # lets residents enter local phone numbers; same value as the worker
+        sync: false
+
+  - type: web
+    name: staff-accommodation
+    runtime: node
+    plan: starter
+    buildCommand: npm ci && npm run build
+    startCommand: npm run start:web
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NODE_ENV
+        value: production
+      - key: API_URL
+        fromService:
+          type: pserv
+          name: staff-accommodation-api
+          property: hostport
+      - key: JOBS_SECRET
+        fromService:
+          type: pserv
+          name: staff-accommodation-api
+          envVarKey: JOBS_SECRET
+
+  # Delivers email and WhatsApp messages and runs the booking and request sweeps.
+  # Keep this at exactly one instance.
+  - type: worker
+    name: staff-accommodation-worker
+    runtime: node
+    plan: starter
+    buildCommand: npm ci && npm run build
+    startCommand: npm run start:worker
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: staff-accommodation-db
+          property: connectionString
+      - key: APP_BASE_URL
+        fromService:
+          type: web
+          name: staff-accommodation
+          envVarKey: RENDER_EXTERNAL_URL
       # Fill these in the Render dashboard after the first deploy.
       - key: MAIL_FROM
         value: "Staff Accommodation <no-reply@example.com>"
@@ -59,32 +118,5 @@ services:
         sync: false
       - key: WHATSAPP_PHONE_NUMBER_ID
         sync: false
-      - key: WHATSAPP_VERIFY_TOKEN
-        sync: false
-      - key: WHATSAPP_APP_SECRET
-        sync: false
       - key: DEFAULT_COUNTRY_CODE
         sync: false
-
-  # Calls POST /api/jobs/notifications on the web service: outbox delivery
-  # (email, WhatsApp) and the booking and request sweeps.
-  - type: cron
-    name: staff-accommodation-jobs
-    runtime: node
-    plan: starter
-    schedule: "* * * * *"
-    buildCommand: echo "nothing to build"
-    startCommand: node scripts/jobs.mjs
-    envVars:
-      - key: NODE_VERSION
-        value: "22"
-      - key: APP_BASE_URL
-        fromService:
-          type: web
-          name: staff-accommodation
-          envVarKey: RENDER_EXTERNAL_URL
-      - key: JOBS_SECRET
-        fromService:
-          type: web
-          name: staff-accommodation
-          envVarKey: JOBS_SECRET
