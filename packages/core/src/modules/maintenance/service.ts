@@ -20,7 +20,7 @@ export const PRIORITIES: WorkOrderPriority[] = ["LOW", "MEDIUM", "HIGH", "URGENT
 export const SLA_HOURS: Record<WorkOrderPriority, number> = { URGENT: 4, HIGH: 24, MEDIUM: 72, LOW: 168 };
 export const REOPEN_WINDOW_DAYS = Number(process.env.MAINTENANCE_REOPEN_WINDOW_DAYS ?? 7);
 
-export const OPEN_STATUSES: WorkOrderStatus[] = ["NEW", "TRIAGED", "ASSIGNED", "IN_PROGRESS", "WAITING_STAFF", "WAITING_PARTS", "WAITING_ACCESS", "REOPENED"];
+export const OPEN_STATUSES: WorkOrderStatus[] = ["NEW", "TRIAGED", "ASSIGNED", "ACCEPTED", "ON_HOLD", "IN_PROGRESS", "WAITING_STAFF", "WAITING_PARTS", "WAITING_ACCESS", "REOPENED"];
 export const WAITING_STATUSES: WorkOrderStatus[] = ["WAITING_STAFF", "WAITING_PARTS", "WAITING_ACCESS"];
 const TERMINAL: WorkOrderStatus[] = ["CLOSED", "CANCELLED"];
 
@@ -83,6 +83,7 @@ export function allowedTransitions(status: WorkOrderStatus, access: WorkOrderAcc
     case "TRIAGED":
       return isCoordinator ? ["CANCELLED"] : [];
     case "ASSIGNED":
+    case "ACCEPTED":
     case "IN_PROGRESS":
     case "WAITING_STAFF":
     case "WAITING_PARTS":
@@ -90,6 +91,12 @@ export function allowedTransitions(status: WorkOrderStatus, access: WorkOrderAcc
     case "REOPENED":
       if (isCoordinator) return [...WORKER_TARGETS.filter((s) => s !== status), "CANCELLED"];
       if (isWorker) return WORKER_TARGETS.filter((s) => s !== status);
+      return [];
+    case "ON_HOLD":
+      return isCoordinator ? ["CANCELLED"] : [];
+    case "VERIFIED":
+      if (isCoordinator) return ["CLOSED", "REOPENED"];
+      if (access === "requester") return opts.reopenWindowOpen ? ["CLOSED", "REOPENED"] : ["CLOSED"];
       return [];
     case "RESOLVED":
       if (isCoordinator) return ["CLOSED", "REOPENED"];
@@ -267,9 +274,16 @@ export async function changeStatus(input: { workOrderId: string; actor: Actor; s
       throw new MaintenanceError("NOTE_REQUIRED", input.status === "RESOLVED" ? "Describe what was done to resolve the issue." : input.status === "REOPENED" ? "Explain why the issue is not resolved." : "Give a reason for cancelling.");
     }
 
+    if (input.status === "IN_PROGRESS") {
+      if (wo.costApprovalStatus === "PENDING") throw new MaintenanceError("INVALID_TRANSITION", "The cost estimate is waiting for approval: work cannot start yet.");
+      if (wo.costApprovalStatus === "REJECTED") throw new MaintenanceError("INVALID_TRANSITION", "The cost estimate was rejected: submit a revised estimate first.");
+      if (wo.needsPermit && !(await tx.workPermit.findFirst({ where: { workOrderId: wo.id, status: "APPROVED", OR: [{ validTo: null }, { validTo: { gte: now } }] } }))) {
+        throw new MaintenanceError("INVALID_TRANSITION", "This job needs an approved work permit before work can start.");
+      }
+    }
     const data: Prisma.WorkOrderUpdateInput = { status: input.status };
     if (input.status === "IN_PROGRESS" && !wo.startedAt) data.startedAt = now;
-    if (input.status === "RESOLVED") { data.resolvedAt = now; data.resolutionNote = note; }
+    if (input.status === "RESOLVED") { data.resolvedAt = now; data.resolutionNote = note; data.autoCloseAt = new Date(now.getTime() + 3 * 86400000); }
     if (input.status === "CLOSED") data.closedAt = now;
     if (input.status === "CANCELLED") data.closedAt = now;
     if (input.status === "REOPENED") { data.reopenCount = { increment: 1 }; data.resolvedAt = null; data.closedAt = null; }

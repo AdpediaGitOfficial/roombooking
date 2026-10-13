@@ -9,18 +9,13 @@ import { OCCUPYING_STATUSES, isoDate, todayInTimezone } from "../accommodation/o
 import { checkEligibility } from "./eligibility";
 import { effectivePolicy } from "../structure/service";
 import { AllocationError } from "./errors";
+import { orgSetting } from "../../lib/settings";
 import { allocate, checkIn, findAvailableBeds, isIsoDate, toDate } from "./service";
 
 type Tx = Prisma.TransactionClient;
 
 const bedCtx = { include: { room: { include: { building: { include: { site: true } } } } } } as const;
 
-async function orgSetting<T>(key: string, fallback: T): Promise<T> {
-  const org = await prisma.organization.findFirst({ select: { id: true } });
-  if (!org) return fallback;
-  const s = await prisma.orgSetting.findUnique({ where: { organizationId_key: { organizationId: org.id, key } } });
-  return (s?.value as T | undefined) ?? fallback;
-}
 
 // ---------------------------------------------------------------------------
 // Emergency check-in (provisional until an Admin approves within 24 hours)
