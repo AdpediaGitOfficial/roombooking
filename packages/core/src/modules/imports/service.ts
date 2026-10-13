@@ -8,6 +8,7 @@ import { prisma } from "../../lib/db";
 import { recordAudit } from "../../lib/audit";
 import { parseCsv, toCsv, toRecords } from "./csv";
 
+/** Staff import and structure import: Super Admin by default, Accommodation Admin with the HR set / building creation grants. */
 export const IMPORT_ROLES: Role[] = ["SYSTEM_ADMIN", "ACCOMMODATION_ADMIN"];
 export type ImportKind = "staff" | "accommodation";
 export const KINDS: Array<{ kind: ImportKind; label: string; columns: string[]; blurb: string }> = [

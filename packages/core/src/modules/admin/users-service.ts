@@ -49,7 +49,43 @@ async function assertNotLastAdmin(tx: Prisma.TransactionClient, userId: string, 
 // Create / update
 // ---------------------------------------------------------------------------
 
-export type CreateUserInput = { actorId: string; organizationId: string; name: string; email: string; roles: RoleGrant[]; staffProfileId?: string | null; vendorId?: string | null; accessExpiresAt?: string | null };
+export type CreateUserInput = {
+  actorId: string;
+  organizationId: string;
+  name: string;
+  /** Sign-in name: employee ID, phone number or email. Defaults to the linked employee ID, else the email. */
+  username?: string | null;
+  /** Optional: no email address is required (document section 9). */
+  email?: string | null;
+  roles: RoleGrant[];
+  staffProfileId?: string | null;
+  vendorId?: string | null;
+  accessExpiresAt?: string | null;
+  /** "temp_password" activates the account with a temporary password that must be changed at first login; "invite" sends a one-time link. */
+  mode?: "invite" | "temp_password";
+};
+
+const USERNAME = /^\+?[a-z0-9][a-z0-9._@+-]{2,63}$/;
+
+export function normaliseUsername(value: string): string {
+  return value.trim().toLowerCase().replace(/\s+/g, "");
+}
+
+export function generateTemporaryPassword(): string {
+  // 12 characters from an unambiguous alphabet, always containing upper, lower and a digit.
+  const upper = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+  const lower = "abcdefghijkmnopqrstuvwxyz";
+  const digits = "23456789";
+  const all = upper + lower + digits;
+  const pick = (set: string) => set[randomBytes(1)[0] % set.length];
+  const chars = [pick(upper), pick(lower), pick(digits)];
+  while (chars.length < 12) chars.push(pick(all));
+  for (let i = chars.length - 1; i > 0; i--) {
+    const j = randomBytes(1)[0] % (i + 1);
+    [chars[i], chars[j]] = [chars[j], chars[i]];
+  }
+  return `${chars.join("")}9`;
+}
 
 async function validateGrants(tx: Prisma.TransactionClient, grants: RoleGrant[]) {
   for (const g of grants) {
@@ -73,58 +109,137 @@ function parseExpiry(value: string | null | undefined): Date | null {
 
 export async function createUser(input: CreateUserInput) {
   const name = input.name.trim();
-  const email = input.email.trim().toLowerCase();
+  const email = input.email?.trim().toLowerCase() || null;
   const errors: Record<string, string> = {};
   if (!name) errors.name = "Enter the person's name.";
-  if (!EMAIL.test(email)) errors.email = "Enter a valid email address.";
+  if (email && !EMAIL.test(email)) errors.email = "Enter a valid email address.";
   if (input.roles.length === 0) errors.roles = "Choose at least one role.";
   if (input.roles.some((r) => r.role === "VENDOR") && !input.vendorId) errors.vendorId = "Vendor users must be linked to a vendor.";
   if (Object.keys(errors).length) throw new AdminError("VALIDATION", "Please correct the highlighted fields.", errors);
 
   return prisma.$transaction(async (tx) => {
-    if (await tx.user.findUnique({ where: { email } })) throw new AdminError("VALIDATION", "A user with that email already exists.", { email: "Already in use." });
     await validateGrants(tx, input.roles);
+    let staff: { id: string; employeeId: string; phone: string | null; organizationId: string; userId: string | null } | null = null;
     if (input.staffProfileId) {
-      const staff = await tx.staffProfile.findUnique({ where: { id: input.staffProfileId } });
+      staff = await tx.staffProfile.findUnique({ where: { id: input.staffProfileId }, select: { id: true, employeeId: true, phone: true, organizationId: true, userId: true } });
       if (!staff || staff.organizationId !== input.organizationId) throw new AdminError("VALIDATION", "Unknown staff record.", { staffProfileId: "Unknown." });
       if (staff.userId) throw new AdminError("VALIDATION", "That staff record is already linked to another user.", { staffProfileId: "Already linked." });
     }
-    const token = randomBytes(32).toString("base64url");
+    const username = normaliseUsername(input.username || staff?.employeeId || email || "");
+    if (!USERNAME.test(username)) throw new AdminError("VALIDATION", "Enter a username of 3 to 64 letters, numbers or . _ @ + - (an employee ID, phone number or email).", { username: "Invalid username." });
+    if (await tx.user.findUnique({ where: { username } })) throw new AdminError("VALIDATION", "That username is already in use.", { username: "Already in use." });
+    if (email && (await tx.user.findUnique({ where: { email } }))) throw new AdminError("VALIDATION", "A user with that email already exists.", { email: "Already in use." });
+
+    const mode = input.mode ?? "invite";
+    const token = mode === "invite" ? randomBytes(32).toString("base64url") : null;
+    const temporaryPassword = mode === "temp_password" ? generateTemporaryPassword() : null;
     const user = await tx.user.create({
       data: {
         organizationId: input.organizationId,
         name,
+        username,
         email,
-        status: "INVITED",
+        status: mode === "invite" ? "INVITED" : "ACTIVE",
+        passwordHash: temporaryPassword ? await hashPassword(temporaryPassword) : null,
+        passwordChangedAt: null,
+        mustChangePassword: mode === "temp_password",
         vendorId: input.vendorId || null,
         accessExpiresAt: parseExpiry(input.accessExpiresAt),
-        tokenHash: hashToken(token),
-        tokenPurpose: "INVITE",
-        tokenExpiresAt: new Date(Date.now() + INVITE_TTL_HOURS * 3600000),
+        ...(token ? { tokenHash: hashToken(token), tokenPurpose: "INVITE", tokenExpiresAt: new Date(Date.now() + INVITE_TTL_HOURS * 3600000) } : {}),
         roleAssignments: { create: input.roles.map((r) => ({ role: r.role, siteId: r.siteId || null, buildingId: r.buildingId || null })) },
       },
     });
     if (input.staffProfileId) await tx.staffProfile.update({ where: { id: input.staffProfileId }, data: { userId: user.id } });
-    await recordAudit({ actorId: input.actorId, action: "USER_CREATED", entityType: "User", entityId: user.id, after: { name, email, roles: input.roles as unknown as Prisma.InputJsonValue, staffProfileId: input.staffProfileId ?? null, vendorId: input.vendorId ?? null } }, tx);
-    await enqueueNotification(tx, { recipientId: user.id, channel: "EMAIL", event: "user.invited", idempotencyKey: `user.invited:${user.id}:${user.tokenExpiresAt?.getTime()}`, payload: { invitePath: `/invite/${token}`, expiresAt: user.tokenExpiresAt?.toISOString() ?? null } });
-    return { user, invitePath: `/invite/${token}` };
+    await recordAudit({ actorId: input.actorId, action: "USER_CREATED", entityType: "User", entityId: user.id, after: { name, username, email, mode, roles: input.roles as unknown as Prisma.InputJsonValue, staffProfileId: input.staffProfileId ?? null, vendorId: input.vendorId ?? null } }, tx);
+    if (token) {
+      await enqueueNotification(tx, { recipientId: user.id, channel: "EMAIL", event: "user.invited", idempotencyKey: `user.invited:${user.id}:${user.tokenExpiresAt?.getTime()}`, payload: { invitePath: `/invite/${token}`, expiresAt: user.tokenExpiresAt?.toISOString() ?? null } });
+    } else if (temporaryPassword) {
+      await queueTemporaryPassword(tx, user.id, username, temporaryPassword);
+    }
+    return { user, invitePath: token ? `/invite/${token}` : null, temporaryPassword };
   });
 }
 
-export type UpdateUserInput = { actorId: string; userId: string; name: string; email: string; staffProfileId?: string | null; vendorId?: string | null; accessExpiresAt?: string | null };
+/**
+ * Temporary passwords are sent by WhatsApp, SMS or email (document section 9). The copy is queued on
+ * every channel the person has set up; the delivery worker removes the password from the stored payload once sent.
+ */
+async function queueTemporaryPassword(tx: Prisma.TransactionClient, userId: string, username: string, temporaryPassword: string) {
+  const person = await tx.user.findUniqueOrThrow({ where: { id: userId }, select: { email: true, whatsappNumber: true, staffProfile: { select: { phone: true } } } });
+  const payload = { username, temporaryPassword };
+  const stamp = Date.now();
+  if (person.email) await enqueueNotification(tx, { recipientId: userId, channel: "EMAIL", event: "user.temp_password", idempotencyKey: `temp-password:${userId}:${stamp}:email`, payload });
+  if (person.whatsappNumber || person.staffProfile?.phone) await enqueueNotification(tx, { recipientId: userId, channel: "WHATSAPP", event: "user.temp_password", idempotencyKey: `temp-password:${userId}:${stamp}:whatsapp`, payload });
+}
+
+/** Super Admin resets a password: a new temporary password, all sessions ended, change forced at next sign-in. */
+export async function resetPasswordTemporary(input: { actorId: string; userId: string }) {
+  return prisma.$transaction(async (tx) => {
+    const user = await tx.user.findUnique({ where: { id: input.userId } });
+    if (!user) throw new AdminError("NOT_FOUND", "User not found.");
+    if (user.status === "DEACTIVATED") throw new AdminError("INVALID_STATE", "Reactivate the account before resetting its password.");
+    const temporaryPassword = generateTemporaryPassword();
+    await tx.user.update({ where: { id: user.id }, data: { passwordHash: await hashPassword(temporaryPassword), passwordChangedAt: null, mustChangePassword: true, status: user.status === "INVITED" ? "ACTIVE" : user.status, failedLoginAttempts: 0, lockedUntil: null, tokenHash: null, tokenPurpose: null, tokenExpiresAt: null } });
+    await tx.session.updateMany({ where: { userId: user.id, revokedAt: null }, data: { revokedAt: new Date() } });
+    await recordAudit({ actorId: input.actorId, action: "PASSWORD_RESET_BY_ADMIN", entityType: "User", entityId: user.id }, tx);
+    await queueTemporaryPassword(tx, user.id, user.username, temporaryPassword);
+    return { temporaryPassword };
+  });
+}
+
+/** Unlocks an account locked after repeated failed sign-ins (Super Admin, document 5.1). */
+export async function unlockUser(input: { actorId: string; userId: string }) {
+  const user = await prisma.user.findUnique({ where: { id: input.userId } });
+  if (!user) throw new AdminError("NOT_FOUND", "User not found.");
+  await prisma.user.update({ where: { id: user.id }, data: { failedLoginAttempts: 0, lockedUntil: null } });
+  await recordAudit({ actorId: input.actorId, action: "USER_UNLOCKED", entityType: "User", entityId: user.id });
+}
+
+/**
+ * Self-service reset (document section 12): the link goes to the registered email and WhatsApp number.
+ * Always succeeds from the caller's point of view so the form cannot be used to discover accounts.
+ */
+export async function requestSelfServiceReset(usernameOrEmail: string): Promise<void> {
+  const key = normaliseUsername(usernameOrEmail);
+  if (!key) return;
+  const user = await prisma.user.findFirst({ where: { OR: [{ username: key }, { email: key }] } });
+  if (!user || (user.status !== "ACTIVE" && user.status !== "INVITED")) return;
+  const hasChannel = !!user.email || (!!user.whatsappNumber && user.whatsappNotifications);
+  if (!hasChannel) return;
+  // Throttle: one outstanding link at a time per account.
+  if (user.tokenExpiresAt && user.tokenExpiresAt > new Date() && user.tokenPurpose === "RESET" && user.tokenExpiresAt.getTime() - Date.now() > (RESET_TTL_HOURS - 0.25) * 3600000) return;
+  const token = randomBytes(32).toString("base64url");
+  const expiresAt = new Date(Date.now() + RESET_TTL_HOURS * 3600000);
+  await prisma.$transaction(async (tx) => {
+    await tx.user.update({ where: { id: user.id }, data: { tokenHash: hashToken(token), tokenPurpose: "RESET", tokenExpiresAt: expiresAt } });
+    await recordAudit({ actorId: user.id, action: "PASSWORD_RESET_REQUESTED", entityType: "User", entityId: user.id, after: { expiresAt: expiresAt.toISOString() } }, tx);
+    const payload = { path: `/invite/${token}`, expiresAt: expiresAt.toISOString() };
+    if (user.email) await enqueueNotification(tx, { recipientId: user.id, channel: "EMAIL", event: "user.password_reset", idempotencyKey: `reset:${user.id}:${expiresAt.getTime()}:email`, payload });
+    if (user.whatsappNumber && user.whatsappNotifications && user.whatsappConsentAt) await enqueueNotification(tx, { recipientId: user.id, channel: "WHATSAPP", event: "user.password_reset", idempotencyKey: `reset:${user.id}:${expiresAt.getTime()}:whatsapp`, payload });
+  });
+}
+
+export type UpdateUserInput = { actorId: string; userId: string; name: string; email?: string | null; username?: string | null; staffProfileId?: string | null; vendorId?: string | null; accessExpiresAt?: string | null };
 
 export async function updateUser(input: UpdateUserInput) {
   const name = input.name.trim();
-  const email = input.email.trim().toLowerCase();
+  const email = input.email?.trim().toLowerCase() || null;
   const errors: Record<string, string> = {};
   if (!name) errors.name = "Enter the person's name.";
-  if (!EMAIL.test(email)) errors.email = "Enter a valid email address.";
+  if (email && !EMAIL.test(email)) errors.email = "Enter a valid email address.";
   if (Object.keys(errors).length) throw new AdminError("VALIDATION", "Please correct the highlighted fields.", errors);
   return prisma.$transaction(async (tx) => {
     const user = await tx.user.findUnique({ where: { id: input.userId }, include: { staffProfile: true, roleAssignments: true } });
     if (!user) throw new AdminError("NOT_FOUND", "User not found.");
-    const clash = await tx.user.findUnique({ where: { email } });
-    if (clash && clash.id !== user.id) throw new AdminError("VALIDATION", "That email is used by another account.", { email: "Already in use." });
+    if (email) {
+      const clash = await tx.user.findUnique({ where: { email } });
+      if (clash && clash.id !== user.id) throw new AdminError("VALIDATION", "That email is used by another account.", { email: "Already in use." });
+    }
+    const username = input.username ? normaliseUsername(input.username) : user.username;
+    if (username !== user.username) {
+      if (!USERNAME.test(username)) throw new AdminError("VALIDATION", "Enter a valid username.", { username: "Invalid username." });
+      if (await tx.user.findUnique({ where: { username } })) throw new AdminError("VALIDATION", "That username is already in use.", { username: "Already in use." });
+    }
     if (user.roleAssignments.some((r) => r.role === "VENDOR") && !input.vendorId) throw new AdminError("VALIDATION", "Vendor users must stay linked to a vendor.", { vendorId: "Required." });
     const nextStaffId = input.staffProfileId || null;
     if (nextStaffId !== (user.staffProfile?.id ?? null)) {
@@ -136,8 +251,8 @@ export async function updateUser(input: UpdateUserInput) {
       if (user.staffProfile) await tx.staffProfile.update({ where: { id: user.staffProfile.id }, data: { userId: null } });
       if (nextStaffId) await tx.staffProfile.update({ where: { id: nextStaffId }, data: { userId: user.id } });
     }
-    const updated = await tx.user.update({ where: { id: user.id }, data: { name, email, vendorId: input.vendorId || null, accessExpiresAt: parseExpiry(input.accessExpiresAt) } });
-    await recordAudit({ actorId: input.actorId, action: "USER_UPDATED", entityType: "User", entityId: user.id, before: { name: user.name, email: user.email, staffProfileId: user.staffProfile?.id ?? null, vendorId: user.vendorId, accessExpiresAt: user.accessExpiresAt?.toISOString() ?? null }, after: { name, email, staffProfileId: nextStaffId, vendorId: updated.vendorId, accessExpiresAt: updated.accessExpiresAt?.toISOString() ?? null } }, tx);
+    const updated = await tx.user.update({ where: { id: user.id }, data: { name, email, username, vendorId: input.vendorId || null, accessExpiresAt: parseExpiry(input.accessExpiresAt) } });
+    await recordAudit({ actorId: input.actorId, action: "USER_UPDATED", entityType: "User", entityId: user.id, before: { name: user.name, username: user.username, email: user.email, staffProfileId: user.staffProfile?.id ?? null, vendorId: user.vendorId, accessExpiresAt: user.accessExpiresAt?.toISOString() ?? null }, after: { name, username, email, staffProfileId: nextStaffId, vendorId: updated.vendorId, accessExpiresAt: updated.accessExpiresAt?.toISOString() ?? null } }, tx);
     return updated;
   });
 }
@@ -232,7 +347,7 @@ export async function issueToken(input: { actorId: string; userId: string; purpo
 
 export async function lookupToken(token: string) {
   if (!token) return null;
-  const user = await prisma.user.findUnique({ where: { tokenHash: hashToken(token) }, select: { id: true, name: true, email: true, status: true, tokenPurpose: true, tokenExpiresAt: true } });
+  const user = await prisma.user.findUnique({ where: { tokenHash: hashToken(token) }, select: { id: true, name: true, username: true, email: true, status: true, tokenPurpose: true, tokenExpiresAt: true } });
   if (!user || !user.tokenExpiresAt || user.tokenExpiresAt < new Date() || user.status === "DEACTIVATED" || user.status === "SUSPENDED") return null;
   return user;
 }
@@ -246,7 +361,7 @@ export async function acceptToken(input: { token: string; password: string }) {
   const passwordHash = await hashPassword(input.password);
   return prisma.$transaction(async (tx) => {
     // Clear the token atomically so a link works exactly once.
-    const consumed = await tx.user.updateMany({ where: { id: user.id, tokenHash: hashToken(input.token) }, data: { passwordHash, passwordChangedAt: new Date(), status: "ACTIVE", tokenHash: null, tokenPurpose: null, tokenExpiresAt: null, failedLoginAttempts: 0, lockedUntil: null } });
+    const consumed = await tx.user.updateMany({ where: { id: user.id, tokenHash: hashToken(input.token) }, data: { passwordHash, passwordChangedAt: new Date(), mustChangePassword: false, status: "ACTIVE", tokenHash: null, tokenPurpose: null, tokenExpiresAt: null, failedLoginAttempts: 0, lockedUntil: null } });
     if (consumed.count !== 1) throw new AdminError("INVALID_STATE", "This link has already been used.");
     await tx.session.updateMany({ where: { userId: user.id, revokedAt: null }, data: { revokedAt: new Date() } });
     await recordAudit({ actorId: user.id, action: user.tokenPurpose === "INVITE" ? "USER_ACTIVATED" : "PASSWORD_RESET_COMPLETED", entityType: "User", entityId: user.id, after: { status: "ACTIVE" } }, tx);
@@ -267,7 +382,7 @@ export async function listUsers(organizationId: string, filter: UserFilter) {
       organizationId,
       ...(filter.status ? { status: filter.status } : {}),
       ...(filter.role ? { roleAssignments: { some: { role: filter.role } } } : {}),
-      ...(q ? { OR: [{ name: { contains: q, mode: "insensitive" } }, { email: { contains: q, mode: "insensitive" } }, { staffProfile: { employeeId: { contains: q, mode: "insensitive" } } }] } : {}),
+      ...(q ? { OR: [{ name: { contains: q, mode: "insensitive" } }, { email: { contains: q, mode: "insensitive" } }, { username: { contains: q, mode: "insensitive" } }, { staffProfile: { employeeId: { contains: q, mode: "insensitive" } } }] } : {}),
     },
     include: userInclude,
     orderBy: [{ status: "asc" }, { name: "asc" }],

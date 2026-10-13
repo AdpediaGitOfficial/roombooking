@@ -3,6 +3,9 @@ import { requireResident } from "@/modules/self-service/context";
 import { ProfileForm, PasswordForm } from "@/modules/self-service/components/forms";
 import { EmailPreferenceForm, WhatsAppPreferenceForm } from "@/modules/notifications/components/forms";
 import { logout } from "@/app/login/actions";
+import { extraAccessNotes } from "@sam/core/lib/permissions/engine";
+import { principalOf } from "@/lib/auth/authorize";
+import { ROLE_META } from "@sam/core/lib/permissions/roles";
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -22,13 +25,29 @@ async function ProfileContent() {
         <p className="mt-1 text-xs text-zinc-500">Managed by HR and the accommodation office. Contact them for corrections.</p>
         <dl className="mt-2 divide-y divide-zinc-200 card px-4">
           <Row label="Name">{staff ? `${staff.firstName} ${staff.lastName}` : user.name}</Row>
-          <Row label="Email">{user.email}</Row>
+          <Row label="Username">{user.username}</Row>
+          {user.email && <Row label="Email">{user.email}</Row>}
           {staff && <Row label="Employee ID">{staff.employeeId}</Row>}
           {staff?.department && <Row label="Department">{staff.department}</Row>}
           {staff?.company && <Row label="Company">{staff.company}</Row>}
           {staff && <Row label="Employment status">{staff.employmentStatus.toLowerCase().replace("_", " ")}</Row>}
         </dl>
       </section>
+
+      {(() => {
+        const extra = extraAccessNotes(principalOf(user));
+        return (
+          <section className="mt-8" data-access-note>
+            <h2 className="section-title">Your access</h2>
+            <p className="mt-1 text-xs text-zinc-500">{[...new Set(user.roleAssignments.map((r) => ROLE_META[r.role].label))].join(", ") || "No roles"}</p>
+            {extra.length > 0 && (
+              <ul className="card mt-2 divide-y divide-zinc-200 px-4 text-sm">
+                {extra.map((x, i) => <li key={i} className="py-2">Extra access: <b>{x.label}</b>{x.expiresAt ? <span className="text-zinc-500"> · until {x.expiresAt.toISOString().slice(0, 10)}</span> : null}</li>)}
+              </ul>
+            )}
+          </section>
+        );
+      })()}
 
       {staff && (
         <section className="mt-8">

@@ -9,12 +9,14 @@ import { INVENTORY_VIEW_ROLES } from "@sam/core/modules/inventory/access";
 import { LOST_FOUND_VIEW_ROLES } from "@sam/core/modules/lost-found/access";
 import { REPORT_VIEW_ROLES } from "@sam/core/modules/reports/access";
 import { ADMIN_VIEW_ROLES, USER_ADMIN_ROLES } from "@sam/core/modules/admin/access";
+import { FORM_BUILDER_ROLES } from "@sam/core/modules/requests/builder";
 import { BROADCAST_ROLES } from "@sam/core/modules/broadcasts/access";
 
 export type NavItem = { href: string; label: string; icon: string; description: string; roles: Role[] | "ALL" };
 export type NavGroup = { label: string; items: NavItem[] };
 
 const CONFIG_ROLES: Role[] = ["SYSTEM_ADMIN", "ACCOMMODATION_ADMIN"];
+const WORKFLOW_ROLES: Role[] = FORM_BUILDER_ROLES;
 
 /** Sidebar and home-page entries, gated by the same role lists the pages enforce. */
 export const NAV_GROUPS: NavGroup[] = [
@@ -41,11 +43,13 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     label: "Administration",
     items: [
-      { href: "/admin/users", label: "Users & roles", icon: "◉", description: "Accounts, roles, invitations and status", roles: ADMIN_VIEW_ROLES },
+      { href: "/admin/users", label: "Users", icon: "◉", description: "Accounts, sign-in, roles and status", roles: ADMIN_VIEW_ROLES },
+      { href: "/admin/access", label: "Roles & access", icon: "⚿", description: "Permission matrix, grants and access review", roles: ADMIN_VIEW_ROLES },
+      { href: "/admin/changes", label: "Pending changes", icon: "⇋", description: "Second-admin approval of high-risk changes", roles: USER_ADMIN_ROLES },
       { href: "/admin/audit", label: "Audit log", icon: "≡", description: "Who changed what, and when", roles: ADMIN_VIEW_ROLES },
       { href: "/admin/notifications", label: "Notifications", icon: "✉", description: "In-app, email and WhatsApp delivery", roles: ADMIN_VIEW_ROLES },
       { href: "/admin/broadcasts", label: "Broadcasts", icon: "▣", description: "Announcements to sites, buildings or roles", roles: BROADCAST_ROLES },
-      { href: "/admin/forms", label: "Forms & routes", icon: "✎", description: "Request forms and approval routes", roles: CONFIG_ROLES },
+      { href: "/admin/forms", label: "Forms & routes", icon: "✎", description: "Request forms and approval routes", roles: WORKFLOW_ROLES },
       { href: "/admin/import", label: "Import & export", icon: "⇅", description: "Staff and accommodation from CSV", roles: CONFIG_ROLES },
       { href: "/approvals/delegations", label: "Delegations", icon: "⇉", description: "Approval cover while away", roles: APPROVALS_AREA_ROLES },
     ],

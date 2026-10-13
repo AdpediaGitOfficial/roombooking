@@ -1,10 +1,11 @@
 import type { Role } from "@prisma/client";
+import { rolesWithDefault } from "../../lib/permissions/matrix";
 
-/** May allocate, transfer, check in and check out (SRS: admin + officer/reception). */
-export const ALLOCATION_OPERATE_ROLES: Role[] = ["SYSTEM_ADMIN", "ACCOMMODATION_ADMIN", "ACCOMMODATION_OFFICER"];
+/** May check in, check out and run transfers (Admin decides, Reception executes). */
+export const ALLOCATION_OPERATE_ROLES: Role[] = rolesWithDefault("accom.checkin");
 
-/** May cancel allocations and override check-out clearance blockers. */
-export const ALLOCATION_ADMIN_ROLES: Role[] = ["SYSTEM_ADMIN", "ACCOMMODATION_ADMIN"];
+/** May allocate beds, cancel allocations and override check-out clearance blockers. */
+export const ALLOCATION_ADMIN_ROLES: Role[] = rolesWithDefault("accom.allocate");
 
 /** May view allocation records. */
-export const ALLOCATION_VIEW_ROLES: Role[] = [...ALLOCATION_OPERATE_ROLES, "AUDITOR"];
+export const ALLOCATION_VIEW_ROLES: Role[] = rolesWithDefault("accom.view", "full", "view");

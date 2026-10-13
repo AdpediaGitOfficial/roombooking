@@ -17,15 +17,15 @@ async function expectError<T>(p: Promise<T>, code: string) {
 beforeAll(async () => {
   const org = await prisma.organization.create({ data: { code: `DL-${stamp}`, name: "Delegation Org" } });
   orgId = org.id;
-  const mk = async (name: string, roles: Array<"SYSTEM_ADMIN" | "APPROVER" | "ACCOMMODATION_ADMIN" | "STAFF" | "ACCOMMODATION_OFFICER">) => (await prisma.user.create({ data: { organizationId: orgId, email: `dl-${name}-${stamp}@example.com`, name: `${name} ${stamp}`, status: "ACTIVE", roleAssignments: { create: roles.map((role) => ({ role })) } } })).id;
+  const mk = async (name: string, roles: Array<"SYSTEM_ADMIN" | "LINE_MANAGER" | "ACCOMMODATION_ADMIN" | "STAFF" | "ACCOMMODATION_OFFICER">) => (await prisma.user.create({ data: { organizationId: orgId, email: `dl-${name}-${stamp}@example.com`, name: `${name} ${stamp}`, status: "ACTIVE", roleAssignments: { create: roles.map((role) => ({ role })) } } })).id;
   admin = await mk("Admin", ["SYSTEM_ADMIN"]);
-  manager = await mk("Manager", ["APPROVER"]);
+  manager = await mk("Manager", ["LINE_MANAGER"]);
   cover = await mk("Cover", ["ACCOMMODATION_OFFICER"]);
   resident = await mk("Resident", ["STAFF"]);
   other = await mk("Other", ["STAFF"]);
-  // A one-step type routed to APPROVER.
+  // A one-step type routed to LINE_MANAGER.
   const type = await prisma.requestType.create({ data: { organizationId: orgId, code: "LEAVE", name: "Leave note" } });
-  await prisma.workflowVersion.create({ data: { requestTypeId: type.id, version: 1, isCurrent: true, publishedAt: new Date(), formSchema: { fields: [{ name: "note", label: "Note", type: "text", required: true }] }, steps: { create: [{ order: 1, name: "Manager approval", approverRole: "APPROVER", requireComment: false }] } } });
+  await prisma.workflowVersion.create({ data: { requestTypeId: type.id, version: 1, isCurrent: true, publishedAt: new Date(), formSchema: { fields: [{ name: "note", label: "Note", type: "text", required: true }] }, steps: { create: [{ order: 1, name: "Manager approval", approverRole: "LINE_MANAGER", requireComment: false }] } } });
 });
 
 afterAll(async () => { await prisma.$disconnect(); });
@@ -50,10 +50,10 @@ describe("delegations", () => {
 
   it("gives the delegate the delegator's approver roles only while the delegation is live", async () => {
     const roles = await delegatedRolesFor(cover);
-    expect(roles).toEqual([{ role: "APPROVER", delegatorId: manager, delegatorName: `Manager ${stamp}`, delegationId }]);
+    expect(roles).toEqual([{ role: "LINE_MANAGER", delegatorId: manager, delegatorName: `Manager ${stamp}`, delegationId }]);
     expect(await delegatedRolesFor(cover, new Date(Date.now() + 5 * 86400000))).toEqual([]);
-    expect(coveredRoles({ roles: [], delegator: { roleAssignments: [{ role: "APPROVER" }, { role: "STAFF" }] } })).toEqual(["APPROVER"]);
-    expect(coveredRoles({ roles: ["ACCOMMODATION_ADMIN"], delegator: { roleAssignments: [{ role: "APPROVER" }] } })).toEqual([]);
+    expect(coveredRoles({ roles: [], delegator: { roleAssignments: [{ role: "LINE_MANAGER" }, { role: "STAFF" }] } })).toEqual(["LINE_MANAGER"]);
+    expect(coveredRoles({ roles: ["ACCOMMODATION_ADMIN"], delegator: { roleAssignments: [{ role: "LINE_MANAGER" }] } })).toEqual([]);
     const future = await createDelegation({ delegatorId: manager, delegateId: other, startsAt: plus(10), endsAt: plus(12), actor: { id: admin, isAdmin: true } });
     expect(await delegatedRolesFor(other)).toEqual([]);
     expect(await prisma.notification.findFirst({ where: { recipientId: manager, event: "delegation.arranged" } })).not.toBeNull();

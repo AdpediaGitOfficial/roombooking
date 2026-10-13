@@ -160,7 +160,7 @@ export async function changeOwnPassword(input: { userId: string; currentPassword
   if (input.newPassword === input.currentPassword) throw new SelfServiceError("Choose a password you have not used before.");
 
   const passwordHash = await hashPassword(input.newPassword);
-  await prisma.user.update({ where: { id: user.id }, data: { passwordHash, passwordChangedAt: new Date() } });
+  await prisma.user.update({ where: { id: user.id }, data: { passwordHash, passwordChangedAt: new Date(), mustChangePassword: false } });
   const revoked = input.keepSessionToken ? await revokeOtherUserSessions(user.id, input.keepSessionToken) : 0;
   await recordAudit({ actorId: user.id, action: "PASSWORD_CHANGED", entityType: "User", entityId: user.id, after: { otherSessionsRevoked: revoked } });
   return { otherSessionsRevoked: revoked };

@@ -1,16 +1,17 @@
 // Maintenance requests and work orders (SRS 5.3, 6.3, 8.3).
-import type { Prisma, PrismaClient, Role, WorkOrderPriority, WorkOrderStatus } from "@prisma/client";
+import type { Prisma, PrismaClient, WorkOrderPriority, WorkOrderStatus } from "@prisma/client";
 import { prisma } from "../../lib/db";
 import { recordAudit } from "../../lib/audit";
 import { enqueueNotification } from "../../lib/notifications";
 import { storeImage, UploadError } from "../../lib/uploads";
 import { MaintenanceError } from "./errors";
-import { MAINTENANCE_COORDINATOR_ROLES } from "./access";
+import { actorCan, principalOf, type ActorLike } from "../../lib/permissions/actor";
+import { dataScope, scopeWhere } from "../../lib/permissions/engine";
 
 type Tx = Prisma.TransactionClient;
 type Db = Tx | PrismaClient;
 
-export type Actor = { id: string; roles: Role[]; vendorId?: string | null };
+export type Actor = ActorLike;
 
 export const CATEGORIES = ["Electrical", "Plumbing", "Air conditioning", "Furniture", "Doors and locks", "Cleaning", "Pest control", "Internet / TV", "Other"] as const;
 export const PRIORITIES: WorkOrderPriority[] = ["LOW", "MEDIUM", "HIGH", "URGENT"];
@@ -49,12 +50,13 @@ export type WorkOrderRecord = Prisma.WorkOrderGetPayload<{ include: typeof workO
 
 export type WorkOrderAccess = "coordinator" | "assignee" | "vendor" | "requester" | "auditor" | null;
 
-export function accessFor(wo: Pick<WorkOrderRecord, "requesterId" | "assigneeId" | "vendorId">, actor: Actor): WorkOrderAccess {
-  if (actor.roles.some((r) => MAINTENANCE_COORDINATOR_ROLES.includes(r))) return "coordinator";
+export function accessFor(wo: Pick<WorkOrderRecord, "requesterId" | "assigneeId" | "vendorId"> & { siteId?: string | null; buildingId?: string | null }, actor: Actor): WorkOrderAccess {
+  // Triage, assign and cancel are the coordinator's powers (Maintenance coordinator grant for admins), within their sites.
+  if (actorCan(actor, "maint.triage", { siteId: wo.siteId, buildingId: wo.buildingId })) return "coordinator";
   if (wo.assigneeId === actor.id) return "assignee";
   if (actor.vendorId && wo.vendorId === actor.vendorId && actor.roles.includes("VENDOR")) return "vendor";
   if (wo.requesterId === actor.id) return "requester";
-  if (actor.roles.includes("AUDITOR")) return "auditor";
+  if (actor.roles.includes("READONLY_MANAGER") || actor.roles.includes("AUDITOR")) return "auditor";
   return null;
 }
 
@@ -204,7 +206,7 @@ export async function assignWorkOrder(input: { workOrderId: string; actor: Actor
     let label: string;
     if (input.assigneeId) {
       const assignee = await tx.user.findUnique({ where: { id: input.assigneeId }, include: { roleAssignments: true } });
-      if (!assignee || assignee.status !== "ACTIVE" || !assignee.roleAssignments.some((r) => r.role === "MAINTENANCE")) {
+      if (!assignee || assignee.status !== "ACTIVE" || !assignee.roleAssignments.some((r) => r.role === "TECHNICIAN")) {
         throw new MaintenanceError("VALIDATION", "The assignee must be an active maintenance team member.");
       }
       label = assignee.name;
@@ -357,12 +359,15 @@ export type QueueFilter = "open" | "unassigned" | "mine" | "waiting" | "resolved
 
 /** Operations queue, scoped by what the actor may see. */
 export async function listWorkOrders(actor: Actor, filter: QueueFilter) {
-  const isCoordinator = actor.roles.some((r) => MAINTENANCE_COORDINATOR_ROLES.includes(r)) || actor.roles.includes("AUDITOR");
+  const view = dataScope(principalOf(actor), "maint.triage");
+  const isCoordinator = view.all || view.siteIds.length > 0 || view.buildingIds.length > 0;
   const scope: Prisma.WorkOrderWhereInput = isCoordinator
-    ? {}
+    ? (scopeWhere(view, { site: "siteId", building: "buildingId" }) as Prisma.WorkOrderWhereInput)
+    : actor.roles.includes("READONLY_MANAGER") || actor.roles.includes("AUDITOR")
+      ? (scopeWhere(dataScope(principalOf(actor), "maint.view"), { site: "siteId", building: "buildingId" }) as Prisma.WorkOrderWhereInput)
     : actor.vendorId && actor.roles.includes("VENDOR")
-      ? { vendorId: actor.vendorId }
-      : { OR: [{ assigneeId: actor.id }, { requesterId: actor.id }] };
+        ? { vendorId: actor.vendorId }
+        : { OR: [{ assigneeId: actor.id }, { requesterId: actor.id }] };
   const byFilter: Prisma.WorkOrderWhereInput =
     filter === "open" ? { status: { in: OPEN_STATUSES } }
     : filter === "unassigned" ? { status: { in: ["NEW", "TRIAGED", "REOPENED"] }, assigneeId: null, vendorId: null }
@@ -396,7 +401,7 @@ export async function queueSummary(actor: Actor, now: Date = new Date()) {
 
 export async function listAssignees(db: Db = prisma) {
   const [engineers, vendors] = await Promise.all([
-    db.user.findMany({ where: { status: "ACTIVE", roleAssignments: { some: { role: "MAINTENANCE" } } }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
+    db.user.findMany({ where: { status: "ACTIVE", roleAssignments: { some: { role: "TECHNICIAN" } } }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
     db.vendor.findMany({ where: { status: "ACTIVE" }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
   ]);
   return { engineers, vendors };

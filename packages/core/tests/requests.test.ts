@@ -50,8 +50,8 @@ beforeAll(async () => {
   const org = await prisma.organization.upsert({ where: { code: "TEST" }, update: {}, create: { code: "TEST", name: "Test Org" } });
   orgId = org.id;
   const requester = await ensureUser("requester", "wf-requester@example.com", ["STAFF"]);
-  await ensureUser("manager", "wf-manager@example.com", ["APPROVER"]);
-  await ensureUser("manager2", "wf-manager2@example.com", ["APPROVER"]);
+  await ensureUser("manager", "wf-manager@example.com", ["LINE_MANAGER"]);
+  await ensureUser("manager2", "wf-manager2@example.com", ["LINE_MANAGER"]);
   await ensureUser("accadmin", "wf-accadmin@example.com", ["ACCOMMODATION_ADMIN"]);
   await ensureUser("officer", "wf-officer@example.com", ["ACCOMMODATION_OFFICER"]);
 
@@ -68,7 +68,7 @@ beforeAll(async () => {
   bedB = (await prisma.bed.upsert({ where: { roomId_code: { roomId: room.id, code: "WF-R1-2" } }, update: {}, create: { roomId: room.id, code: "WF-R1-2" } })).id;
 
   const twoStep = [
-    { name: "Line manager approval", approverRole: "APPROVER" as Role, requireComment: false },
+    { name: "Line manager approval", approverRole: "LINE_MANAGER" as Role, requireComment: false },
     { name: "Accommodation administrator approval", approverRole: "ACCOMMODATION_ADMIN" as Role, requireComment: true },
   ];
   await ensureType("ROOM_CHANGE", "Room change", [
@@ -79,10 +79,10 @@ beforeAll(async () => {
     { name: "visitorName", label: "Visitor", type: "text", required: true },
     { name: "arrivalDate", label: "Arrival", type: "date", required: true },
     { name: "departureDate", label: "Departure", type: "date", required: true },
-  ], [{ name: "Line manager approval", approverRole: "APPROVER", requireComment: false }]);
+  ], [{ name: "Line manager approval", approverRole: "LINE_MANAGER", requireComment: false }]);
   await ensureType("EXIT_CLEARANCE", "Exit clearance", [
     { name: "lastWorkingDay", label: "Last working day", type: "date", required: true },
-  ], [{ name: "Line manager approval", approverRole: "APPROVER", requireComment: false }]);
+  ], [{ name: "Line manager approval", approverRole: "LINE_MANAGER", requireComment: false }]);
   await ensureType("NO_APPROVAL", "Auto", [{ name: "note", label: "Note", type: "text" }], []);
 
   await prisma.allocation.deleteMany({ where: { staffId } });
@@ -165,7 +165,8 @@ describe("decisions", () => {
     const failed = results.filter((r) => r.status === "rejected") as PromiseRejectedResult[];
     expect(ok).toHaveLength(1);
     expect(failed).toHaveLength(1);
-    expect((failed[0].reason as RequestError).code).toBe("CONFLICT");
+    // The loser either loses the race (CONFLICT) or arrives after step 1 closed and the step has moved on (FORBIDDEN).
+    expect(["CONFLICT", "FORBIDDEN"]).toContain((failed[0].reason as RequestError).code);
     const r = await getRequest(id);
     expect(r?.status).toBe("PENDING_APPROVAL");
     expect(r?.currentStepOrder).toBe(2);

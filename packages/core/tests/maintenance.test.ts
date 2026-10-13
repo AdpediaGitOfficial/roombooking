@@ -43,9 +43,9 @@ beforeAll(async () => {
   vendorId = vendor.id;
   await ensureUser("resident", "mnt-resident@example.com", ["STAFF"]);
   await ensureUser("other", "mnt-other@example.com", ["STAFF"]);
-  await ensureUser("coordinator", "mnt-coord@example.com", ["ACCOMMODATION_OFFICER"]);
-  await ensureUser("engineer", "mnt-engineer@example.com", ["MAINTENANCE"]);
-  await ensureUser("engineer2", "mnt-engineer2@example.com", ["MAINTENANCE"]);
+  await ensureUser("coordinator", "mnt-coord@example.com", ["MAINTENANCE_COORDINATOR"]);
+  await ensureUser("engineer", "mnt-engineer@example.com", ["TECHNICIAN"]);
+  await ensureUser("engineer2", "mnt-engineer2@example.com", ["TECHNICIAN"]);
   await ensureUser("vendor", "mnt-vendor@example.com", ["VENDOR"], vendorId);
   await prisma.workOrderNote.deleteMany({ where: { workOrder: { siteId } } });
   await prisma.attachment.deleteMany({ where: { entityType: "WorkOrder", entityId: { in: (await prisma.workOrder.findMany({ where: { siteId }, select: { id: true } })).map((w) => w.id) } } });

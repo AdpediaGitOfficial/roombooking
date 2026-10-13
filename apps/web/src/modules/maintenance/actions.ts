@@ -3,9 +3,9 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { WorkOrderPriority, WorkOrderStatus } from "@prisma/client";
-import { requireUser, type CurrentUser } from "@/lib/auth/authorize";
+import { actorOf, requireUser } from "@/lib/auth/authorize";
 import { MaintenanceError } from "@sam/core/modules/maintenance/errors";
-import { addNote, assignWorkOrder, changeStatus, createWorkOrder, triageWorkOrder, type Actor } from "@sam/core/modules/maintenance/service";
+import { addNote, assignWorkOrder, changeStatus, createWorkOrder, triageWorkOrder } from "@sam/core/modules/maintenance/service";
 
 export type FormState = { error?: string; fieldErrors?: Record<string, string>; values?: Record<string, string> };
 export type ActionState = { error?: string; message?: string };
@@ -21,9 +21,6 @@ async function photoFrom(formData: FormData): Promise<{ bytes: Uint8Array; fileN
   return { bytes: new Uint8Array(await file.arrayBuffer()), fileName: file.name };
 }
 
-function actorOf(user: CurrentUser): Actor {
-  return { id: user.id, roles: user.roleAssignments.map((r) => r.role), vendorId: user.vendorId };
-}
 
 function revalidateMaintenance(id?: string) {
   revalidatePath("/my");

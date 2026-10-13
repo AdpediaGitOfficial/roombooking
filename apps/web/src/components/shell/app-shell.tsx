@@ -1,17 +1,18 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { prisma } from "@sam/core/lib/db";
-import { hasRole, requireUser, type CurrentUser } from "@/lib/auth/authorize";
+import { hasRole, requireUser, userCan, type CurrentUser } from "@/lib/auth/authorize";
+import type { Role } from "@prisma/client";
+import { ROLE_META } from "@sam/core/lib/permissions/roles";
 import { logout } from "@/app/login/actions";
 import { countUnreadNotifications } from "@sam/core/modules/self-service/service";
 import { ALLOCATION_OPERATE_ROLES } from "@sam/core/modules/allocations/access";
 import { APPROVALS_AREA_ROLES } from "@sam/core/modules/requests/access";
-import { MAINTENANCE_COORDINATOR_ROLES } from "@sam/core/modules/maintenance/access";
 import { visibleGroups } from "./nav";
 import { SidebarNav } from "./sidebar-nav";
 
-function roleLabel(role: string) {
-  return role.replaceAll("_", " ").toLowerCase().replace(/^\w/, (c) => c.toUpperCase());
+function roleLabel(role: Role) {
+  return ROLE_META[role].label;
 }
 
 function initials(name: string) {
@@ -28,7 +29,7 @@ async function navCounts(user: CurrentUser): Promise<Record<string, number>> {
   if (hasRole(user, ...APPROVALS_AREA_ROLES)) {
     jobs.push(prisma.request.count({ where: { status: { in: ["SUBMITTED", "PENDING_APPROVAL", "RESUBMITTED"] } } }).then((n) => { if (n) counts["/approvals"] = n; }));
   }
-  if (hasRole(user, ...MAINTENANCE_COORDINATOR_ROLES)) {
+  if (userCan(user, "maint.triage")) {
     jobs.push(prisma.workOrder.count({ where: { status: { in: ["NEW", "TRIAGED"] }, assigneeId: null, vendorId: null } }).then((n) => { if (n) counts["/maintenance"] = n; }));
   }
   await Promise.all(jobs);
@@ -77,7 +78,7 @@ async function TopBar({ returnTo }: { returnTo: string }) {
       <div className="flex-1" />
       <span className="topbar-site" title="Your site scope"><small>Scope</small>{scope}</span>
       <Link href="/my" className="icbtn" aria-label={unread ? `${unread} unread notifications` : "Notifications"} title="Notifications">🔔{unread > 0 && <span className="dot" />}</Link>
-      <span className="av av-primary" title={user.email}>{initials(user.name)}</span>
+      <span className="av av-primary" title={user.username}>{initials(user.name)}</span>
     </>
   );
 }

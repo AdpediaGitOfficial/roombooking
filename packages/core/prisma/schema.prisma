@@ -166,9 +166,13 @@ enum UserStatus {
 model User {
   id                    String     @id @default(cuid())
   organizationId        String
-  email                 String     @unique
+  // Sign-in name (employee ID, phone number or email). Email is optional.
+  username              String     @unique @default(dbgenerated("(gen_random_uuid())::text"))
+  email                 String?    @unique
   name                  String
   passwordHash          String?
+  // Temporary passwords must be changed at first sign-in.
+  mustChangePassword    Boolean    @default(false)
   passwordChangedAt     DateTime?
   failedLoginAttempts   Int        @default(0)
   lockedUntil           DateTime?
@@ -227,6 +231,11 @@ model User {
   auditEvents               AuditEvent[]
   attachments               Attachment[]
   allocations               Allocation[]
+  permissionGrants          PermissionGrant[]      @relation("GrantsReceived")
+  permissionGrantsGiven     PermissionGrant[]      @relation("GrantsGiven")
+  permissionGrantsRevoked   PermissionGrant[]      @relation("GrantsRevoked")
+  changeRequestsRaised      ChangeRequest[]        @relation("ChangesRaised")
+  changeRequestsDecided     ChangeRequest[]        @relation("ChangesDecided")
 }
 
 // Server-side sessions (ADM-05). The cookie carries a random token; only its
@@ -248,19 +257,23 @@ model Session {
   @@index([userId, expiresAt])
 }
 
-// Roles from SRS section 3. Permissions are enforced server-side in code;
-// a role assignment may be scoped to a site or building.
+// Roles from the Roles, Permissions & Module Map (section 2): 8 core roles,
+// 2 oversight roles and the optional Line Manager route step. HR, keys,
+// inventory, facility, supervisor and similar powers are capability sets
+// granted on top of a role (PermissionGrant), not extra roles. What each role
+// may do is defined once in src/lib/permissions/matrix.ts.
 enum Role {
   SYSTEM_ADMIN
   ACCOMMODATION_ADMIN
   ACCOMMODATION_OFFICER
   STAFF
-  APPROVER
-  MAINTENANCE
+  MAINTENANCE_COORDINATOR
+  TECHNICIAN
   VENDOR
-  INVENTORY_KEY_CUSTODIAN
-  FACILITY_MANAGER
+  SECURITY
+  READONLY_MANAGER
   AUDITOR
+  LINE_MANAGER
 }
 
 model RoleAssignment {
@@ -276,6 +289,72 @@ model RoleAssignment {
   building Building? @relation(fields: [buildingId], references: [id])
 
   @@unique([userId, role, siteId, buildingId])
+}
+
+// Capability grants (document section 3): a capability set or single
+// capability switched on for every holder of a role, or one user, bound to
+// their scope, with a mandatory reason and an optional expiry.
+model PermissionGrant {
+  id             String    @id @default(cuid())
+  organizationId String
+  // Exactly one of capabilitySet / capability.
+  capabilitySet  String?
+  capability     String?
+  // Exactly one of role / userId.
+  role           Role?
+  userId         String?
+  siteId         String?
+  buildingId     String?
+  reason         String
+  grantedById    String
+  expiresAt      DateTime?
+  revokedAt      DateTime?
+  revokedById    String?
+  revokeReason   String?
+  createdAt      DateTime  @default(now())
+
+  user      User? @relation("GrantsReceived", fields: [userId], references: [id])
+  grantedBy User  @relation("GrantsGiven", fields: [grantedById], references: [id])
+  revokedBy User? @relation("GrantsRevoked", fields: [revokedById], references: [id])
+
+  @@index([userId, revokedAt])
+  @@index([role, revokedAt])
+}
+
+enum ChangeRequestKind {
+  ROLE_CHANGE
+  GRANT
+  WORKFLOW_PUBLISH
+  BULK_CHANGE
+}
+
+enum ChangeRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+// Maker-checker (document 6.3): a high-risk configuration change raised by one
+// Super Admin takes effect only after a second Super Admin approves it.
+model ChangeRequest {
+  id             String              @id @default(cuid())
+  organizationId String
+  kind           ChangeRequestKind
+  summary        String
+  payload        Json
+  status         ChangeRequestStatus @default(PENDING)
+  requestedById  String
+  decidedById    String?
+  decidedAt      DateTime?
+  decisionNote   String?
+  appliedAt      DateTime?
+  createdAt      DateTime            @default(now())
+
+  requestedBy User  @relation("ChangesRaised", fields: [requestedById], references: [id])
+  decidedBy   User? @relation("ChangesDecided", fields: [decidedById], references: [id])
+
+  @@index([organizationId, status])
 }
 
 enum EmploymentStatus {

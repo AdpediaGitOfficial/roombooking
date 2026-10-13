@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@sam/core/lib/db";
 import { getCurrentUser } from "@/lib/auth/session";
+import { actorOf } from "@/lib/auth/authorize";
 import { readStoredFile } from "@sam/core/lib/uploads";
 import { accessFor } from "@sam/core/modules/maintenance/service";
 
@@ -14,8 +15,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ attachm
 
   let allowed = false;
   if (attachment.entityType === "WorkOrder") {
-    const wo = await prisma.workOrder.findUnique({ where: { id: attachment.entityId }, select: { requesterId: true, assigneeId: true, vendorId: true } });
-    allowed = !!wo && accessFor(wo, { id: user.id, roles: user.roleAssignments.map((r) => r.role), vendorId: user.vendorId }) !== null;
+    const wo = await prisma.workOrder.findUnique({ where: { id: attachment.entityId }, select: { requesterId: true, assigneeId: true, vendorId: true, siteId: true, buildingId: true } });
+    allowed = !!wo && accessFor(wo, actorOf(user)) !== null;
   }
   if (attachment.entityType === "LostFoundItem") {
     // Photos of found items are visible to every signed-in user (residents browse them to find their things).

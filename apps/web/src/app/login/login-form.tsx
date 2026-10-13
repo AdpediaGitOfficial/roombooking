@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState } from "react";
 import { login, type LoginState } from "./actions";
 
@@ -11,15 +12,17 @@ export function LoginForm({ next }: { next: string }) {
       <input type="hidden" name="next" value={next} />
 
       <div>
-        <label htmlFor="email" className="block text-sm font-medium">
-          Email
+        <label htmlFor="username" className="block text-sm font-medium">
+          Username
         </label>
         <input
-          id="email"
-          name="email"
-          type="email"
-          autoComplete="email"
-          inputMode="email"
+          id="username"
+          name="username"
+          type="text"
+          autoComplete="username"
+          autoCapitalize="none"
+          spellCheck={false}
+          placeholder="Employee ID, phone number or email"
           required
           className="mt-1 block w-full rounded-md border border-zinc-300 px-3 py-3 text-base"
         />
@@ -44,6 +47,8 @@ export function LoginForm({ next }: { next: string }) {
           {state.error}
         </p>
       )}
+
+      <p className="text-sm"><Link href="/forgot-password" className="text-zinc-600 underline">Forgot your password?</Link></p>
 
       <button
         type="submit"

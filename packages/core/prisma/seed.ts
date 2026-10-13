@@ -40,11 +40,11 @@ async function main() {
 
   const passwordHash = await hashPassword(DEMO_PASSWORD);
 
-  async function ensureUser(email: string, name: string, role: Role) {
+  async function ensureUser(email: string, name: string, role: Role, username?: string) {
     const user = await prisma.user.upsert({
       where: { email },
-      update: { passwordHash, status: "ACTIVE" },
-      create: { organizationId: org.id, email, name, passwordHash, status: "ACTIVE" },
+      update: { passwordHash, status: "ACTIVE", ...(username ? { username } : {}) },
+      create: { organizationId: org.id, email, name, passwordHash, status: "ACTIVE", ...(username ? { username } : {}) },
     });
     // Composite unique keys containing NULL cannot be matched by upsert.
     const existing = await prisma.roleAssignment.findFirst({
@@ -56,16 +56,31 @@ async function main() {
     return user;
   }
 
-  const adminUser = await ensureUser("admin@example.com", "System Administrator", Role.SYSTEM_ADMIN);
-  // The demo admin also acts as the accommodation administrator (final approval step).
-  if (!(await prisma.roleAssignment.findFirst({ where: { userId: adminUser.id, role: Role.ACCOMMODATION_ADMIN, siteId: null, buildingId: null } }))) {
-    await prisma.roleAssignment.create({ data: { userId: adminUser.id, role: Role.ACCOMMODATION_ADMIN } });
+  /** Switches a capability set on for one user (document section 3: reason mandatory, audited). */
+  async function ensureSetGrant(userId: string, capabilitySet: string, reason: string, grantedById: string) {
+    const existing = await prisma.permissionGrant.findFirst({ where: { userId, capabilitySet, revokedAt: null } });
+    if (!existing) {
+      await prisma.permissionGrant.create({ data: { organizationId: org.id, userId, capabilitySet, reason, grantedById } });
+    }
   }
+
+  // Two Super Admins plus a break-glass account (document section 12).
+  const adminUser = await ensureUser("admin@example.com", "Super Admin", Role.SYSTEM_ADMIN);
+  await ensureUser("admin2@example.com", "Second Super Admin", Role.SYSTEM_ADMIN);
+  await ensureUser("breakglass@example.com", "Break-glass Admin", Role.SYSTEM_ADMIN);
+  await ensureUser("accadmin@example.com", "Accommodation Admin", Role.ACCOMMODATION_ADMIN);
   const officer = await ensureUser("officer@example.com", "Reception Officer", Role.ACCOMMODATION_OFFICER);
-  await ensureUser("manager@example.com", "Line Manager", Role.APPROVER);
-  const engineer = await ensureUser("engineer@example.com", "Maintenance Engineer", Role.MAINTENANCE);
-  const custodian = await ensureUser("custodian@example.com", "Key Custodian", Role.INVENTORY_KEY_CUSTODIAN);
-  await ensureUser("facility@example.com", "Facility Manager", Role.FACILITY_MANAGER);
+  await ensureUser("manager@example.com", "Line Manager", Role.LINE_MANAGER);
+  await ensureUser("coordinator@example.com", "Maintenance Coordinator", Role.MAINTENANCE_COORDINATOR);
+  const engineer = await ensureUser("engineer@example.com", "Maintenance Technician", Role.TECHNICIAN);
+  await ensureUser("security@example.com", "Gate Security", Role.SECURITY);
+  await ensureUser("readonly@example.com", "Read-only Manager", Role.READONLY_MANAGER);
+  // A senior officer holds the Key supervisor and Inventory supervisor sets; another leads the facilities.
+  const custodian = await ensureUser("custodian@example.com", "Senior Officer (keys & stock)", Role.ACCOMMODATION_OFFICER);
+  await ensureSetGrant(custodian.id, "KEY_SUPERVISOR", "Senior officer keeps the key register", adminUser.id);
+  await ensureSetGrant(custodian.id, "INVENTORY_SUPERVISOR", "Senior officer keeps the stores", adminUser.id);
+  const facilityUser = await ensureUser("facility@example.com", "Facility In-charge", Role.ACCOMMODATION_OFFICER);
+  await ensureSetGrant(facilityUser.id, "FACILITY_MANAGER", "Runs the gym and community hall", adminUser.id);
   await ensureUser("auditor@example.com", "Read-only Auditor", Role.AUDITOR);
   const vendor = await prisma.vendor.upsert({
     where: { id: "demo-vendor-coolair" },
@@ -74,7 +89,7 @@ async function main() {
   });
   const vendorUser = await ensureUser("vendor@example.com", "CoolAir Technician", Role.VENDOR);
   await prisma.user.update({ where: { id: vendorUser.id }, data: { vendorId: vendor.id } });
-  const staffUser = await ensureUser("staff@example.com", "Sample Resident", Role.STAFF);
+  const staffUser = await ensureUser("staff@example.com", "Sample Resident", Role.STAFF, "e1001");
   // Demo resident has opted in to WhatsApp so the WhatsApp queue shows something with the log transport.
   await prisma.user.update({ where: { id: staffUser.id }, data: { whatsappNumber: "+971500000001", whatsappNotifications: true, whatsappConsentAt: new Date() } });
   await prisma.staffProfile.upsert({
@@ -183,7 +198,7 @@ async function main() {
       create: { requestTypeId: type.id, version: 1, isCurrent: true, publishedAt: new Date(), publishedById: adminUser.id, formSchema: { fields: rt.fields } },
     });
     const steps = [
-      { order: 1, name: "Line manager approval", approverRole: Role.APPROVER, requireComment: false },
+      { order: 1, name: "Line manager approval", approverRole: Role.LINE_MANAGER, requireComment: false },
       { order: 2, name: "Accommodation administrator approval", approverRole: Role.ACCOMMODATION_ADMIN, requireComment: true },
     ];
     for (const s of steps) {

@@ -26,7 +26,7 @@ beforeAll(async () => {
   blockA1 = await building(siteA, "A1"); blockA2 = await building(siteA, "A2"); const blockB1 = await building(siteB, "B1");
   const bed = async (bid: string, code: string) => { const room = await prisma.room.create({ data: { buildingId: bid, code: `R-${code}` } }); return (await prisma.bed.create({ data: { roomId: room.id, code: `${code}-1` } })).id; };
   let n = 0;
-  const user = async (name: string, roles: Array<{ role: "STAFF" | "ACCOMMODATION_OFFICER" | "MAINTENANCE" | "SYSTEM_ADMIN"; siteId?: string; buildingId?: string }>, home?: string) => {
+  const user = async (name: string, roles: Array<{ role: "STAFF" | "ACCOMMODATION_OFFICER" | "TECHNICIAN" | "SYSTEM_ADMIN"; siteId?: string; buildingId?: string }>, home?: string) => {
     const u = await prisma.user.create({ data: { organizationId: orgId, email: `bc-${stamp}-${n++}@example.com`, name, status: "ACTIVE", roleAssignments: { create: roles.map((r) => ({ role: r.role, siteId: r.siteId ?? null, buildingId: r.buildingId ?? null })) } } });
     if (home) {
       const staff = await prisma.staffProfile.create({ data: { organizationId: orgId, employeeId: `BC-${stamp}-${n}`, firstName: name, lastName: "Test", userId: u.id } });
@@ -41,7 +41,7 @@ beforeAll(async () => {
   await user("Resident Nowhere", [{ role: "STAFF" }]);
   await user("Officer A", [{ role: "ACCOMMODATION_OFFICER", siteId: siteA }]);
   await user("Officer Global", [{ role: "ACCOMMODATION_OFFICER" }]);
-  await user("Engineer B", [{ role: "MAINTENANCE", siteId: siteB }]);
+  await user("Engineer B", [{ role: "TECHNICIAN", siteId: siteB }]);
   await prisma.user.create({ data: { organizationId: orgId, email: `bc-${stamp}-gone@example.com`, name: "Deactivated", status: "DEACTIVATED", roleAssignments: { create: [{ role: "STAFF" }] } } });
 });
 
@@ -55,7 +55,7 @@ describe("audience", () => {
     expect(await names({ roles: ["STAFF"], siteIds: [siteA], buildingIds: [] })).toEqual(["Resident A1", "Resident A2"]);
     expect(await names({ roles: ["STAFF"], siteIds: [], buildingIds: [blockA2] })).toEqual(["Resident A2"]);
     expect(await names({ roles: [], siteIds: [siteA], buildingIds: [] })).toEqual(["Admin", "Officer A", "Officer Global", "Resident A1", "Resident A2"]);
-    expect(await names({ roles: ["ACCOMMODATION_OFFICER", "MAINTENANCE"], siteIds: [siteB], buildingIds: [] })).toEqual(["Engineer B", "Officer Global"]);
+    expect(await names({ roles: ["ACCOMMODATION_OFFICER", "TECHNICIAN"], siteIds: [siteB], buildingIds: [] })).toEqual(["Engineer B", "Officer Global"]);
     expect(await names({ roles: ["ACCOMMODATION_OFFICER"], siteIds: [], buildingIds: [blockA1] })).toEqual(["Officer A", "Officer Global"]);
     expect(parseAudience({ roles: ["STAFF", "NOPE", 3], siteIds: ["x", ""], buildingIds: null })).toEqual({ roles: ["STAFF"], siteIds: ["x"], buildingIds: [] });
     expect(await describeAudience({ roles: ["STAFF"], siteIds: [siteA], buildingIds: [] })).toBe("residents at Site A");

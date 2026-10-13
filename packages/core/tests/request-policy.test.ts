@@ -24,14 +24,14 @@ async function age(requestId: string, days: number) {
 beforeAll(async () => {
   const org = await prisma.organization.create({ data: { code: `RP-${stamp}`, name: "Policy Org" } });
   orgId = org.id;
-  const mk = async (name: string, roles: Array<"SYSTEM_ADMIN" | "APPROVER" | "ACCOMMODATION_ADMIN" | "STAFF">) => (await prisma.user.create({ data: { organizationId: orgId, email: `rp-${name}-${stamp}@example.com`, name: `${name} ${stamp}`, status: "ACTIVE", roleAssignments: { create: roles.map((role) => ({ role })) } } })).id;
+  const mk = async (name: string, roles: Array<"SYSTEM_ADMIN" | "LINE_MANAGER" | "ACCOMMODATION_ADMIN" | "STAFF">) => (await prisma.user.create({ data: { organizationId: orgId, email: `rp-${name}-${stamp}@example.com`, name: `${name} ${stamp}`, status: "ACTIVE", roleAssignments: { create: roles.map((role) => ({ role })) } } })).id;
   admin = await mk("Admin", ["SYSTEM_ADMIN"]);
-  manager = await mk("Manager", ["APPROVER"]);
+  manager = await mk("Manager", ["LINE_MANAGER"]);
   senior = await mk("Senior", ["ACCOMMODATION_ADMIN"]);
   resident = await mk("Resident", ["STAFF"]);
   const type = await prisma.requestType.create({ data: { organizationId: orgId, code: "SLOW", name: "Slow request", reminderAfterDays: 2, escalateAfterDays: 5, escalateToRole: "ACCOMMODATION_ADMIN", expireAfterDays: 10 } });
   typeId = type.id;
-  await prisma.workflowVersion.create({ data: { requestTypeId: type.id, version: 1, isCurrent: true, publishedAt: new Date(), formSchema: { fields: [{ name: "note", label: "Note", type: "text", required: true }] }, steps: { create: [{ order: 1, name: "Manager approval", approverRole: "APPROVER", requireComment: false }, { order: 2, name: "Final approval", approverRole: "ACCOMMODATION_ADMIN", requireComment: false }] } } });
+  await prisma.workflowVersion.create({ data: { requestTypeId: type.id, version: 1, isCurrent: true, publishedAt: new Date(), formSchema: { fields: [{ name: "note", label: "Note", type: "text", required: true }] }, steps: { create: [{ order: 1, name: "Manager approval", approverRole: "LINE_MANAGER", requireComment: false }, { order: 2, name: "Final approval", approverRole: "ACCOMMODATION_ADMIN", requireComment: false }] } } });
 });
 
 afterAll(async () => { await prisma.$disconnect(); });
@@ -60,7 +60,7 @@ describe("policy sweep", () => {
     expect(full.stepRoleOverride).toBe("ACCOMMODATION_ADMIN");
     expect(full.escalatedAt).not.toBeNull();
     expect(describeStatus(full)).toContain("escalated to accommodation admin");
-    expect(canDecide(full, actor(manager, ["APPROVER"])).ok).toBe(false);
+    expect(canDecide(full, actor(manager, ["LINE_MANAGER"])).ok).toBe(false);
     expect(canDecide(full, actor(senior, ["ACCOMMODATION_ADMIN"])).ok).toBe(true);
     expect((await listInbox(actor(senior, ["ACCOMMODATION_ADMIN"]))).some((x) => x.id === r.id)).toBe(true);
     expect(await prisma.notification.count({ where: { channel: "IN_APP", recipientId: senior, event: "request.escalated", idempotencyKey: { contains: r.id } } })).toBe(1);
@@ -86,7 +86,7 @@ describe("policy sweep", () => {
     expect(full.status).toBe("EXPIRED");
     expect(describeStatus(full)).toContain("Expired");
     expect(await prisma.notification.findFirst({ where: { recipientId: resident, event: "request.expired", idempotencyKey: { contains: r.id } } })).not.toBeNull();
-    await expectError(decideRequest({ requestId: r.id, actor: actor(manager, ["APPROVER"]), action: "APPROVE" }), "INVALID_STATE");
+    await expectError(decideRequest({ requestId: r.id, actor: actor(manager, ["LINE_MANAGER"]), action: "APPROVE" }), "INVALID_STATE");
     const again = await resubmitRequest({ requestId: r.id, requesterId: resident, raw: { note: "expire again" } });
     expect(again.status).toBe("PENDING_APPROVAL");
     expect(again.submissionVersion).toBe(2);
@@ -96,9 +96,9 @@ describe("policy sweep", () => {
 
   it("lets an administrator reassign a step to another role with a reason, and the policy can be switched off per type", async () => {
     const r = await submit("reassign");
-    await expectError(reassignStep({ requestId: r.id, actor: actor(manager, ["APPROVER"]), role: "ACCOMMODATION_ADMIN", reason: "x" }), "FORBIDDEN");
+    await expectError(reassignStep({ requestId: r.id, actor: actor(manager, ["LINE_MANAGER"]), role: "ACCOMMODATION_ADMIN", reason: "x" }), "FORBIDDEN");
     await expectError(reassignStep({ requestId: r.id, actor: actor(admin, ["SYSTEM_ADMIN"]), role: "ACCOMMODATION_ADMIN", reason: "" }), "VALIDATION");
-    await expectError(reassignStep({ requestId: r.id, actor: actor(admin, ["SYSTEM_ADMIN"]), role: "APPROVER", reason: "same" }), "VALIDATION");
+    await expectError(reassignStep({ requestId: r.id, actor: actor(admin, ["SYSTEM_ADMIN"]), role: "LINE_MANAGER", reason: "same" }), "VALIDATION");
     await reassignStep({ requestId: r.id, actor: actor(admin, ["SYSTEM_ADMIN"]), role: "ACCOMMODATION_ADMIN", reason: "Manager has left the company" });
     const full = (await getRequest(r.id))!;
     expect(full.stepRoleOverride).toBe("ACCOMMODATION_ADMIN");

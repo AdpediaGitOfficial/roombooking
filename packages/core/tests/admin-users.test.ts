@@ -48,7 +48,7 @@ describe("create and invite", () => {
     const { user, invitePath } = await createUser({ actorId: adminId, organizationId: orgId, name: "New Officer", email: email.toUpperCase(), roles: [{ role: "ACCOMMODATION_OFFICER", siteId }, { role: "STAFF" }] });
     expect(user.status).toBe("INVITED");
     expect(user.email).toBe(email);
-    const token = invitePath.split("/").pop()!;
+    const token = invitePath!.split("/").pop()!;
     expect(user.tokenHash).not.toBe(token);
     const full = (await getUser(user.id))!;
     expect(full.roleAssignments.map((r) => [r.role, r.siteId])).toEqual([["ACCOMMODATION_OFFICER", siteId], ["STAFF", null]]);
@@ -67,7 +67,7 @@ describe("create and invite", () => {
   it("rejects expired tokens and refuses invites for active accounts", async () => {
     const { user, invitePath } = await createUser({ actorId: adminId, organizationId: orgId, name: "Late", email: `late-${stamp}@example.com`, roles: [{ role: "STAFF" }] });
     await prisma.user.update({ where: { id: user.id }, data: { tokenExpiresAt: new Date(Date.now() - 1000) } });
-    expect(await lookupToken(invitePath.split("/").pop()!)).toBeNull();
+    expect(await lookupToken(invitePath!.split("/").pop()!)).toBeNull();
     const reissued = await issueToken({ actorId: adminId, userId: user.id, purpose: "INVITE" });
     expect((await lookupToken(reissued.path.split("/").pop()!))?.id).toBe(user.id);
     await expectError(issueToken({ actorId: adminId, userId: user.id, purpose: "RESET" }), "INVALID_STATE");
@@ -77,12 +77,12 @@ describe("create and invite", () => {
 describe("roles", () => {
   it("adds and removes scoped roles, rejects duplicates, and protects the last administrator", async () => {
     const user = await prisma.user.findUniqueOrThrow({ where: { email: `officer-${stamp}@example.com` } });
-    const grant = await addRole({ actorId: adminId, userId: user.id, grant: { role: "APPROVER", buildingId } });
+    const grant = await addRole({ actorId: adminId, userId: user.id, grant: { role: "LINE_MANAGER", buildingId } });
     expect(grant.siteId).toBe(siteId); // building scope implies its site
-    await expectError(addRole({ actorId: adminId, userId: user.id, grant: { role: "APPROVER", buildingId } }), "INVALID_STATE");
+    await expectError(addRole({ actorId: adminId, userId: user.id, grant: { role: "LINE_MANAGER", buildingId } }), "INVALID_STATE");
     await expectError(addRole({ actorId: adminId, userId: user.id, grant: { role: "VENDOR" } }), "VALIDATION");
     await removeRole({ actorId: adminId, userId: user.id, assignmentId: grant.id });
-    expect((await getUser(user.id))!.roleAssignments.some((r) => r.role === "APPROVER")).toBe(false);
+    expect((await getUser(user.id))!.roleAssignments.some((r) => r.role === "LINE_MANAGER")).toBe(false);
 
     const adminRole = await prisma.roleAssignment.findFirstOrThrow({ where: { userId: adminId, role: "SYSTEM_ADMIN" } });
     await expectError(removeRole({ actorId: adminId, userId: adminId, assignmentId: adminRole.id }), "GUARD");
@@ -119,7 +119,7 @@ describe("status and sessions", () => {
 
   it("a reset link sets a new password and ends existing sessions", async () => {
     const { user, invitePath } = await createUser({ actorId: adminId, organizationId: orgId, name: "Reset Me", email: `reset-${stamp}@example.com`, roles: [{ role: "STAFF" }] });
-    await acceptToken({ token: invitePath.split("/").pop()!, password: "First-Pass-123" });
+    await acceptToken({ token: invitePath!.split("/").pop()!, password: "First-Pass-123" });
     const { token: session } = await createSessionRecord(user.id);
     const reset = await issueToken({ actorId: adminId, userId: user.id, purpose: "RESET" });
     expect(await resolveSession(session)).not.toBeNull(); // issuing does not log them out
@@ -133,8 +133,8 @@ describe("status and sessions", () => {
 describe("update and list", () => {
   it("links staff records exclusively, keeps vendor users linked, and searches by name, email and employee id", async () => {
     const staff = await prisma.staffProfile.upsert({ where: { organizationId_employeeId: { organizationId: orgId, employeeId: "ADM-E1" } }, update: { userId: null }, create: { organizationId: orgId, employeeId: "ADM-E1", firstName: "Linked", lastName: "Person" } });
-    const a = await createUser({ actorId: adminId, organizationId: orgId, name: "Link A", email: `linka-${stamp}@example.com`, roles: [{ role: "STAFF" }], staffProfileId: staff.id });
-    await expectError(createUser({ actorId: adminId, organizationId: orgId, name: "Link B", email: `linkb-${stamp}@example.com`, roles: [{ role: "STAFF" }], staffProfileId: staff.id }), "VALIDATION");
+    const a = await createUser({ actorId: adminId, organizationId: orgId, name: "Link A", username: `link-a-${stamp}`, email: `linka-${stamp}@example.com`, roles: [{ role: "STAFF" }], staffProfileId: staff.id });
+    await expectError(createUser({ actorId: adminId, organizationId: orgId, name: "Link B", username: `link-b-${stamp}`, email: `linkb-${stamp}@example.com`, roles: [{ role: "STAFF" }], staffProfileId: staff.id }), "VALIDATION");
     await updateUser({ actorId: adminId, userId: a.user.id, name: "Link A Renamed", email: a.user.email, staffProfileId: null });
     expect((await prisma.staffProfile.findUniqueOrThrow({ where: { id: staff.id } })).userId).toBeNull();
     const vendor = await prisma.vendor.create({ data: { organizationId: orgId, name: `Vendor ${stamp}` } });

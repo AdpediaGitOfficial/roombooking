@@ -24,7 +24,7 @@ export function parseAudience(raw: unknown): Audience {
   return { roles: list(o.roles).filter((r): r is Role => (ALL_ROLES as string[]).includes(r)), siteIds: list(o.siteIds), buildingIds: list(o.buildingIds) };
 }
 
-export type Recipient = { id: string; name: string; email: string };
+export type Recipient = { id: string; name: string; email: string | null };
 
 /** Everyone the audience resolves to right now. */
 export async function resolveAudience(organizationId: string, audience: Audience, today: Date = new Date()): Promise<Recipient[]> {

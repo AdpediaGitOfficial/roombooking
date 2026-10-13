@@ -18,7 +18,7 @@ async function Content({ params }: { params: Promise<{ token: string }> }) {
   return (
     <>
       <h1 className="page-title">{user.tokenPurpose === "RESET" ? "Set a new password" : `Welcome, ${user.name.split(" ")[0]}`}</h1>
-      <p className="mt-1 mb-8 text-sm text-zinc-600">{user.email}</p>
+      <p className="mt-1 mb-8 text-sm text-zinc-600">{user.username}</p>
       <AcceptInviteForm token={token} />
     </>
   );

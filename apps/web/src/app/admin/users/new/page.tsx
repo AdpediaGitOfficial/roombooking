@@ -14,7 +14,7 @@ async function Content() {
 export default function NewUserPage() {
   return (
     <main className="max-w-3xl">
-      <PageHeader title="New user" subtitle="The account starts as invited. Share the one-time link so the person can set their password." />
+      <PageHeader title="New user" subtitle="Sign-in is by username (employee ID, phone number or email). The account starts with a temporary password that must be changed at first sign-in." />
       <Suspense fallback={<p className="text-sm text-zinc-500">Loading…</p>}>
         <Content />
       </Suspense>

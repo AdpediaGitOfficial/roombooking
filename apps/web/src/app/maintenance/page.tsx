@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import Link from "next/link";
-import { hasRole, requireRole } from "@/lib/auth/authorize";
-import { MAINTENANCE_AREA_ROLES, MAINTENANCE_COORDINATOR_ROLES } from "@sam/core/modules/maintenance/access";
+import { requireRole, userCan } from "@/lib/auth/authorize";
+import { MAINTENANCE_AREA_ROLES } from "@sam/core/modules/maintenance/access";
 import { listWorkOrders, locationLabel, queueSummary, type QueueFilter } from "@sam/core/modules/maintenance/service";
 import { actorOf } from "@/modules/maintenance/context";
 import { PriorityLabel, SlaLabel, WorkOrderStatusBadge } from "@/modules/maintenance/components/views";
@@ -14,7 +14,7 @@ const FILTERS: Array<[QueueFilter, string]> = [
 async function Queue({ searchParams }: { searchParams: Promise<{ filter?: string }> }) {
   const user = await requireRole(MAINTENANCE_AREA_ROLES, "/maintenance");
   const actor = actorOf(user);
-  const isCoordinator = hasRole(user, ...MAINTENANCE_COORDINATOR_ROLES);
+  const isCoordinator = userCan(user, "maint.triage");
   const { filter: raw } = await searchParams;
   const filter = (FILTERS.some(([f]) => f === raw) ? raw : "open") as QueueFilter;
   const now = new Date();

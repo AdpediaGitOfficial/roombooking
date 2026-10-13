@@ -1,11 +1,6 @@
 import "server-only";
 import { prisma } from "@sam/core/lib/db";
-import type { CurrentUser } from "@/lib/auth/authorize";
-import type { Actor } from "@sam/core/modules/maintenance/service";
-
-export function actorOf(user: CurrentUser): Actor {
-  return { id: user.id, roles: user.roleAssignments.map((r) => r.role), vendorId: user.vendorId };
-}
+export { actorOf } from "@/lib/auth/authorize";
 
 /** Rooms a resident can report against: their current bed's room. */
 export async function residentRoomOptions(userId: string) {

@@ -4,7 +4,8 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { Role } from "@prisma/client";
 import { requireRole } from "@/lib/auth/authorize";
-import { FORM_BUILDER_ROLES, createDraft, createType, discardDraft, publishVersion, saveDraft, updateType } from "@sam/core/modules/requests/builder";
+import { FORM_BUILDER_ROLES, assertPublishable, createDraft, createType, discardDraft, saveDraft, updateType } from "@sam/core/modules/requests/builder";
+import { submitChange } from "@sam/core/modules/admin/change-requests";
 import { RequestError } from "@sam/core/modules/requests/errors";
 
 export type BuilderState = { error?: string; message?: string; fieldErrors?: Record<string, string>; values?: Record<string, string> };
@@ -76,10 +77,17 @@ export async function draftAction(_prev: BuilderState, formData: FormData): Prom
     }
     const parse = (s: string) => { try { return JSON.parse(s || "null"); } catch { throw new RequestError("VALIDATION", "The builder sent malformed data; reload and try again."); } };
     await saveDraft({ versionId, actorId: user.id, schema: parse(values.schema), steps: parse(values.steps), changeNote: values.changeNote });
-    if (intent === "publish") await publishVersion({ versionId, actorId: user.id });
+    if (intent === "publish") {
+      // Publishing a route is a high-risk change: a second Super Admin approves it (document 6.3).
+      await assertPublishable(versionId);
+      const r = await submitChange({ organizationId: user.organizationId, actorId: user.id, summary: `Publish a new version of a request form${values.changeNote ? ` (${values.changeNote.slice(0, 80)})` : ""}`, payload: { op: "workflow.publish", versionId, changeNote: values.changeNote } });
+      revalidate(typeId);
+      revalidatePath("/admin/changes");
+      return { message: r.status === "PENDING" ? "Submitted: a second Super Admin must approve publishing before residents see this version." : "Published. Residents now see this version.", values };
+    }
   } catch (error) {
     return fail(error, values);
   }
   revalidate(typeId);
-  return { message: intent === "publish" ? "Published. Residents now see this version." : "Draft saved.", values };
+  return { message: "Draft saved.", values };
 }

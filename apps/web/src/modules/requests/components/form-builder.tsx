@@ -191,7 +191,7 @@ export function FormBuilder({ typeId, draft, initialFields, initialSteps, roles 
               </li>
             ))}
           </ol>
-          <button type="button" onClick={() => setSteps((ss) => [...ss, { name: "", approverRole: "APPROVER", requireComment: false }])} className={`${secondary} mt-3`} data-add-step>Add step</button>
+          <button type="button" onClick={() => setSteps((ss) => [...ss, { name: "", approverRole: "LINE_MANAGER", requireComment: false }])} className={`${secondary} mt-3`} data-add-step>Add step</button>
         </>
       )}
 

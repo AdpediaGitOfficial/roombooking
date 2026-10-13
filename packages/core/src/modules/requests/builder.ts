@@ -6,12 +6,14 @@ import type { Prisma, Role } from "@prisma/client";
 import { prisma } from "../../lib/db";
 import { recordAudit } from "../../lib/audit";
 import { ALL_ROLES } from "../admin/access";
+import { rolesWithDefault } from "../../lib/permissions/matrix";
 import { RequestError } from "./errors";
 import { FIELD_TYPES, VISIBILITY_OPS, parseSchema, type FormField, type FormSchema } from "./forms";
 
-export const FORM_BUILDER_ROLES: Role[] = ["SYSTEM_ADMIN", "ACCOMMODATION_ADMIN"];
+/** Forms, approval routes, SLAs and delegation rules belong to the Super Admin (document 5.1). */
+export const FORM_BUILDER_ROLES: Role[] = rolesWithDefault("setup.workflows");
 /** Roles that can sit on an approval route (residents and vendors never approve). */
-export const APPROVER_ROLES: Role[] = ALL_ROLES.filter((r) => r !== "STAFF" && r !== "VENDOR");
+export const APPROVER_ROLES: Role[] = ALL_ROLES.filter((r) => r !== "STAFF" && r !== "VENDOR" && r !== "TECHNICIAN");
 export const NAME_PATTERN = /^[a-z][A-Za-z0-9]{0,39}$/;
 export const CODE_PATTERN = /^[A-Z][A-Z0-9_]{1,39}$/;
 
@@ -188,6 +190,18 @@ export async function saveDraft(input: { versionId: string; actorId: string; sch
 }
 
 /** Makes the draft current. In-flight requests keep the version they were submitted under. */
+/** Throws a VALIDATION error naming the problems when the draft cannot be published yet. */
+export async function assertPublishable(versionId: string) {
+  const v = await prisma.workflowVersion.findUnique({ where: { id: versionId }, include: { steps: true } });
+  if (!v) throw new RequestError("NOT_FOUND", "Version not found.");
+  if (v.publishedAt) throw new RequestError("INVALID_STATE", "This version is already published.");
+  const schema = parseSchema(v.formSchema);
+  const errors = { ...validateSchema(schema), ...validateSteps(v.steps) };
+  if (schema.fields.length === 0) errors["fields"] = "Add at least one field before publishing.";
+  if (Object.keys(errors).length) throw new RequestError("VALIDATION", "The draft has problems; fix them before publishing.", errors);
+  return v;
+}
+
 export async function publishVersion(input: { versionId: string; actorId: string; now?: Date }) {
   const now = input.now ?? new Date();
   return prisma.$transaction(async (tx) => {

@@ -2,7 +2,7 @@
 // WhatsApp messages, renders and sends them, and schedules retries with
 // backoff. A failure never touches the business record the notification is
 // about.
-import type { NotificationChannel } from "@prisma/client";
+import type { NotificationChannel, Prisma } from "@prisma/client";
 import { prisma } from "../../lib/db";
 import { recordAudit } from "../../lib/audit";
 import { renderEmail } from "./templates";
@@ -75,9 +75,13 @@ export async function processOutbox(opts: { limit?: number; now?: Date; transpor
         prepared = { kind: "whatsapp", subject: message.text, to: n.recipient.whatsappNumber!, send: () => wa!.send(message) };
       }
 
+      // Messages that carry a secret (temporary passwords) keep a neutral subject, and the secret is removed once sent.
+      const secretKeys = SECRET_PAYLOAD_KEYS[n.event];
+      if (secretKeys) prepared.subject = "Account sign-in details";
       try {
         const { messageId } = await prepared.send();
-        await prisma.notification.update({ where: { id: n.id }, data: { status: "SENT", sentAt: new Date(), lockedAt: null, nextAttemptAt: null, lastError: null, subject: prepared.subject, deliveredTo: prepared.to, providerMessageId: messageId, attempts: { increment: 1 } } });
+        const scrubbed = secretKeys ? Object.fromEntries(Object.entries((n.payload ?? {}) as Record<string, unknown>).filter(([k]) => !secretKeys.includes(k))) : undefined;
+        await prisma.notification.update({ where: { id: n.id }, data: { status: "SENT", sentAt: new Date(), lockedAt: null, nextAttemptAt: null, lastError: null, subject: prepared.subject, deliveredTo: prepared.to, providerMessageId: messageId, attempts: { increment: 1 }, ...(scrubbed ? { payload: scrubbed as Prisma.InputJsonValue } : {}) } });
         result.sent++;
       } catch (error) {
         const attempts = n.attempts + 1;
@@ -95,6 +99,9 @@ export async function processOutbox(opts: { limit?: number; now?: Date; transpor
   }
   return result;
 }
+
+/** Payload keys removed from the stored notification once it has been delivered. */
+const SECRET_PAYLOAD_KEYS: Record<string, string[]> = { "user.temp_password": ["temporaryPassword"] };
 
 /** Applies provider delivery receipts (COM-04): delivered/read mark the row delivered, failed marks it failed with the provider's reason. */
 export async function applyStatusUpdates(updates: StatusUpdate[]): Promise<{ matched: number; delivered: number; failed: number }> {
