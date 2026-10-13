@@ -35,6 +35,7 @@ model Organization {
   staff        StaffProfile[]
   vendors      Vendor[]
   requestTypes RequestType[]
+  broadcasts   Broadcast[]
 }
 
 model Site {
@@ -211,6 +212,8 @@ model User {
   lostFoundClaims       LostFoundClaim[]       @relation("LostFoundClaimant")
   lostFoundDecisions    LostFoundClaim[]       @relation("LostFoundClaimDecided")
   lostFoundEvents       LostFoundEvent[]       @relation("LostFoundEvents")
+  broadcastsCreated     Broadcast[]            @relation("BroadcastsCreated")
+  broadcastsSent        Broadcast[]            @relation("BroadcastsSent")
   notifications         Notification[]
   auditEvents           AuditEvent[]
   attachments           Attachment[]
@@ -934,6 +937,42 @@ model LostFoundEvent {
   actor User          @relation("LostFoundEvents", fields: [actorId], references: [id])
 
   @@index([itemId, createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// Broadcast messages (COM-03)
+// ---------------------------------------------------------------------------
+
+enum BroadcastStatus {
+  DRAFT
+  SENT
+  CANCELLED
+}
+
+// A message to an audience (sites, buildings, roles). Sending writes one
+// in-app notification per recipient (plus email/WhatsApp copies when asked
+// and consented), keyed broadcast:<id>:<userId> so a retry never duplicates.
+model Broadcast {
+  id             String          @id @default(cuid())
+  organizationId String
+  title          String
+  body           String
+  audience       Json
+  emailCopy      Boolean         @default(true)
+  whatsappCopy   Boolean         @default(false)
+  status         BroadcastStatus @default(DRAFT)
+  recipientCount Int             @default(0)
+  createdById    String
+  sentById       String?
+  sentAt         DateTime?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  createdBy    User         @relation("BroadcastsCreated", fields: [createdById], references: [id])
+  sentBy       User?        @relation("BroadcastsSent", fields: [sentById], references: [id])
+
+  @@index([organizationId, status, createdAt])
 }
 
 // ---------------------------------------------------------------------------

@@ -305,6 +305,21 @@ WhatsApp is a second transport on the same outbox (COM-02, COM-04, COM-05):
   the admin page shows WhatsApp transport health, opted-in count, per-status
   counts and a test message to yourself.
 
+### Broadcasts
+
+Administrators and officers send announcements from `/admin/broadcasts`
+(COM-03). An audience is a set of roles (none ticked means everyone) narrowed
+to sites and/or buildings: residents belong to the building they currently
+occupy, other roles to the site or building their role assignment is scoped
+to, and a global assignment counts for every site. The form previews who
+matches before anything is sent. Drafts can be edited or cancelled; sending
+writes one in-app notification per recipient through the outbox, keyed per
+person so an interrupted send can be re-run without duplicates, with optional
+email copies (full text) and WhatsApp copies (title only, to people who opted
+in). The broadcast page shows recipients, how many have read it in the app,
+and email and WhatsApp copies by status. Residents read announcements at
+`/my/announcements`; opening one marks it read.
+
 ## Authentication
 
 Sessions are owned by the application, not a third-party provider, so the

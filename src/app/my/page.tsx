@@ -60,6 +60,7 @@ async function HomeContent() {
         <div className="grid grid-cols-2 gap-2 text-sm">
           <Link href="/my/facilities" className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800"><div className="font-medium">Facilities</div><div className="text-xs text-zinc-500">Book the gym or hall</div></Link>
           <Link href="/my/lost-found" className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800"><div className="font-medium">Lost &amp; found</div><div className="text-xs text-zinc-500">Found items and your claims</div></Link>
+          <Link href="/my/announcements" className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800"><div className="font-medium">Announcements</div><div className="text-xs text-zinc-500">Messages from the office</div></Link>
         </div>
       </section>
 
@@ -75,7 +76,7 @@ async function HomeContent() {
                 <li key={n.id} data-notification={n.id} data-read={n.readAt ? "true" : "false"} className={`p-3 text-sm ${n.readAt ? "text-zinc-500" : ""}`}>
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <div className="font-medium">{title}</div>
+                      <div className="font-medium">{n.event === "broadcast" ? <Link href={`/my/announcements/${(n.payload as { broadcastId?: string }).broadcastId ?? ""}`} className="underline">{title}</Link> : title}</div>
                       {body && <div className="mt-0.5">{body}</div>}
                       <div className="mt-1 text-xs text-zinc-500">{n.createdAt.toISOString().slice(0, 10)}</div>
                     </div>

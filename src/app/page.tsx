@@ -15,7 +15,7 @@ const modules: Array<[string, string, string?]> = [
   ["Keys", "Issue, return, lost and damaged keys", "/keys"],
   ["Inventory", "Stock, serialised assets, issues and returns", "/inventory"],
   ["Lost & found", "Found items, claims, handover and disposal", "/lost-found"],
-  ["Notifications", "In-app, email and WhatsApp"],
+  ["Notifications", "Broadcasts; in-app, email and WhatsApp delivery", "/admin/broadcasts"],
   ["Reports", "Occupancy, movements, maintenance, utilisation", "/dashboard"],
   ["Administration", "Users, roles, audit, configuration", "/admin/users"],
 ];

@@ -7,6 +7,8 @@ type EnqueueInput = {
   payload: Prisma.InputJsonValue;
   template?: string;
   channel?: NotificationChannel;
+  /** Which copies an in-app notification may fan out to (default: both, subject to the recipient's settings). */
+  fanout?: { email?: boolean; whatsapp?: boolean };
 };
 
 /**
@@ -33,7 +35,8 @@ export async function enqueueNotification(tx: Prisma.TransactionClient, input: E
   if (channel !== "IN_APP") return;
   const recipient = await tx.user.findUnique({ where: { id: input.recipientId }, select: { email: true, emailNotifications: true, status: true, whatsappNumber: true, whatsappNotifications: true, whatsappConsentAt: true } });
   if (!recipient || recipient.status === "DEACTIVATED") return;
-  if (process.env.EMAIL_FANOUT !== "false" && recipient.email && recipient.emailNotifications) {
+  const fan = { email: input.fanout?.email ?? true, whatsapp: input.fanout?.whatsapp ?? true };
+  if (fan.email && process.env.EMAIL_FANOUT !== "false" && recipient.email && recipient.emailNotifications) {
     await tx.notification.upsert({
       where: { idempotencyKey: `${input.idempotencyKey}:email` },
       update: {},
@@ -41,7 +44,7 @@ export async function enqueueNotification(tx: Prisma.TransactionClient, input: E
     });
   }
   // WhatsApp copy only with a number, the switch on and recorded consent (COM-02).
-  if (process.env.WHATSAPP_FANOUT !== "false" && recipient.whatsappNumber && recipient.whatsappNotifications && recipient.whatsappConsentAt) {
+  if (fan.whatsapp && process.env.WHATSAPP_FANOUT !== "false" && recipient.whatsappNumber && recipient.whatsappNotifications && recipient.whatsappConsentAt) {
     await tx.notification.upsert({
       where: { idempotencyKey: `${input.idempotencyKey}:whatsapp` },
       update: {},

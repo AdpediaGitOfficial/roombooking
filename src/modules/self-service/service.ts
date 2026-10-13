@@ -207,6 +207,8 @@ export function describeNotification(event: string, payload: unknown): { title: 
       return { title: "Booking declined", body: `${p.facility} on ${p.date} at ${p.startTime}${p.reason ? `: ${p.reason}` : "."}` };
     case "booking.cancelled":
       return { title: "Booking cancelled", body: `${p.facility} on ${p.date} at ${p.startTime}${p.reason ? `: ${p.reason}` : "."}` };
+    case "broadcast":
+      return { title: p.title ?? "Announcement", body: (p.body ?? "").length > 160 ? `${(p.body ?? "").slice(0, 157)}…` : p.body ?? "" };
     case "lostfound.claim_verified":
       return { title: "Lost and found claim verified", body: `${p.reference}: ${p.description}. Collect it from the accommodation office${p.storageLocation ? ` (${p.storageLocation})` : ""} with your ID.` };
     case "lostfound.claim_rejected":

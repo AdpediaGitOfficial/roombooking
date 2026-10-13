@@ -33,6 +33,7 @@ const T: Record<string, WaTemplate> = {
   "lostfound.claim_verified": { name: "lostfound_update", body: "Hello {{1}}, your lost and found claim {{2}} {{3}}. Open the staff portal for details.", params: (p, n) => [n, str(p, "reference"), "has been verified; collect the item from the accommodation office with your ID"] },
   "lostfound.claim_rejected": { name: "lostfound_update", body: "Hello {{1}}, your lost and found claim {{2}} {{3}}. Open the staff portal for details.", params: (p, n) => [n, str(p, "reference"), "could not be verified"] },
   "lostfound.returned": { name: "lostfound_update", body: "Hello {{1}}, your lost and found claim {{2}} {{3}}. Open the staff portal for details.", params: (p, n) => [n, str(p, "reference"), "is complete: the item has been handed over"] },
+  "broadcast": { name: "announcement", body: "Hello {{1}}, there is a new announcement from the accommodation office: {{2}}. Open the staff portal to read it.", params: (p, n) => [n, str(p, "title", "announcement")] },
   "test.whatsapp": { name: "test_message", body: "Hello {{1}}, this is a test message from Staff Accommodation Management. No action is needed.", params: (_p, n) => [n] },
 };
 const GENERIC: WaTemplate = { name: "notification", body: "Hello {{1}}, you have a new notification in the staff accommodation portal: {{2}}. Please open the portal for details.", params: (_p, n) => [n, "update"] };
