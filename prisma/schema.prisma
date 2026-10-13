@@ -173,6 +173,8 @@ model User {
   tokenHash           String?    @unique
   tokenPurpose        String?
   tokenExpiresAt      DateTime?
+  // Resident preference: receive email copies of in-app notifications (COM-01).
+  emailNotifications  Boolean    @default(true)
   status              UserStatus @default(INVITED)
   lastLoginAt         DateTime?
   createdAt           DateTime   @default(now())
@@ -856,24 +858,31 @@ enum NotificationStatus {
 // Outbox: written in the same transaction as the business action, delivered
 // by a worker with retries. idempotencyKey prevents duplicate sends (COM-07).
 model Notification {
-  id             String              @id @default(cuid())
-  recipientId    String
-  channel        NotificationChannel
-  event          String
-  template       String
-  payload        Json
-  idempotencyKey String              @unique
-  status         NotificationStatus  @default(QUEUED)
-  attempts       Int                 @default(0)
-  lastError      String?
-  sentAt         DateTime?
-  readAt         DateTime?
-  createdAt      DateTime            @default(now())
-  updatedAt      DateTime            @updatedAt
+  id                String              @id @default(cuid())
+  recipientId       String
+  channel           NotificationChannel
+  event             String
+  template          String
+  payload           Json
+  idempotencyKey    String              @unique
+  status            NotificationStatus  @default(QUEUED)
+  attempts          Int                 @default(0)
+  lastError         String?
+  // Delivery bookkeeping for the worker (COM-04): when to try next, a claim
+  // timestamp so concurrent workers never double-send, and what went out.
+  nextAttemptAt     DateTime?
+  lockedAt          DateTime?
+  subject           String?
+  deliveredTo       String?
+  providerMessageId String?
+  sentAt            DateTime?
+  readAt            DateTime?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
 
   recipient User @relation(fields: [recipientId], references: [id])
 
-  @@index([status, channel])
+  @@index([status, channel, nextAttemptAt])
   @@index([recipientId, readAt])
 }
 

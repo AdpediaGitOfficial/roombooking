@@ -6,7 +6,8 @@ export default function AdminLayout({ children }: LayoutProps<"/admin">) {
       <nav className="mb-6 flex flex-wrap gap-x-2 text-sm text-zinc-600 dark:text-zinc-400">
         <Link href="/" className="underline">Home</Link><span>/</span>
         <Link href="/admin/users" className="underline">Users</Link><span>·</span>
-        <Link href="/admin/audit" className="underline">Audit log</Link>
+        <Link href="/admin/audit" className="underline">Audit log</Link><span>·</span>
+        <Link href="/admin/notifications" className="underline">Notifications</Link>
       </nav>
       {children}
     </div>

@@ -4,7 +4,8 @@ import { NextResponse, type NextRequest } from "next/server";
 // Real session validation and authorisation happen server-side in
 // src/lib/auth (requireUser / requireRole); this only checks cookie presence.
 const SESSION_COOKIE = "sam_session";
-const PUBLIC_PATHS = ["/login", "/invite", "/api/health"];
+// /api/jobs authenticates with its own bearer secret, not a session cookie.
+const PUBLIC_PATHS = ["/login", "/invite", "/api/health", "/api/jobs"];
 
 function isPublic(pathname: string) {
   return PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));

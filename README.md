@@ -186,6 +186,30 @@ every export is audited (RPT-07). Chart colours come from the validated
 reference palette in `src/app/globals.css` with light and dark steps, legends
 and table views.
 
+## Email delivery
+
+Business actions write notifications to the outbox inside their own
+transaction; delivery is separate, so a mail failure never undoes an
+allocation, approval or ticket change (COM-06). In-app notifications also
+queue an email copy for people who have an address and have not switched
+email off in their profile (COM-01).
+
+- `src/modules/notifications/worker.ts` claims due emails one by one (two
+  workers never send the same one), renders the template, sends, and records
+  subject, recipient, provider message id, attempts and the last error.
+  Failures retry after 1, 5, 30, 120 and 720 minutes, then fail permanently
+  with an audit event; administrators can retry from `/admin/notifications`.
+- Transports: SMTP via nodemailer (`SMTP_*`, `MAIL_FROM`), a log transport
+  for development, or disabled. Links use `APP_BASE_URL`.
+- Run delivery with `npm run notifications:worker` (polls every
+  `EMAIL_WORKER_INTERVAL_SECONDS`) or have a scheduler call
+  `POST /api/jobs/notifications` with `Authorization: Bearer $JOBS_SECRET`.
+- `/admin/notifications` shows transport health, queue counts, recent
+  emails with failure reasons, retry, run-now and a test email.
+
+WhatsApp is not implemented yet; it will be another transport on the same
+outbox.
+
 ## Authentication
 
 Sessions are owned by the application, not a third-party provider, so the
@@ -226,6 +250,7 @@ MFA (client decision), and per-site scoping of role checks.
 | `npm run db:seed` | Seed demo data (idempotent) |
 | `npm run db:studio` | Browse the database |
 | `npm run db:reset` | Drop, recreate, migrate and seed (dev only) |
+| `npm run notifications:worker` | Email delivery worker (long-running) |
 
 ## Project layout
 
@@ -249,6 +274,8 @@ src/
   modules/keys/           key register service, actions, components
   modules/admin/          users and roles administration, audit log
   modules/reports/        occupancy dashboard, trend, CSV export, chart components
+  modules/notifications/  email templates, transports, outbox worker, admin actions
+scripts/notifications-worker.ts  standalone delivery process
   lib/uploads.ts          photo validation and storage
   lib/notifications.ts   notification outbox writer
   lib/audit.ts         append-only audit writer

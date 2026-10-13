@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { requireResident } from "@/modules/self-service/context";
 import { ProfileForm, PasswordForm } from "@/modules/self-service/components/forms";
+import { EmailPreferenceForm } from "@/modules/notifications/components/forms";
 import { logout } from "@/app/login/actions";
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
@@ -37,6 +38,11 @@ async function ProfileContent() {
           </div>
         </section>
       )}
+
+      <section className="mt-8">
+        <h2 className="text-lg font-semibold">Notifications</h2>
+        <div className="mt-2"><EmailPreferenceForm enabled={user.emailNotifications} /></div>
+      </section>
 
       <section className="mt-8">
         <h2 className="text-lg font-semibold">Password</h2>

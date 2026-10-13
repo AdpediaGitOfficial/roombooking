@@ -236,10 +236,10 @@ describe("notifications", () => {
     await prisma.staffProfile.update({ where: { id: ids.s4 }, data: { userId: resident.id } });
 
     const a = await allocate({ staffId: ids.s4, bedId: ids.r1b2, startDate: plus(60), endDate: plus(70), actorId });
-    const queued = await prisma.notification.findMany({ where: { recipientId: resident.id, event: "allocation.confirmed", payload: { path: ["allocationId"], equals: a.id } } });
-    expect(queued).toHaveLength(1);
-    expect(queued[0].status).toBe("QUEUED");
-    expect(queued[0].channel).toBe("IN_APP");
+    const queued = await prisma.notification.findMany({ where: { recipientId: resident.id, event: "allocation.confirmed", payload: { path: ["allocationId"], equals: a.id } }, orderBy: { channel: "asc" } });
+    // One in-app notification plus its email copy (fan-out), each exactly once.
+    expect(queued.map((n) => n.channel).sort()).toEqual(["EMAIL", "IN_APP"]);
+    expect(queued.every((n) => n.status === "QUEUED")).toBe(true);
 
     await cancel({ allocationId: a.id, actorId, reason: "test" });
     const cancelled = await prisma.notification.findMany({ where: { recipientId: resident.id, event: "allocation.cancelled" } });
