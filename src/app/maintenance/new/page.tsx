@@ -4,6 +4,7 @@ import { MAINTENANCE_COORDINATOR_ROLES } from "@/modules/maintenance/access";
 import { CATEGORIES } from "@/modules/maintenance/service";
 import { allRoomOptions, buildingOptions } from "@/modules/maintenance/context";
 import { NewWorkOrderForm } from "@/modules/maintenance/components/forms";
+import { PageHeader } from "@/components/shell/page-header";
 
 async function Content() {
   await requireRole(MAINTENANCE_COORDINATOR_ROLES, "/maintenance/new");
@@ -14,8 +15,7 @@ async function Content() {
 export default function NewTicketPage() {
   return (
     <main className="max-w-xl">
-      <h1 className="page-title">Raise a ticket</h1>
-      <p className="mt-1 mb-6 text-sm text-zinc-600">For issues reported by phone, inspection or in common areas.</p>
+      <PageHeader title="Raise a ticket" subtitle="For issues reported by phone, inspection or in common areas." />
       <Suspense fallback={<p className="text-sm text-zinc-500">Loading…</p>}>
         <Content />
       </Suspense>

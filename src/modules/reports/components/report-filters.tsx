@@ -41,7 +41,7 @@ export function Definitions({ lines, masked }: { lines: string[]; masked: boolea
 }
 
 export function Stat({ label, value, note }: { label: string; value: string | number; note?: string }) {
-  return <div className="card p-3"><dt className="text-xs uppercase tracking-wide text-zinc-500">{label}</dt><dd data-stat={label} className="mt-1 text-2xl font-semibold tabular-nums">{value}</dd>{note && <dd className="text-xs text-zinc-500">{note}</dd>}</div>;
+  return <div className="kpi"><dt className="kpi-label">{label}</dt><dd data-stat={label} className="kpi-value">{value}</dd>{note && <dd className="text-xs text-zinc-500">{note}</dd>}</div>;
 }
 
 export const th = "px-3 py-2";

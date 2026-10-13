@@ -4,6 +4,7 @@ import { requireRole } from "@/lib/auth/authorize";
 import { REPORT_VIEW_ROLES } from "@/modules/reports/access";
 import { getDashboard } from "@/modules/reports/service";
 import { defaultRange, facilityReport, keyReport, maintenanceReport, movementReport, scopeFor } from "@/modules/reports/suite";
+import { PageHeader } from "@/components/shell/page-header";
 
 async function Overview() {
   const user = await requireRole(REPORT_VIEW_ROLES, "/reports");
@@ -35,8 +36,7 @@ async function Overview() {
 export default function ReportsPage() {
   return (
     <main>
-      <h1 className="page-title">Reports</h1>
-      <p className="mt-1 mb-6 text-sm text-zinc-600">Last 30 days across the sites you can see. Each report has date, site, building, status and category filters and a CSV export.</p>
+      <PageHeader title="Reports" subtitle="Last 30 days across the sites you can see. Each report has date, site, building, status and category filters and a CSV export." crumbs={[["Reports"]]} />
       <Suspense fallback={<p className="text-sm text-zinc-500">Loading…</p>}>
         <Overview />
       </Suspense>

@@ -4,6 +4,7 @@ import { requireRole } from "@/lib/auth/authorize";
 import { REPORT_VIEW_ROLES } from "@/modules/reports/access";
 import { DEFINITIONS, facilityReport, filterOptions, parseRange, scopeFor } from "@/modules/reports/suite";
 import { Definitions, ReportFilters, Stat, qs, table, tbody, td, th, thead, wrap } from "@/modules/reports/components/report-filters";
+import { PageHeader } from "@/components/shell/page-header";
 
 type Search = Promise<Record<string, string | undefined>>;
 
@@ -45,8 +46,7 @@ async function Content({ searchParams }: { searchParams: Search }) {
 export default function FacilitiesReportPage({ searchParams }: PageProps<"/reports/facilities">) {
   return (
     <main>
-      <h1 className="page-title">Facility use</h1>
-      <p className="mt-1 mb-6 text-sm text-zinc-600">Bookings, attendance, cancellations, no-shows and utilisation by facility.</p>
+      <PageHeader title="Facility use" subtitle="Bookings, attendance, cancellations, no-shows and utilisation by facility." />
       <Suspense fallback={<p className="text-sm text-zinc-500">Loading…</p>}><Content searchParams={searchParams as Search} /></Suspense>
     </main>
   );

@@ -31,7 +31,7 @@ async function Content({ params }: { params: Params }) {
           <h2 className="section-title">Delivery</h2>
           <dl className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-4">
             {[["Recipients", b.recipientCount], ["Read in app", `${delivery.read} of ${delivery.inApp}`], ["Email", b.emailCopy ? `${delivery.email.SENT ?? 0} sent · ${delivery.email.QUEUED ?? 0} queued · ${delivery.email.FAILED ?? 0} failed` : "off"], ["WhatsApp", b.whatsappCopy ? `${(delivery.whatsapp.SENT ?? 0) + (delivery.whatsapp.DELIVERED ?? 0)} sent · ${delivery.whatsapp.QUEUED ?? 0} queued · ${delivery.whatsapp.FAILED ?? 0} failed` : "off"]].map(([label, value]) => (
-              <div key={String(label)} className="card p-3"><dt className="text-xs uppercase tracking-wide text-zinc-500">{label}</dt><dd data-delivery={label} className="mt-1 text-sm font-medium">{value}</dd></div>
+              <div key={String(label)} className="kpi"><dt className="kpi-label">{label}</dt><dd data-delivery={label} className="mt-1 text-sm font-medium">{value}</dd></div>
             ))}
           </dl>
           <p className="mt-2 text-xs text-zinc-500">{sum(delivery.email) + sum(delivery.whatsapp) > 0 ? "Copies go out from the notification worker; failures and retries are on the Notifications page." : "No copies were queued (recipients have email or WhatsApp off, or copies were not requested)."}</p>

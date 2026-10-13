@@ -4,6 +4,7 @@ import { hasRole, requireRole } from "@/lib/auth/authorize";
 import { APPROVALS_AREA_ROLES, REQUEST_ADMIN_ROLES } from "@/modules/requests/access";
 import { listAllRequests, listInbox, withDelegations, type RequestListFilter, type RequestRecord } from "@/modules/requests/service";
 import { RequestStatusBadge } from "@/modules/requests/components/request-view";
+import { PageHeader } from "@/components/shell/page-header";
 
 const FILTERS: Array<[RequestListFilter | "inbox", string]> = [
   ["inbox", "Waiting for me"],
@@ -44,7 +45,7 @@ async function Inbox({ searchParams }: { searchParams: Promise<{ filter?: string
       {isAdmin && (
         <nav className="flex flex-wrap gap-2 text-sm">
           {FILTERS.map(([f, label]) => (
-            <Link key={f} href={`/approvals?filter=${f}`} className={`rounded-full px-3 py-1 ${f === filter ? "bg-deep text-white" : "border border-zinc-300"}`}>{label}</Link>
+            <Link key={f} href={`/approvals?filter=${f}`} className={`pill ${f === filter ? "pill-on" : ""}`}>{label}</Link>
           ))}
         </nav>
       )}
@@ -66,8 +67,7 @@ async function Inbox({ searchParams }: { searchParams: Promise<{ filter?: string
 export default function ApprovalsPage({ searchParams }: PageProps<"/approvals">) {
   return (
     <main>
-      <h1 className="page-title">Approvals</h1>
-      <p className="mt-1 mb-6 text-sm text-zinc-600">Requests waiting on a step you are responsible for.</p>
+      <PageHeader title="Approvals" subtitle="Requests waiting on a step you are responsible for." crumbs={[["Approvals"]]} />
       <Suspense fallback={<p className="text-sm text-zinc-500">Loading…</p>}>
         <Inbox searchParams={searchParams as Promise<{ filter?: string }>} />
       </Suspense>

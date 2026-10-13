@@ -3,6 +3,7 @@ import Link from "next/link";
 import { requireRole } from "@/lib/auth/authorize";
 import { FORM_BUILDER_ROLES, currentOf, draftOf, listTypes } from "@/modules/requests/builder";
 import { CreateTypeForm } from "@/modules/requests/components/form-builder";
+import { PageHeader } from "@/components/shell/page-header";
 
 async function Content() {
   const user = await requireRole(FORM_BUILDER_ROLES, "/admin/forms");
@@ -40,8 +41,7 @@ async function Content() {
 export default function FormsPage() {
   return (
     <main>
-      <h1 className="page-title">Forms &amp; approval routes</h1>
-      <p className="mt-1 mb-6 text-sm text-zinc-600">Design request forms (fields, required flags, help text, conditional visibility) and their approval routes. Changes are drafted, then published as a new version; requests already submitted keep the version they used.</p>
+      <PageHeader title="Forms & approval routes" subtitle="Design request forms (fields, required flags, help text, conditional visibility) and their approval routes. Changes are drafted, then published as a new version; requests already submitted keep the version they used." crumbs={[["Administration"], ["Forms & routes"]]} />
       <Suspense fallback={<p className="text-sm text-zinc-500">Loading…</p>}><Content /></Suspense>
     </main>
   );

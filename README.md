@@ -500,8 +500,9 @@ prisma/
   migrations/          SQL migrations incl. constraints Prisma cannot express
   seed.ts              demo data
 src/
-  app/globals.css      design tokens (Fynix minimal system: greens, glass surfaces, Inter)
-  components/shell/    sidebar application shell and role-gated navigation
+  app/globals.css      design tokens and component classes (Fynix minimal system)
+  components/shell/    deep-green sidebar shell, top bar, page header, role-gated navigation
+  app/search/          global search over people, beds and tickets
   app/                 Next.js App Router pages and API routes
     login/             sign-in page, server actions (login/logout)
     api/health/        liveness + database check
@@ -531,11 +532,12 @@ docs/
 
 ## Conventions
 
-- The UI follows the Fynix minimal design system: neutral glass surfaces,
-  one primary green for actions, deep green for emphasis, semantic colours
-  only for status. Tokens live in `src/app/globals.css`; pages use the
-  `card`, `page-title`, `section-title`, `metric`, `btn` and `badge`
-  classes plus Tailwind utilities mapped onto the same palette.
+- The UI follows the Fynix minimal design system with three surface
+  levels (tinted canvas, white panels, soft sub-surfaces), a deep-green
+  sidebar, one primary green for actions and semantic colours only for
+  status. Tokens and component classes (`panel`, `kpi`, `chip`, `pill`,
+  `btn`, `table`, `steps`, `timeline`, `att`) live in `src/app/globals.css`;
+  every page opens with `PageHeader` (breadcrumb, title, purpose, actions).
 - Store timestamps in UTC; each site carries an IANA timezone for display and
   report boundaries.
 - Every state transition on allocations, requests, work orders, keys and

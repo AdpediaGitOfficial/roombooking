@@ -14,7 +14,7 @@ const STATUS_STYLE: Record<string, string> = {
 
 export function RequestStatusBadge({ request }: { request: Parameters<typeof describeStatus>[0] }) {
   const style = STATUS_STYLE[request.status] ?? "bg-zinc-100 text-zinc-700";
-  return <span data-status={request.status} className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${style}`}>{describeStatus(request)}</span>;
+  return <span data-status={request.status} className={`chip ${style}`}>{describeStatus(request)}</span>;
 }
 
 export function RequestSteps({ request }: { request: RequestRecord }) {

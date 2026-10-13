@@ -4,30 +4,44 @@ import { requireRole } from "@/lib/auth/authorize";
 import { REPORT_VIEW_ROLES } from "@/modules/reports/access";
 import { ARRIVAL_WINDOW_DAYS, getDashboard, getOccupancyTrend, type MovementRow } from "@/modules/reports/service";
 import { OccupancyStackChart, OccupancyTrendChart } from "@/modules/reports/components/charts";
+import { PageHeader } from "@/components/shell/page-header";
 
-function Tile({ label, value, note, hero, href }: { label: string; value: string | number; note?: string; hero?: boolean; href?: string }) {
+type Severity = "danger" | "warning" | "info";
+
+function Tile({ label, value, note, hero, href, accent, icon, chip, pct }: { label: string; value: string | number; note?: React.ReactNode; hero?: boolean; href?: string; accent?: string; icon?: string; chip?: React.ReactNode; pct?: number }) {
   const inner = (
     <>
-      <dt className="text-xs uppercase tracking-wide text-zinc-500">{label}</dt>
-      <dd data-tile={label} className={`mt-1 font-semibold ${hero ? "text-4xl" : "text-2xl"}`}>{value}</dd>
-      {note && <dd className="mt-1 text-xs text-zinc-500">{note}</dd>}
+      <dt className="kpi-label">{label}{icon && <span className="kpi-icon" aria-hidden="true">{icon}</span>}</dt>
+      <dd data-tile={label} className="kpi-value">{value}{hero && note && <small>{note}</small>}</dd>
+      {(chip || (!hero && note)) && <dd className="kpi-foot">{chip}{!hero && note}</dd>}
+      {hero && typeof pct === "number" && <div className="gauge" style={{ "--pct": `${pct}%` } as React.CSSProperties} aria-hidden="true" />}
     </>
   );
-  const cls = "card p-4";
-  return href ? <Link href={href} className={`${cls} block hover:bg-zinc-50`}>{inner}</Link> : <div className={cls}>{inner}</div>;
+  const cls = `kpi${hero ? " kpi-hero" : ""}`;
+  const style = accent ? ({ "--acc": accent } as React.CSSProperties) : undefined;
+  return href ? <Link href={href} className={cls} style={style}>{inner}</Link> : <div className={cls} style={style}>{inner}</div>;
 }
 
-function MovementList({ rows, empty, kindLabel }: { rows: MovementRow[]; empty: string; kindLabel: (k: MovementRow["kind"]) => string }) {
-  if (rows.length === 0) return <p className="mt-2 text-sm text-zinc-500">{empty}</p>;
+function MovementTable({ rows }: { rows: Array<MovementRow & { direction: "arrival" | "departure" }> }) {
+  if (rows.length === 0) return <p className="panel-body text-sm text-zinc-500">No arrivals or departures due in the next two weeks.</p>;
+  const label = (k: MovementRow["kind"]) => (k === "OVERDUE_ARRIVAL" ? "Overdue arrival" : k === "OVERSTAY" ? "Overstaying" : k === "ARRIVAL" ? "Arriving" : "Departing");
+  const chip = (k: MovementRow["kind"]) => (k === "OVERDUE_ARRIVAL" || k === "OVERSTAY" ? "chip chip-dot chip-danger" : k === "ARRIVAL" ? "chip chip-dot chip-warning" : "chip chip-dot chip-info");
   return (
-    <ul className="mt-2 divide-y divide-zinc-200 card text-sm">
-      {rows.map((r) => (
-        <li key={r.allocationId} data-movement={r.kind} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
-          <span><Link href={`/accommodation/allocations/${r.allocationId}`} className="font-medium underline">{r.staff}</Link> <span className="text-zinc-500">· {r.employeeId} · bed {r.bed}, {r.building}</span></span>
-          <span className={`text-xs tabular-nums ${r.kind === "OVERDUE_ARRIVAL" || r.kind === "OVERSTAY" ? "font-medium text-red-700" : "text-zinc-500"}`}>{kindLabel(r.kind)} {r.date}</span>
-        </li>
-      ))}
-    </ul>
+    <div className="overflow-x-auto"><table className="table">
+      <thead><tr><th>Resident</th><th>Bed</th><th>Movement</th><th>Date</th><th>Status</th><th className="num"></th></tr></thead>
+      <tbody>
+        {rows.map((r) => (
+          <tr key={`${r.direction}-${r.allocationId}`} data-movement={r.kind}>
+            <td><div className="who"><span className="av">{r.staff.split(" ").map((p) => p[0]).join("").slice(0, 2)}</span><div><b>{r.staff}</b><small>{r.employeeId}</small></div></div></td>
+            <td>{r.bed}<span className="sub">{r.building}</span></td>
+            <td>{r.direction === "arrival" ? "Arrival" : "Departure"}</td>
+            <td className="tabular-nums">{r.date}</td>
+            <td><span className={chip(r.kind)}>{label(r.kind)}</span></td>
+            <td className="num"><Link href={`/accommodation/allocations/${r.allocationId}`} className="btn btn-small">{r.direction === "arrival" && r.kind !== "OVERSTAY" ? "Check in" : "Open"}</Link></td>
+          </tr>
+        ))}
+      </tbody>
+    </table></div>
   );
 }
 
@@ -38,84 +52,83 @@ async function Dashboard({ searchParams }: { searchParams: Promise<{ siteId?: st
   const [d, trend] = await Promise.all([getDashboard(siteId), getOccupancyTrend(siteId, 30)]);
   const s = d.summary;
   const p = d.pending;
-  const input = "rounded-md border border-zinc-300 px-3 py-2 text-sm";
-  const pendingItems: Array<[string, number, string]> = [
-    ["Overdue arrivals (not checked in)", p.overdueArrivals, "/accommodation/allocations?filter=upcoming"],
-    ["Overstays past end date", p.overstays, "/accommodation/allocations?filter=active"],
-    ["Approved room changes awaiting move", p.approvedRoomChanges, "/approvals?filter=approved"],
-    ["Requests awaiting approval", p.pendingRequests, "/approvals?filter=pending"],
-    ["Keys overdue for return", p.overdueKeys, "/keys?filter=overdue"],
-    ["Maintenance tickets unassigned", p.unassignedTickets, "/maintenance?filter=unassigned"],
+  const pendingItems: Array<[string, string, number, string, Severity]> = [
+    ["Overdue arrivals", "Allocated, not checked in by the start date", p.overdueArrivals, "/accommodation/allocations?filter=upcoming", "danger"],
+    ["Overstays past end date", "Still checked in after the allocation ended", p.overstays, "/accommodation/allocations?filter=active", "danger"],
+    ["Requests awaiting approval", "Waiting on an approver", p.pendingRequests, "/approvals?filter=pending", "warning"],
+    ["Maintenance tickets unassigned", "No engineer or vendor yet", p.unassignedTickets, "/maintenance?filter=unassigned", "warning"],
+    ["Keys overdue for return", "Past the agreed return date", p.overdueKeys, "/keys?filter=overdue", "warning"],
+    ["Approved room changes awaiting move", "Beds reserved for the transfer", p.approvedRoomChanges, "/approvals?filter=approved", "info"],
   ];
+  const movements = [...d.arrivals.map((r) => ({ ...r, direction: "arrival" as const })), ...d.departures.map((r) => ({ ...r, direction: "departure" as const }))].sort((a, b) => a.date.localeCompare(b.date));
+  const last = trend[trend.length - 1]?.occupied ?? 0;
+  const first = trend[0]?.occupied ?? 0;
+  const delta = last - first;
+  const siteName = siteId ? d.sites.find((x) => x.id === siteId)?.name : null;
 
   return (
     <>
-      <form method="get" className="flex flex-wrap items-end gap-3">
-        <label className="text-sm">Site<br /><select name="siteId" defaultValue={siteId ?? ""} className={input}><option value="">All sites</option>{d.sites.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select></label>
-        <button type="submit" className="rounded-md border border-zinc-300 px-3 py-2 text-sm font-medium">Apply</button>
-        <a href={`/api/reports/occupancy.csv${siteId ? `?siteId=${siteId}` : ""}`} className="ml-auto rounded-md border border-zinc-300 px-3 py-2 text-sm font-medium">Export bed list (CSV)</a>
-      </form>
-      <p className="mt-2 text-xs text-zinc-500">As of {d.today} ({d.timezone}). Occupied counts checked-in residents and confirmed allocations that have started.</p>
+      <PageHeader
+        crumbs={[["Dashboard"]]}
+        title="Occupancy dashboard"
+        subtitle={`As of ${d.today} (${d.timezone})${siteName ? ` · ${siteName}` : " · all sites"}. Occupied counts checked-in residents and confirmed allocations that have started.`}
+        actions={<>
+          <form method="get" className="flex items-center gap-2">
+            <label className="sr-only" htmlFor="siteId">Site</label>
+            <select id="siteId" name="siteId" defaultValue={siteId ?? ""} className="rounded-md border border-zinc-300 px-3 py-2 text-sm"><option value="">All sites</option>{d.sites.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select>
+            <button type="submit" className="btn">Apply</button>
+          </form>
+          <a href={`/api/reports/occupancy.csv${siteId ? `?siteId=${siteId}` : ""}`} className="btn">Export bed list</a>
+          <Link href="/accommodation/allocations/new" className="btn btn-primary">＋ New allocation</Link>
+        </>}
+      />
 
-      <dl className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-6">
-        <Tile label="Occupancy" value={`${d.occupancyRate}%`} note={`${s.occupied} of ${s.capacity} beds`} hero />
-        <Tile label="Occupied" value={s.occupied} note={`${s.checkedIn} checked in · ${s.awaitingCheckIn} awaiting`} />
-        <Tile label="Vacant" value={s.vacant} note={s.upcomingArrivals ? `${s.upcomingArrivals} reserved for arrivals` : undefined} href="/accommodation/allocations/new" />
-        <Tile label="Blocked" value={s.blocked} note={s.retired ? `${s.retired} retired` : undefined} href="/accommodation" />
-        <Tile label={`Arrivals · ${ARRIVAL_WINDOW_DAYS} days`} value={d.arrivals.length} note={p.overdueArrivals ? `${p.overdueArrivals} overdue` : undefined} />
-        <Tile label={`Departures · ${ARRIVAL_WINDOW_DAYS} days`} value={d.departures.length} note={p.overstays ? `${p.overstays} overstaying` : undefined} />
+      <dl className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+        <Tile label="Occupancy" value={`${d.occupancyRate}%`} note={`${s.occupied} of ${s.capacity} beds`} hero pct={d.occupancyRate} icon="◔" chip={delta !== 0 ? <span className="chip chip-lite">{delta > 0 ? "▲" : "▼"} {Math.abs(delta)} vs 30 days ago</span> : undefined} />
+        <Tile label="Occupied" value={s.occupied} note={<>{s.checkedIn} checked in · {s.awaitingCheckIn} awaiting</>} accent="var(--deep)" icon="▣" href="/accommodation/allocations?filter=active" />
+        <Tile label="Vacant" value={s.vacant} note={s.upcomingArrivals ? `${s.upcomingArrivals} reserved for arrivals` : "ready to allocate"} accent="var(--primary)" icon="▢" href="/accommodation/allocations/new" />
+        <Tile label="Blocked" value={s.blocked} note={s.retired ? `${s.retired} retired` : "out of service"} accent="#aeb8b1" icon="⊘" href="/accommodation" />
+        <Tile label={`Arrivals · ${ARRIVAL_WINDOW_DAYS}d`} value={d.arrivals.length} note={p.overdueArrivals ? undefined : "on schedule"} chip={p.overdueArrivals ? <span className="chip chip-warning">{p.overdueArrivals} overdue</span> : undefined} accent="var(--warning)" icon="→" href="/accommodation/allocations?filter=upcoming" />
+        <Tile label={`Departures · ${ARRIVAL_WINDOW_DAYS}d`} value={d.departures.length} note={p.overstays ? undefined : "no overstays"} chip={p.overstays ? <span className="chip chip-danger">{p.overstays} overstaying</span> : undefined} accent="var(--info)" icon="←" href="/accommodation/allocations?filter=active" />
       </dl>
 
-      <div className="mt-8 grid gap-8 lg:grid-cols-2">
-        <section>
-          <h2 className="section-title">Capacity by building</h2>
-          <p className="mb-3 text-xs text-zinc-500">Beds in service, by current state.</p>
-          <OccupancyStackChart rows={d.buildings.map((b) => ({ id: b.id, label: d.sites.length > 1 && !siteId ? `${b.name} (${b.siteName})` : b.name, occupied: b.summary.occupied, vacant: b.summary.vacant, blocked: b.summary.blocked, href: `/accommodation/buildings/${b.id}` }))} />
+      <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
+        <section className="panel">
+          <div className="panel-head"><div><h2>Capacity by building</h2><p>Beds in service, by current state</p></div></div>
+          <div className="panel-body">
+            <OccupancyStackChart rows={d.buildings.map((b) => ({ id: b.id, label: d.sites.length > 1 && !siteId ? `${b.name} (${b.siteName})` : b.name, occupied: b.summary.occupied, vacant: b.summary.vacant, blocked: b.summary.blocked, href: `/accommodation/buildings/${b.id}` }))} />
+          </div>
         </section>
-        <section>
-          <h2 className="section-title">Occupied beds, last 30 days</h2>
-          <p className="mb-3 text-xs text-zinc-500">From actual check-in and check-out times; capacity today is {trend[trend.length - 1]?.capacity ?? 0}.</p>
-          <OccupancyTrendChart points={trend} />
-        </section>
+        <div className="grid gap-4 content-start">
+          <section className="panel">
+            <div className="panel-head"><div><h2>Needs attention</h2><p>Items that block an arrival, a departure or a resident</p></div></div>
+            <ul className="att">
+              {pendingItems.map(([label, hint, value, href, sev]) => (
+                <li key={label} className={value > 0 ? `sev-${sev}` : ""}><i aria-hidden="true" /><Link href={href} data-pending={label}><b>{label}</b><small>{hint}</small></Link><span className="n">{value}</span></li>
+              ))}
+            </ul>
+          </section>
+          <section className="panel">
+            <div className="panel-head"><div><h2>Occupied beds, last 30 days</h2><p>From actual check-in and check-out times; capacity today is {trend[trend.length - 1]?.capacity ?? 0}</p></div>{delta !== 0 && <span className={`chip ${delta > 0 ? "chip-success" : "chip-warning"}`}>{delta > 0 ? "▲" : "▼"} {Math.abs(delta)} this month</span>}</div>
+            <div className="panel-body"><OccupancyTrendChart points={trend} /></div>
+          </section>
+        </div>
       </div>
 
-      <section className="mt-8">
-        <h2 className="section-title">Pending actions</h2>
-        <ul className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          {pendingItems.map(([label, value, href]) => (
-            <li key={label}>
-              <Link href={href} data-pending={label} className={`flex items-center justify-between rounded-lg border px-3 py-2 text-sm ${value > 0 ? "border-amber-300 bg-amber-50" : "border-zinc-200"}`}>
-                <span>{label}</span><span className="text-lg font-semibold tabular-nums">{value}</span>
-              </Link>
-            </li>
-          ))}
-        </ul>
+      <section className="panel mt-4">
+        <div className="panel-head"><div><h2>Arrivals and departures, next {ARRIVAL_WINDOW_DAYS} days</h2><p>Confirmed allocations starting or ending, overdue first</p></div><Link href="/accommodation/allocations?filter=upcoming" className="btn btn-small">All allocations</Link></div>
+        <MovementTable rows={movements} />
       </section>
-
-      <div className="mt-8 grid gap-8 lg:grid-cols-2">
-        <section>
-          <h2 className="section-title">Arrivals</h2>
-          <MovementList rows={d.arrivals} empty="No arrivals due in the next two weeks." kindLabel={(k) => (k === "OVERDUE_ARRIVAL" ? "overdue since" : "due")} />
-        </section>
-        <section>
-          <h2 className="section-title">Departures</h2>
-          <MovementList rows={d.departures} empty="No departures due in the next two weeks." kindLabel={(k) => (k === "OVERSTAY" ? "overstaying since" : "due")} />
-        </section>
-      </div>
     </>
   );
 }
 
 export default function DashboardPage({ searchParams }: PageProps<"/dashboard">) {
   return (
-    <main className="mx-auto w-full max-w-6xl px-4 py-8">
-      <nav className="mb-4 text-sm text-zinc-600"><Link href="/" className="underline">Home</Link><span className="mx-2">/</span>Dashboard</nav>
-      <h1 className="page-title">Occupancy dashboard</h1>
-      <div className="mt-4">
-        <Suspense fallback={<p className="text-sm text-zinc-500">Loading…</p>}>
-          <Dashboard searchParams={searchParams as Promise<{ siteId?: string }>} />
-        </Suspense>
-      </div>
+    <main>
+      <Suspense fallback={<p className="text-sm text-zinc-500">Loading…</p>}>
+        <Dashboard searchParams={searchParams as Promise<{ siteId?: string }>} />
+      </Suspense>
     </main>
   );
 }

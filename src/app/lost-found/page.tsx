@@ -6,6 +6,7 @@ import { CATEGORIES, ITEM_FILTERS, RETENTION_DAYS, listItems, lostFoundSummary, 
 import { registerOptions } from "@/modules/lost-found/context";
 import { StatusBadge, when } from "@/modules/lost-found/components/views";
 import { RegisterItemForm } from "@/modules/lost-found/components/forms";
+import { PageHeader } from "@/components/shell/page-header";
 
 type Search = Promise<{ filter?: string; q?: string }>;
 
@@ -20,12 +21,12 @@ async function Register({ searchParams }: { searchParams: Search }) {
     <>
       <dl className="grid grid-cols-2 gap-3 sm:grid-cols-5">
         {[["Open items", summary.open], ["Claims to verify", summary.claims], ["Due for disposal", summary.due], ["Returned (30 d)", summary.returned30], ["Disposed (30 d)", summary.disposed30]].map(([label, value]) => (
-          <div key={label} className="card p-3"><dt className="text-xs uppercase tracking-wide text-zinc-500">{label}</dt><dd data-summary={label} className="mt-1 text-2xl font-semibold tabular-nums">{value}</dd></div>
+          <div key={label} className="kpi"><dt className="kpi-label">{label}</dt><dd data-summary={label} className="kpi-value">{value}</dd></div>
         ))}
       </dl>
       <div className="mt-4 flex flex-wrap items-center gap-2">
         <nav className="flex flex-wrap gap-2 text-sm">
-          {ITEM_FILTERS.map(([f, label]) => <Link key={f} href={`/lost-found?filter=${f}${q ? `&q=${encodeURIComponent(q)}` : ""}`} className={`rounded-full px-3 py-1 ${f === filter ? "bg-deep text-white" : "border border-zinc-300"}`}>{label}</Link>)}
+          {ITEM_FILTERS.map(([f, label]) => <Link key={f} href={`/lost-found?filter=${f}${q ? `&q=${encodeURIComponent(q)}` : ""}`} className={`pill ${f === filter ? "pill-on" : ""}`}>{label}</Link>)}
         </nav>
         <form method="get" action="/lost-found" className="ml-auto flex items-center gap-2 text-sm">
           <input type="hidden" name="filter" value={filter} />
@@ -64,8 +65,7 @@ async function Register({ searchParams }: { searchParams: Search }) {
 export default function LostFoundPage({ searchParams }: PageProps<"/lost-found">) {
   return (
     <main>
-      <h1 className="page-title">Lost &amp; found</h1>
-      <p className="mt-1 mb-6 text-sm text-zinc-600">Found items, storage, claims, handover and disposal.</p>
+      <PageHeader title="Lost & found" subtitle="Found items, storage, claims, handover and disposal." crumbs={[["Lost & found"]]} />
       <Suspense fallback={<p className="text-sm text-zinc-500">Loading…</p>}>
         <Register searchParams={searchParams as Search} />
       </Suspense>

@@ -18,7 +18,7 @@ const LABELS: Record<BedState, string> = {
 
 export function StateBadge({ state }: { state: BedState }) {
   return (
-    <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${STYLES[state]}`}>
+    <span className={`chip ${STYLES[state]}`}>
       {LABELS[state]}
     </span>
   );

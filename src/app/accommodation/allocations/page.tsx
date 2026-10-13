@@ -5,6 +5,7 @@ import { ALLOCATION_VIEW_ROLES } from "@/modules/allocations/access";
 import { listAllocations, type AllocationListFilter } from "@/modules/allocations/service";
 import { AllocationStatusBadge } from "@/modules/allocations/components/status-badge";
 import { isoDate } from "@/modules/accommodation/occupancy";
+import { PageHeader } from "@/components/shell/page-header";
 
 const FILTERS: Array<[AllocationListFilter, string]> = [
   ["active", "Checked in"],
@@ -19,48 +20,43 @@ async function AllocationList({ searchParams }: { searchParams: Promise<{ filter
   const filter = (FILTERS.some(([f]) => f === raw) ? raw : "active") as AllocationListFilter;
   const allocations = await listAllocations(filter, staffId || null);
 
+  const counts = { active: allocations.filter((a) => a.status === "CHECKED_IN").length };
   return (
-    <>
-      <nav className="flex flex-wrap gap-2 text-sm">
-        {FILTERS.map(([f, label]) => (
-          <Link
-            key={f}
-            href={`/accommodation/allocations?filter=${f}`}
-            className={`rounded-full px-3 py-1 ${f === filter ? "bg-deep text-white" : "border border-zinc-300"}`}
-          >
-            {label}
-          </Link>
-        ))}
-      </nav>
-      <div className="mt-4 overflow-x-auto card">
-        <table className="w-full text-sm">
-          <thead className="bg-zinc-50 text-left text-xs uppercase tracking-wide text-zinc-500">
+    <section className="panel">
+      <div className="toolbar">
+        <nav className="flex flex-wrap gap-1.5" aria-label="Filter">
+          {FILTERS.map(([f, label]) => (
+            <Link key={f} href={`/accommodation/allocations?filter=${f}${staffId ? `&staffId=${staffId}` : ""}`} className={`pill${f === filter ? " pill-on" : ""}`}>{label}</Link>
+          ))}
+        </nav>
+        {staffId && <Link href={`/accommodation/allocations?filter=${filter}`} className="chip chip-info">Filtered to one person · clear ×</Link>}
+        <span className="ml-auto text-xs text-zinc-500">{allocations.length} shown{filter === "active" ? ` · ${counts.active} checked in` : ""}</span>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="table">
+          <thead>
             <tr>
-              <th className="px-3 py-2">Resident</th>
-              <th className="px-3 py-2">Bed</th>
-              <th className="px-3 py-2">From / to</th>
-              <th className="px-3 py-2">Status</th>
-              <th className="px-3 py-2"></th>
+              <th>Resident</th>
+              <th>Bed</th>
+              <th>From → to</th>
+              <th>Status</th>
+              <th className="num"></th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-200">
+          <tbody>
             {allocations.map((a) => (
               <tr key={a.id} data-allocation={a.id}>
-                <td className="px-3 py-3">
-                  <div>{a.staff.firstName} {a.staff.lastName}</div>
-                  <div className="text-xs text-zinc-500">{a.staff.employeeId}</div>
+                <td>
+                  <div className="who"><span className="av">{(a.staff.firstName[0] ?? "") + (a.staff.lastName[0] ?? "")}</span><div><b>{a.staff.firstName} {a.staff.lastName}</b><small>{a.staff.employeeId}</small></div></div>
                 </td>
-                <td className="px-3 py-3">
-                  <div>{a.bed.code}</div>
-                  <div className="text-xs text-zinc-500">{a.bed.room.building.name} · Room {a.bed.room.code}</div>
-                </td>
-                <td className="px-3 py-3 tabular-nums">{isoDate(a.startDate)} → {a.endDate ? isoDate(a.endDate) : "open-ended"}</td>
-                <td className="px-3 py-3"><AllocationStatusBadge status={a.status} /></td>
-                <td className="px-3 py-3 text-right">
+                <td>{a.bed.code}<span className="sub">{a.bed.room.building.name} · Room {a.bed.room.code}</span></td>
+                <td className="tabular-nums">{isoDate(a.startDate)} → {a.endDate ? isoDate(a.endDate) : "open-ended"}</td>
+                <td><AllocationStatusBadge status={a.status} /></td>
+                <td className="num">
                   {requestId && (a.status === "CONFIRMED" || a.status === "CHECKED_IN") ? (
-                    <Link href={`/accommodation/allocations/${a.id}/transfer?requestId=${requestId}&reason=${encodeURIComponent(`Room change request ${requestId.slice(-8).toUpperCase()}`)}`} className="underline">Transfer for request</Link>
+                    <Link href={`/accommodation/allocations/${a.id}/transfer?requestId=${requestId}&reason=${encodeURIComponent(`Room change request ${requestId.slice(-8).toUpperCase()}`)}`} className="btn btn-small">Transfer for request</Link>
                   ) : (
-                    <Link href={`/accommodation/allocations/${a.id}`} className="underline">Open</Link>
+                    <Link href={`/accommodation/allocations/${a.id}`} className={`btn btn-small${a.status === "CONFIRMED" ? "" : " btn-ghost"}`}>{a.status === "CONFIRMED" ? "Check in" : "Open"}</Link>
                   )}
                 </td>
               </tr>
@@ -71,23 +67,15 @@ async function AllocationList({ searchParams }: { searchParams: Promise<{ filter
           </tbody>
         </table>
       </div>
-    </>
+    </section>
   );
 }
 
 export default function AllocationsPage({ searchParams }: PageProps<"/accommodation/allocations">) {
   return (
     <main>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="page-title">Allocations</h1>
-          <p className="mt-1 text-sm text-zinc-600">Who is in which bed, arrivals and departures.</p>
-        </div>
-        <Link href="/accommodation/allocations/new" className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-ink">
-          New allocation
-        </Link>
-      </div>
-      <div className="mt-6">
+      <PageHeader crumbs={[["Accommodation", "/accommodation"], ["Allocations"]]} title="Allocations" subtitle="Who is in which bed, who is arriving and who is leaving." actions={<><Link href="/accommodation" className="btn">Buildings &amp; rooms</Link><Link href="/accommodation/allocations/new" className="btn btn-primary">＋ New allocation</Link></>} />
+      <div>
         <Suspense fallback={<p className="text-sm text-zinc-500">Loading…</p>}>
           <AllocationList searchParams={searchParams as Promise<{ filter?: string; staffId?: string; requestId?: string }>} />
         </Suspense>

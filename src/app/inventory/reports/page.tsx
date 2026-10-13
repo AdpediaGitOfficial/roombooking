@@ -6,6 +6,7 @@ import { prisma } from "@/lib/db";
 import { INVENTORY_VIEW_ROLES } from "@/modules/inventory/access";
 import { allocatedReport, conditionReport, describeCondition, describeTransaction, movementReport, stockBalanceReport } from "@/modules/inventory/service";
 import { TransactionTable } from "@/modules/inventory/components/views";
+import { PageHeader } from "@/components/shell/page-header";
 
 type Search = Promise<{ siteId?: string; from?: string; to?: string; type?: string }>;
 const TYPES: InventoryTransactionType[] = ["RECEIPT", "ISSUE", "RETURN", "TRANSFER", "ADJUSTMENT", "DAMAGE", "RETIREMENT"];
@@ -90,8 +91,7 @@ async function Reports({ searchParams }: { searchParams: Search }) {
 export default function InventoryReportsPage({ searchParams }: PageProps<"/inventory/reports">) {
   return (
     <main>
-      <h1 className="page-title">Inventory reports</h1>
-      <p className="mt-1 mb-6 text-sm text-zinc-600">Stock balance, movements, allocated items and asset condition.</p>
+      <PageHeader title="Inventory reports" subtitle="Stock balance, movements, allocated items and asset condition." crumbs={[["Inventory", "/inventory"], ["Reports"]]} />
       <Suspense fallback={<p className="text-sm text-zinc-500">Loading…</p>}>
         <Reports searchParams={searchParams as Search} />
       </Suspense>

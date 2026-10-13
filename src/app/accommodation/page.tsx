@@ -4,6 +4,7 @@ import { requireRole } from "@/lib/auth/authorize";
 import { ACCOMMODATION_VIEW_ROLES } from "@/modules/accommodation/access";
 import { getSitesOverview } from "@/modules/accommodation/occupancy";
 import { SummaryTiles } from "@/modules/accommodation/components/summary-tiles";
+import { PageHeader } from "@/components/shell/page-header";
 
 async function Overview() {
   await requireRole(ACCOMMODATION_VIEW_ROLES, "/accommodation");
@@ -42,8 +43,7 @@ async function Overview() {
 export default function AccommodationPage() {
   return (
     <main>
-      <h1 className="page-title">Accommodation</h1>
-      <p className="mt-1 mb-6 text-sm text-zinc-600">Sites, buildings, rooms and bed spaces.</p>
+      <PageHeader title="Accommodation" subtitle="Sites, buildings, rooms and bed spaces." crumbs={[["Accommodation"]]} />
       <Suspense fallback={<p className="text-sm text-zinc-500">Loading…</p>}>
         <Overview />
       </Suspense>

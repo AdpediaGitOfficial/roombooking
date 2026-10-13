@@ -5,6 +5,7 @@ import { BROADCAST_ROLES } from "@/modules/broadcasts/access";
 import { describeAudience, describeStatus, listBroadcasts, parseAudience } from "@/modules/broadcasts/service";
 import { audienceOptions } from "@/modules/broadcasts/context";
 import { ComposeForm } from "@/modules/broadcasts/components/forms";
+import { PageHeader } from "@/components/shell/page-header";
 
 async function Content() {
   const user = await requireRole(BROADCAST_ROLES, "/admin/broadcasts");
@@ -24,7 +25,7 @@ async function Content() {
               <tr key={b.id} data-broadcast={b.id} data-status={b.status}>
                 <td className="px-3 py-3"><Link href={`/admin/broadcasts/${b.id}`} className="font-medium underline">{b.title}</Link><div className="text-xs text-zinc-500">{(b.sentAt ?? b.createdAt).toISOString().slice(0, 16).replace("T", " ")}</div></td>
                 <td className="px-3 py-3 text-xs">{described[i]}{b.emailCopy ? " · email" : ""}{b.whatsappCopy ? " · WhatsApp" : ""}</td>
-                <td className="px-3 py-3"><span className={`rounded-full px-2 py-0.5 text-xs font-medium ${b.status === "SENT" ? "bg-green-100 text-green-800" : b.status === "DRAFT" ? "bg-amber-100 text-amber-800" : "bg-zinc-100 text-zinc-700"}`}>{describeStatus(b.status)}</span></td>
+                <td className="px-3 py-3"><span className={`chip ${b.status === "SENT" ? "bg-green-100 text-green-800" : b.status === "DRAFT" ? "bg-amber-100 text-amber-800" : "bg-zinc-100 text-zinc-700"}`}>{describeStatus(b.status)}</span></td>
                 <td className="px-3 py-3 text-right tabular-nums">{b.status === "SENT" ? b.recipientCount : "—"}</td>
                 <td className="px-3 py-3 text-xs">{b.sentBy?.name ?? b.createdBy.name}</td>
               </tr>
@@ -40,8 +41,7 @@ async function Content() {
 export default function BroadcastsPage() {
   return (
     <main>
-      <h1 className="page-title">Broadcasts</h1>
-      <p className="mt-1 mb-6 text-sm text-zinc-600">Announcements to residents and staff by site, building or role, delivered in the app with optional email and WhatsApp copies.</p>
+      <PageHeader title="Broadcasts" subtitle="Announcements to residents and staff by site, building or role, delivered in the app with optional email and WhatsApp copies." crumbs={[["Administration"], ["Broadcasts"]]} />
       <Suspense fallback={<p className="text-sm text-zinc-500">Loading…</p>}>
         <Content />
       </Suspense>

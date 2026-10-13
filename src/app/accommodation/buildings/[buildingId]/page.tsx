@@ -5,6 +5,7 @@ import { requireRole } from "@/lib/auth/authorize";
 import { ACCOMMODATION_VIEW_ROLES } from "@/modules/accommodation/access";
 import { getBuildingOccupancy } from "@/modules/accommodation/occupancy";
 import { SummaryTiles } from "@/modules/accommodation/components/summary-tiles";
+import { PageHeader } from "@/components/shell/page-header";
 
 async function BuildingView({ params }: { params: Promise<{ buildingId: string }> }) {
   const { buildingId } = await params;
@@ -14,10 +15,9 @@ async function BuildingView({ params }: { params: Promise<{ buildingId: string }
   const { building, today, rooms, summary } = data;
   return (
     <>
-      <h1 className="page-title">{building.name}</h1>
-      <p className="mt-1 mb-6 text-sm text-zinc-600">
+      <PageHeader title="{building.name}" subtitle="
         {building.site.name} · {building.type.toLowerCase()} · as of {today}
-      </p>
+      " />
       <SummaryTiles summary={summary} />
       <h2 className="mt-8 text-lg font-semibold">Rooms</h2>
       <ul className="mt-3 grid gap-3 sm:grid-cols-2">

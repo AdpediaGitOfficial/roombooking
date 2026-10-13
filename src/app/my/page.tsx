@@ -4,7 +4,7 @@ import { describeNotification, getMyStay, listMyNotifications } from "@/modules/
 import { prisma } from "@/lib/db";
 import Link from "next/link";
 import { markReadAction } from "@/modules/self-service/actions";
-import { StayCard } from "@/modules/self-service/components/stay-card";
+import { isoDate } from "@/modules/accommodation/occupancy";
 
 async function HomeContent() {
   const { user, staff } = await requireResident("/my");
@@ -17,55 +17,59 @@ async function HomeContent() {
   const firstName = staff?.firstName ?? user.name.split(" ")[0];
   const unread = notifications.filter((n) => !n.readAt);
 
+  const current = stay?.current ?? null;
+  const todos: Array<{ key: string; sev: "danger" | "warning" | "info"; title: React.ReactNode; hint: string; attr: string }> = [
+    ...ticketsNeedingMe.map((t) => ({ key: t.id, sev: t.status === "RESOLVED" ? ("danger" as const) : ("warning" as const), attr: "TICKET", title: <Link href={`/my/maintenance/${t.id}`}>{t.status === "RESOLVED" ? `Confirm the ${t.category.toLowerCase()} fix` : `${t.category} needs a reply from you`}</Link>, hint: `${t.ticketNumber} · ${t.status === "RESOLVED" ? "marked resolved" : "waiting for you"}` })),
+    ...returned.map((r) => ({ key: r.id, sev: "warning" as const, attr: "REQUEST", title: <Link href={`/my/requests/${r.id}`}>{r.requestType.name} needs changes</Link>, hint: "Returned by the approver · edit and resubmit" })),
+    ...(stay?.pendingActions ?? []).map((a) => ({ key: `${a.kind}-${a.date}`, sev: "info" as const, attr: a.kind, title: a.text, hint: `${a.kind.toLowerCase()} · ${a.date}` })),
+  ];
+
   return (
     <>
-      <h1 className="page-title">Hello, {firstName}</h1>
-      <p className="mt-1 text-sm text-zinc-600">{stay ? `Today is ${stay.today}` : "Welcome"}</p>
-
-      <section className="mt-6">
-        {staff ? <StayCard allocation={stay?.current ?? null} compact /> : (
-          <div className="rounded-lg border border-dashed border-zinc-300 p-4 text-sm text-zinc-600">
-            Your account is not linked to a staff record yet. Contact the accommodation office.
-          </div>
+      <header className="portal-head">
+        <div className="meta"><span>{stay ? `Today is ${stay.today}` : "Welcome"}{current ? ` · ${current.bed.room.building.site.name}` : ""}</span><Link href="#notifications" aria-label={`${unread.length} unread notifications`}>🔔 <b>{unread.length}</b></Link></div>
+        <h1>Hello, {firstName}</h1>
+        {staff ? (
+          current ? (
+            <div className="bedcard" data-stay={current.bed.code}>
+              <span className="e">{current.status === "CONFIRMED" ? "Allocated · check in at reception" : "Your bed"}</span>
+              <b>{current.bed.code} · {current.bed.room.building.name}</b>
+              <small>Room {current.bed.room.code}{current.bed.room.floor ? ` · Floor ${current.bed.room.floor}` : ""} · {isoDate(current.startDate)} → {current.endDate ? isoDate(current.endDate) : "open-ended"}</small>
+              <div className="mt-2.5"><Link href="/my/stay" className="chip chip-lite">Stay details →</Link></div>
+            </div>
+          ) : (
+            <div className="bedcard"><span className="e">Accommodation</span><b>No bed allocated</b><small>Contact the accommodation office if you expect one.</small></div>
+          )
+        ) : (
+          <div className="bedcard"><span className="e">Account</span><b>Not linked to a staff record</b><small>Contact the accommodation office.</small></div>
         )}
-      </section>
+      </header>
 
-      {((stay && stay.pendingActions.length > 0) || returned.length > 0 || ticketsNeedingMe.length > 0) && (
-        <section className="mt-6">
-          <h2 className="section-title">To do</h2>
-          <ul className="mt-2 space-y-2">
-            {ticketsNeedingMe.map((t) => (
-              <li key={t.id} data-action="TICKET" className="rounded-lg bg-orange-50 p-3 text-sm text-orange-900">
-                <div className="text-xs uppercase tracking-wide">maintenance · {t.ticketNumber}</div>
-                <div className="mt-0.5"><Link href={`/my/maintenance/${t.id}`} className="underline">{t.category}</Link> {t.status === "RESOLVED" ? "was marked resolved. Please confirm or reopen." : "needs a reply from you."}</div>
-              </li>
-            ))}
-            {returned.map((r) => (
-              <li key={r.id} data-action="REQUEST" className="rounded-lg bg-orange-50 p-3 text-sm text-orange-900">
-                <div className="text-xs uppercase tracking-wide">request returned</div>
-                <div className="mt-0.5"><Link href={`/my/requests/${r.id}`} className="underline">{r.requestType.name}</Link> needs changes before it can be approved.</div>
-              </li>
-            ))}
-            {(stay?.pendingActions ?? []).map((a) => (
-              <li key={`${a.kind}-${a.date}`} data-action={a.kind} className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
-                <div className="text-xs uppercase tracking-wide">{a.kind.toLowerCase()} · {a.date}</div>
-                <div className="mt-0.5">{a.text}</div>
-              </li>
+      {todos.length > 0 && (
+        <section className="mt-5">
+          <div className="flex items-baseline justify-between"><h2 className="section-title">To do <span className="chip chip-danger ml-1">{todos.length}</span></h2></div>
+          <ul className="todo mt-2">
+            {todos.map((t) => (
+              <li key={t.key} data-action={t.attr} className={`todo-item sev-${t.sev}`}><b>{t.title}</b><small>{t.hint}</small></li>
             ))}
           </ul>
         </section>
       )}
 
-      <section className="mt-6" data-shortcuts>
-        <div className="grid grid-cols-2 gap-2 text-sm">
-          <Link href="/my/facilities" className="card p-3"><div className="font-medium">Facilities</div><div className="text-xs text-zinc-500">Book the gym or hall</div></Link>
-          <Link href="/my/lost-found" className="card p-3"><div className="font-medium">Lost &amp; found</div><div className="text-xs text-zinc-500">Found items and your claims</div></Link>
-          <Link href="/my/announcements" className="card p-3"><div className="font-medium">Announcements</div><div className="text-xs text-zinc-500">Messages from the office</div></Link>
+      <section className="mt-5" data-shortcuts>
+        <h2 className="section-title">Services</h2>
+        <div className="tiles mt-2">
+          <Link href="/my/maintenance/new" className="tile"><span className="ic" aria-hidden="true">⚒</span><b>Report an issue</b><small>Maintenance ticket</small></Link>
+          <Link href="/my/requests/new" className="tile"><span className="ic" aria-hidden="true">✎</span><b>Make a request</b><small>Room change, visitor, family…</small></Link>
+          <Link href="/my/facilities" className="tile"><span className="ic" aria-hidden="true">◷</span><b>Book a facility</b><small>Gym, hall and more</small></Link>
+          <Link href="/my/lost-found" className="tile"><span className="ic" aria-hidden="true">◎</span><b>Lost &amp; found</b><small>Found items and your claims</small></Link>
+          <Link href="/my/announcements" className="tile"><span className="ic" aria-hidden="true">▣</span><b>Announcements</b><small>Messages from the office</small></Link>
+          <Link href="/my/profile" className="tile"><span className="ic" aria-hidden="true">☺</span><b>Profile</b><small>Contacts and password</small></Link>
         </div>
       </section>
 
-      <section className="mt-6">
-        <h2 className="section-title">Notifications{unread.length > 0 && <span className="ml-2 rounded-full bg-primary px-2 py-0.5 text-xs text-primary-ink">{unread.length} new</span>}</h2>
+      <section className="mt-5" id="notifications">
+        <h2 className="section-title">Notifications{unread.length > 0 && <span className="chip chip-success ml-2">{unread.length} new</span>}</h2>
         {notifications.length === 0 ? (
           <p className="mt-2 text-sm text-zinc-500">Nothing yet.</p>
         ) : (
@@ -83,7 +87,7 @@ async function HomeContent() {
                     {!n.readAt && (
                       <form action={markReadAction}>
                         <input type="hidden" name="notificationId" value={n.id} />
-                        <button type="submit" className="rounded-md border border-zinc-300 px-2 py-1 text-xs">Mark read</button>
+                        <button type="submit" className="btn btn-small">Mark read</button>
                       </form>
                     )}
                   </div>

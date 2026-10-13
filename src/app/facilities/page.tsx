@@ -8,6 +8,7 @@ import { facilityConfig, facilityReports, listFacilities } from "@/modules/facil
 import { describeHours } from "@/modules/facilities/rules";
 import { siteOptions } from "@/modules/facilities/context";
 import { CreateFacilityForm } from "@/modules/facilities/components/forms";
+import { PageHeader } from "@/components/shell/page-header";
 
 async function Overview() {
   const user = await requireRole(FACILITY_VIEW_ROLES, "/facilities");
@@ -31,7 +32,7 @@ async function Overview() {
     <>
       <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {[["Facilities", facilities.filter((f) => f.status === "ACTIVE").length], ["Bookings next 24 h", upcoming], ["Awaiting approval", pending.length], ["Utilisation (30 d)", `${reports.length ? Math.round(reports.reduce((s, r) => s + r.utilisation, 0) / reports.length) : 0}%`]].map(([label, value]) => (
-          <div key={label} className="card p-3"><dt className="text-xs uppercase tracking-wide text-zinc-500">{label}</dt><dd data-summary={label} className="mt-1 text-2xl font-semibold tabular-nums">{value}</dd></div>
+          <div key={label} className="kpi"><dt className="kpi-label">{label}</dt><dd data-summary={label} className="kpi-value">{value}</dd></div>
         ))}
       </dl>
 
@@ -109,8 +110,7 @@ async function Overview() {
 export default function FacilitiesPage() {
   return (
     <main>
-      <h1 className="page-title">Facility booking</h1>
-      <p className="mt-1 mb-6 text-sm text-zinc-600">Shared facilities, daily schedules, approvals and utilisation.</p>
+      <PageHeader title="Facility booking" subtitle="Shared facilities, daily schedules, approvals and utilisation." crumbs={[["Facilities"]]} />
       <Suspense fallback={<p className="text-sm text-zinc-500">Loading…</p>}>
         <Overview />
       </Suspense>

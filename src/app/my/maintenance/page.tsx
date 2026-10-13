@@ -32,7 +32,7 @@ export default function MyMaintenancePage() {
     <main>
       <div className="flex items-center justify-between gap-3">
         <h1 className="page-title">Maintenance</h1>
-        <Link href="/my/maintenance/new" className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-ink">Report an issue</Link>
+        <Link href="/my/maintenance/new" className="btn btn-primary">Report an issue</Link>
       </div>
       <div className="mt-4">
         <Suspense fallback={<p className="text-sm text-zinc-500">Loading…</p>}>

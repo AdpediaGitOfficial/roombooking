@@ -5,6 +5,7 @@ import { requireRole } from "@/lib/auth/authorize";
 import { REPORT_VIEW_ROLES } from "@/modules/reports/access";
 import { DEFINITIONS, filterOptions, movementReport, parseRange, scopeFor } from "@/modules/reports/suite";
 import { Definitions, ReportFilters, Stat, qs, table, tbody, td, th, thead, wrap } from "@/modules/reports/components/report-filters";
+import { PageHeader } from "@/components/shell/page-header";
 
 type Search = Promise<Record<string, string | undefined>>;
 const STATUSES: AllocationStatus[] = ["CONFIRMED", "CHECKED_IN", "CHECKED_OUT", "CANCELLED", "PENDING_APPROVAL", "DRAFT", "REJECTED", "EXPIRED"];
@@ -51,8 +52,7 @@ async function Content({ searchParams }: { searchParams: Search }) {
 export default function MovementsReportPage({ searchParams }: PageProps<"/reports/movements">) {
   return (
     <main>
-      <h1 className="page-title">Staff movements</h1>
-      <p className="mt-1 mb-6 text-sm text-zinc-600">Allocation history: arrivals, departures, transfers and cancellations.</p>
+      <PageHeader title="Staff movements" subtitle="Allocation history: arrivals, departures, transfers and cancellations." />
       <Suspense fallback={<p className="text-sm text-zinc-500">Loading…</p>}><Content searchParams={searchParams as Search} /></Suspense>
     </main>
   );

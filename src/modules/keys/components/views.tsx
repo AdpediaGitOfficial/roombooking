@@ -11,7 +11,7 @@ const STYLE: Record<KeyStatus, string> = {
 };
 
 export function KeyStatusBadge({ status }: { status: KeyStatus }) {
-  return <span data-status={status} className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${STYLE[status]}`}>{describeKeyStatus(status)}</span>;
+  return <span data-status={status} className={`chip ${STYLE[status]}`}>{describeKeyStatus(status)}</span>;
 }
 
 export function HolderCell({ issue, now }: { issue: KeyTransactionRecord | null; now: Date }) {

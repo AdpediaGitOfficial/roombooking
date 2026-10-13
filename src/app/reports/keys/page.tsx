@@ -5,6 +5,7 @@ import { requireRole } from "@/lib/auth/authorize";
 import { REPORT_VIEW_ROLES } from "@/modules/reports/access";
 import { DEFINITIONS, filterOptions, keyReport, parseRange, scopeFor } from "@/modules/reports/suite";
 import { Definitions, ReportFilters, Stat, qs, table, tbody, td, th, thead, wrap } from "@/modules/reports/components/report-filters";
+import { PageHeader } from "@/components/shell/page-header";
 
 type Search = Promise<Record<string, string | undefined>>;
 const STATUSES: KeyStatus[] = ["AVAILABLE", "ISSUED", "LOST", "DAMAGED", "UNDER_REPAIR", "RETIRED"];
@@ -68,8 +69,7 @@ async function Content({ searchParams }: { searchParams: Search }) {
 export default function KeysReportPage({ searchParams }: PageProps<"/reports/keys">) {
   return (
     <main>
-      <h1 className="page-title">Keys</h1>
-      <p className="mt-1 mb-6 text-sm text-zinc-600">Issued, outstanding, overdue, lost and damaged keys.</p>
+      <PageHeader title="Keys" subtitle="Issued, outstanding, overdue, lost and damaged keys." />
       <Suspense fallback={<p className="text-sm text-zinc-500">Loading…</p>}><Content searchParams={searchParams as Search} /></Suspense>
     </main>
   );

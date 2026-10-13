@@ -9,7 +9,7 @@ const STATUS_TONE: Record<LostFoundStatus, string> = {
   DISPOSED: "bg-zinc-100 text-zinc-700",
 };
 export function StatusBadge({ status }: { status: LostFoundStatus }) {
-  return <span data-status={status} className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_TONE[status]}`}>{describeStatus(status)}</span>;
+  return <span data-status={status} className={`chip ${STATUS_TONE[status]}`}>{describeStatus(status)}</span>;
 }
 
 const OUTCOME_TONE: Record<ClaimOutcome, string> = {
@@ -19,7 +19,7 @@ const OUTCOME_TONE: Record<ClaimOutcome, string> = {
   WITHDRAWN: "bg-zinc-100 text-zinc-700",
 };
 export function OutcomeBadge({ outcome }: { outcome: ClaimOutcome }) {
-  return <span data-outcome={outcome} className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${OUTCOME_TONE[outcome]}`}>{describeOutcome(outcome)}</span>;
+  return <span data-outcome={outcome} className={`chip ${OUTCOME_TONE[outcome]}`}>{describeOutcome(outcome)}</span>;
 }
 
 export const when = (d: Date) => d.toISOString().slice(0, 16).replace("T", " ");

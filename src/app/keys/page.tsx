@@ -6,6 +6,7 @@ import { keyLocation, keySummary, listKeys, type KeyFilter } from "@/modules/key
 import { registerOptions } from "@/modules/keys/context";
 import { HolderCell, KeyStatusBadge } from "@/modules/keys/components/views";
 import { RegisterKeyForm } from "@/modules/keys/components/forms";
+import { PageHeader } from "@/components/shell/page-header";
 
 const FILTERS: Array<[KeyFilter, string]> = [["all", "All"], ["available", "Available"], ["issued", "Issued"], ["overdue", "Overdue"], ["exceptions", "Lost / damaged / repair"], ["retired", "Retired"]];
 
@@ -20,11 +21,11 @@ async function Register({ searchParams }: { searchParams: Promise<{ filter?: str
     <>
       <dl className="grid grid-cols-2 gap-3 sm:grid-cols-5">
         {[["Keys", summary.total], ["Available", summary.available], ["Issued", summary.issued], ["Overdue", summary.overdue], ["Exceptions", summary.exceptions]].map(([label, value]) => (
-          <div key={label} className="card p-3"><dt className="text-xs uppercase tracking-wide text-zinc-500">{label}</dt><dd data-summary={label} className="mt-1 text-2xl font-semibold tabular-nums">{value}</dd></div>
+          <div key={label} className="kpi"><dt className="kpi-label">{label}</dt><dd data-summary={label} className="kpi-value">{value}</dd></div>
         ))}
       </dl>
       <nav className="mt-4 flex flex-wrap gap-2 text-sm">
-        {FILTERS.map(([f, label]) => <Link key={f} href={`/keys?filter=${f}`} className={`rounded-full px-3 py-1 ${f === filter ? "bg-deep text-white" : "border border-zinc-300"}`}>{label}</Link>)}
+        {FILTERS.map(([f, label]) => <Link key={f} href={`/keys?filter=${f}`} className={`pill ${f === filter ? "pill-on" : ""}`}>{label}</Link>)}
       </nav>
       <div className="mt-4 overflow-x-auto card">
         <table className="w-full text-sm">
@@ -52,8 +53,7 @@ async function Register({ searchParams }: { searchParams: Promise<{ filter?: str
 export default function KeysPage({ searchParams }: PageProps<"/keys">) {
   return (
     <main>
-      <h1 className="page-title">Keys</h1>
-      <p className="mt-1 mb-6 text-sm text-zinc-600">Register, issue and return, outstanding keys and exceptions.</p>
+      <PageHeader title="Keys" subtitle="Register, issue and return, outstanding keys and exceptions." crumbs={[["Keys"]]} />
       <Suspense fallback={<p className="text-sm text-zinc-500">Loading…</p>}>
         <Register searchParams={searchParams as Promise<{ filter?: string }>} />
       </Suspense>

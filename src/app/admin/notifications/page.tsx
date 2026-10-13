@@ -9,6 +9,7 @@ import { transportFromEnv } from "@/modules/notifications/transport";
 import { whatsappTransportFromEnv } from "@/modules/notifications/whatsapp";
 import { requiredTemplates } from "@/modules/notifications/whatsapp-templates";
 import { RetryButton, RunWorkerButton, SendTestEmailButton, SendTestWhatsAppButton } from "@/modules/notifications/components/forms";
+import { PageHeader } from "@/components/shell/page-header";
 
 const STATUSES: NotificationStatus[] = ["QUEUED", "SENT", "DELIVERED", "FAILED"];
 
@@ -51,15 +52,15 @@ async function Content({ searchParams }: { searchParams: Promise<{ status?: stri
         {(channel === "EMAIL"
           ? [["Due now", due], ["Queued", email.QUEUED ?? 0], ["Sent", email.SENT ?? 0], ["Failed", email.FAILED ?? 0], ["In-app unread", unread]]
           : [["Due now", dueWhatsApp], ["Queued", wa.QUEUED ?? 0], ["Sent", wa.SENT ?? 0], ["Delivered", wa.DELIVERED ?? 0], ["Failed", wa.FAILED ?? 0]]).map(([label, value]) => (
-          <div key={String(label)} className="card p-3"><dt className="text-xs uppercase tracking-wide text-zinc-500">{label}</dt><dd data-stat={label} className="mt-1 text-2xl font-semibold tabular-nums">{value}</dd></div>
+          <div key={String(label)} className="kpi"><dt className="kpi-label">{label}</dt><dd data-stat={label} className="kpi-value">{value}</dd></div>
         ))}
       </dl>
       {channel === "EMAIL" && oldestQueuedAt && <p className="mt-2 text-xs text-zinc-500">Oldest queued email: {oldestQueuedAt.toISOString().replace("T", " ").slice(0, 16)} UTC.</p>}
       {channel === "WHATSAPP" && oldestWhatsAppQueuedAt && <p className="mt-2 text-xs text-zinc-500">Oldest queued WhatsApp message: {oldestWhatsAppQueuedAt.toISOString().replace("T", " ").slice(0, 16)} UTC.</p>}
       <nav className="mt-4 flex flex-wrap items-center gap-2 text-sm">
-        {(["EMAIL", "WHATSAPP"] as NotificationChannel[]).map((c) => <Link key={c} href={query(c, "")} data-channel-tab={c} className={`rounded-md px-3 py-1 font-medium ${c === channel ? "bg-deep text-white" : "border border-zinc-300"}`}>{c === "EMAIL" ? "Email" : "WhatsApp"}</Link>)}
+        {(["EMAIL", "WHATSAPP"] as NotificationChannel[]).map((c) => <Link key={c} href={query(c, "")} data-channel-tab={c} className={`rounded-md px-3 py-1 font-medium ${c === channel ? "pill-on" : ""}`}>{c === "EMAIL" ? "Email" : "WhatsApp"}</Link>)}
         <span className="mx-1 text-zinc-400">|</span>
-        {[["", "All"], ...STATUSES.map((s) => [s, s.toLowerCase()])].map(([s, label]) => <Link key={s} href={query(channel, s)} className={`rounded-full px-3 py-1 ${(status ?? "") === s ? "bg-deep text-white" : "border border-zinc-300"}`}>{label}</Link>)}
+        {[["", "All"], ...STATUSES.map((s) => [s, s.toLowerCase()])].map(([s, label]) => <Link key={s} href={query(channel, s)} className={`pill ${(status ?? "") === s ? "pill-on" : ""}`}>{label}</Link>)}
       </nav>
       <div className="mt-4 overflow-x-auto card">
         <table className="w-full text-sm">
@@ -72,7 +73,7 @@ async function Content({ searchParams }: { searchParams: Promise<{ status?: stri
                 <td className="px-3 py-2 text-xs tabular-nums">{n.createdAt.toISOString().replace("T", " ").slice(0, 16)}</td>
                 <td className="px-3 py-2 text-xs">{n.recipient.name}<div className="text-zinc-500">{n.deliveredTo ?? n.recipient.email}</div></td>
                 <td className="px-3 py-2"><div className="text-xs text-zinc-500">{n.event}</div>{n.subject && <div>{n.subject}</div>}</td>
-                <td className="px-3 py-2"><span className={`rounded-full px-2 py-0.5 text-xs font-medium ${n.status === "SENT" || n.status === "DELIVERED" ? "bg-green-100 text-green-800" : n.status === "FAILED" ? "bg-red-100 text-red-800" : "bg-amber-100 text-amber-800"}`}>{n.status.toLowerCase()}</span></td>
+                <td className="px-3 py-2"><span className={`chip ${n.status === "SENT" || n.status === "DELIVERED" ? "bg-green-100 text-green-800" : n.status === "FAILED" ? "bg-red-100 text-red-800" : "bg-amber-100 text-amber-800"}`}>{n.status.toLowerCase()}</span></td>
                 <td className="px-3 py-2 tabular-nums">{n.attempts}{n.nextAttemptAt && n.status === "QUEUED" && <div className="text-xs text-zinc-500">next {n.nextAttemptAt.toISOString().replace("T", " ").slice(0, 16)}</div>}</td>
                 <td className="px-3 py-2 text-xs">{n.lastError ? <span className="text-red-700">{n.lastError}</span> : n.providerMessageId ? <span className="text-zinc-500">id {n.providerMessageId.slice(0, 40)}</span> : null}{n.status === "FAILED" && <div className="mt-1"><RetryButton id={n.id} /></div>}</td>
               </tr>
@@ -102,8 +103,7 @@ async function Content({ searchParams }: { searchParams: Promise<{ status?: stri
 export default function NotificationsAdminPage({ searchParams }: PageProps<"/admin/notifications">) {
   return (
     <main>
-      <h1 className="page-title">Notifications</h1>
-      <p className="mt-1 mb-6 text-sm text-zinc-600">Email and WhatsApp delivery queues, failures and transport health.</p>
+      <PageHeader title="Notifications" subtitle="Email and WhatsApp delivery queues, failures and transport health." crumbs={[["Administration"], ["Notifications"]]} />
       <Suspense fallback={<p className="text-sm text-zinc-500">Loading…</p>}>
         <Content searchParams={searchParams as Promise<{ status?: string; channel?: string }>} />
       </Suspense>

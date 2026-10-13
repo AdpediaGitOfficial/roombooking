@@ -26,7 +26,7 @@ async function Content({ params }: { params: Params }) {
       <p className="mt-1 text-sm text-zinc-600">{spec.label} · uploaded {batch.createdAt.toISOString().slice(0, 16).replace("T", " ")} by {batch.createdBy.name}{batch.importedAt ? ` · imported ${batch.importedAt.toISOString().slice(0, 16).replace("T", " ")}` : ""}</p>
       <dl className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-5">
         {[["Rows", s.total], ["To create", s.create], ["To update", s.update], ["Unchanged", s.unchanged], ["Errors", s.error]].map(([label, value]) => (
-          <div key={String(label)} className="card p-3"><dt className="text-xs uppercase tracking-wide text-zinc-500">{label}</dt><dd data-stat={label} className={`mt-1 text-2xl font-semibold tabular-nums ${label === "Errors" && Number(value) > 0 ? "text-red-700" : ""}`}>{value}</dd></div>
+          <div key={String(label)} className="kpi"><dt className="kpi-label">{label}</dt><dd data-stat={label} className={`kpi-value ${label === "Errors" && Number(value) > 0 ? "text-red-700" : ""}`}>{value}</dd></div>
         ))}
       </dl>
       {batch.status === "PREVIEW" && (
@@ -44,7 +44,7 @@ async function Content({ params }: { params: Params }) {
             {rows.map((r) => (
               <tr key={r.line} data-row={r.line} data-action={r.action}>
                 <td className="px-3 py-2 tabular-nums">{r.line}</td>
-                <td className="px-3 py-2"><span className={`rounded-full px-2 py-0.5 text-xs font-medium ${TONE[r.action]}`}>{r.action}</span>{r.note && <div className="text-xs text-zinc-500">{r.note}</div>}{r.errors.length > 0 && <ul className="mt-1 list-disc pl-4 text-xs text-red-700">{r.errors.map((e) => <li key={e}>{e}</li>)}</ul>}</td>
+                <td className="px-3 py-2"><span className={`chip ${TONE[r.action]}`}>{r.action}</span>{r.note && <div className="text-xs text-zinc-500">{r.note}</div>}{r.errors.length > 0 && <ul className="mt-1 list-disc pl-4 text-xs text-red-700">{r.errors.map((e) => <li key={e}>{e}</li>)}</ul>}</td>
                 {columns.map((c) => <td key={c} className="px-3 py-2 text-xs">{r.values[c] ?? ""}</td>)}
               </tr>
             ))}

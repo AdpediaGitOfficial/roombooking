@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { requireRole } from "@/lib/auth/authorize";
 import { ADMIN_VIEW_ROLES } from "@/modules/admin/access";
 import { auditEntityTypes, listAudit } from "@/modules/admin/users-service";
+import { PageHeader } from "@/components/shell/page-header";
 
 const input = "mt-1 block w-full rounded-md border border-zinc-300 px-3 py-2 text-sm";
 
@@ -44,8 +45,7 @@ async function Log({ searchParams }: { searchParams: Promise<{ entityType?: stri
 export default function AuditPage({ searchParams }: PageProps<"/admin/audit">) {
   return (
     <main>
-      <h1 className="page-title">Audit log</h1>
-      <p className="mt-1 mb-6 text-sm text-zinc-600">Who did what, when, with before and after values.</p>
+      <PageHeader title="Audit log" subtitle="Who did what, when, with before and after values." crumbs={[["Administration"], ["Audit log"]]} />
       <Suspense fallback={<p className="text-sm text-zinc-500">Loading…</p>}>
         <Log searchParams={searchParams as Promise<{ entityType?: string; action?: string; entityId?: string }>} />
       </Suspense>

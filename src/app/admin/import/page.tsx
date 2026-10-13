@@ -3,6 +3,7 @@ import Link from "next/link";
 import { requireRole } from "@/lib/auth/authorize";
 import { IMPORT_ROLES, KINDS, listBatches, type Summary } from "@/modules/imports/service";
 import { UploadForm } from "@/modules/imports/components/forms";
+import { PageHeader } from "@/components/shell/page-header";
 
 async function Content() {
   const user = await requireRole(IMPORT_ROLES, "/admin/import");
@@ -48,8 +49,7 @@ async function Content() {
 export default function ImportPage() {
   return (
     <main>
-      <h1 className="page-title">Bulk import &amp; export</h1>
-      <p className="mt-1 mb-6 text-sm text-zinc-600">Load staff profiles or buildings, rooms and beds from CSV. Every file is previewed row by row before anything is written.</p>
+      <PageHeader title="Bulk import & export" subtitle="Load staff profiles or buildings, rooms and beds from CSV. Every file is previewed row by row before anything is written." crumbs={[["Administration"], ["Import & export"]]} />
       <Suspense fallback={<p className="text-sm text-zinc-500">Loading…</p>}><Content /></Suspense>
     </main>
   );

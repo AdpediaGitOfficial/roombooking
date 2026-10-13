@@ -39,7 +39,7 @@ async function Content() {
               <BookingCard key={b.id} b={b} href={`/my/facilities/${b.facilityId}?date=${local.date}`}>
                 {canChange && (
                   <div className="flex flex-wrap items-center gap-2">
-                    <Link href={`/my/facilities/${b.facilityId}?date=${local.date}&amend=${b.id}`} className="rounded-md border border-zinc-300 px-3 py-2 text-sm font-medium">Change</Link>
+                    <Link href={`/my/facilities/${b.facilityId}?date=${local.date}&amend=${b.id}`} className="btn">Change</Link>
                     <CancelBookingForm bookingId={b.id} facilityId={b.facilityId} returnPath="/my/facilities" />
                   </div>
                 )}

@@ -23,7 +23,7 @@ export function AllocateForm(props: { bedId: string; staffId: string; startDate:
       <input type="hidden" name="startDate" value={props.startDate} />
       <input type="hidden" name="endDate" value={props.endDate} />
       <input type="hidden" name="reason" value={props.reason} />
-      <button type="submit" disabled={pending} className={button}>{pending ? "Allocating…" : (props.label ?? "Allocate")}</button>
+      <button type="submit" disabled={pending} className={`${button} ${props.label ? "w-full" : ""}`}>{pending ? "Allocating…" : (props.label ?? "Allocate")}</button>
       <Feedback state={state} />
     </form>
   );

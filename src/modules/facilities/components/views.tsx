@@ -15,7 +15,7 @@ const STATUS_CLASS: Record<BookingStatus, string> = {
 };
 
 export function BookingStatusBadge({ status }: { status: BookingStatus }) {
-  return <span data-status={status} className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_CLASS[status]}`}>{describeBookingStatus(status)}</span>;
+  return <span data-status={status} className={`chip ${STATUS_CLASS[status]}`}>{describeBookingStatus(status)}</span>;
 }
 
 /** Local date, start and end of a booking in the facility's site zone. */

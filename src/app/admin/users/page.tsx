@@ -4,6 +4,7 @@ import type { Role, UserStatus } from "@prisma/client";
 import { requireRole } from "@/lib/auth/authorize";
 import { ADMIN_VIEW_ROLES, ALL_ROLES } from "@/modules/admin/access";
 import { listUsers, scopeLabel } from "@/modules/admin/users-service";
+import { PageHeader } from "@/components/shell/page-header";
 
 const STATUSES: UserStatus[] = ["INVITED", "ACTIVE", "SUSPENDED", "DEACTIVATED"];
 const input = "mt-1 block w-full rounded-md border border-zinc-300 px-3 py-2 text-sm";
@@ -15,7 +16,7 @@ const STATUS_STYLE: Record<UserStatus, string> = {
 };
 
 export function UserStatusBadge({ status }: { status: UserStatus }) {
-  return <span data-status={status} className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_STYLE[status]}`}>{status.toLowerCase()}</span>;
+  return <span data-status={status} className={`chip ${STATUS_STYLE[status]}`}>{status.toLowerCase()}</span>;
 }
 
 async function Users({ searchParams }: { searchParams: Promise<{ q?: string; status?: string; role?: string }> }) {
@@ -56,10 +57,7 @@ async function Users({ searchParams }: { searchParams: Promise<{ q?: string; sta
 export default function UsersPage({ searchParams }: PageProps<"/admin/users">) {
   return (
     <main>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div><h1 className="page-title">Users</h1><p className="mt-1 text-sm text-zinc-600">Accounts, roles and access.</p></div>
-        <Link href="/admin/users/new" className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-ink">New user</Link>
-      </div>
+      <PageHeader title="Users" subtitle="Accounts, roles and access." crumbs={[["Administration"], ["Users & roles"]]} actions={<Link href="/admin/users/new" className="btn btn-primary">New user</Link>} />
       <div className="mt-6">
         <Suspense fallback={<p className="text-sm text-zinc-500">Loading…</p>}>
           <Users searchParams={searchParams as Promise<{ q?: string; status?: string; role?: string }>} />

@@ -6,6 +6,7 @@ import { ITEM_FILTERS, categories, describeLocation, inventorySummary, listItems
 import { targetOptions } from "@/modules/inventory/context";
 import { ConditionBadge, ItemStateBadge } from "@/modules/inventory/components/views";
 import { CreateItemForm } from "@/modules/inventory/components/forms";
+import { PageHeader } from "@/components/shell/page-header";
 
 type Search = Promise<{ filter?: string; q?: string; category?: string }>;
 
@@ -20,12 +21,12 @@ async function Register({ searchParams }: { searchParams: Search }) {
     <>
       <dl className="grid grid-cols-2 gap-3 sm:grid-cols-5">
         {[["Stock lines", summary.stockLines], ["Assets", summary.assets], ["Assets issued", summary.issued], ["Low stock", summary.lowStock], ["Damaged", summary.damaged]].map(([label, value]) => (
-          <div key={label} className="card p-3"><dt className="text-xs uppercase tracking-wide text-zinc-500">{label}</dt><dd data-summary={label} className="mt-1 text-2xl font-semibold tabular-nums">{value}</dd></div>
+          <div key={label} className="kpi"><dt className="kpi-label">{label}</dt><dd data-summary={label} className="kpi-value">{value}</dd></div>
         ))}
       </dl>
       <div className="mt-4 flex flex-wrap items-center gap-2">
         <nav className="flex flex-wrap gap-2 text-sm">
-          {ITEM_FILTERS.map(([f, label]) => <Link key={f} href={query(f)} className={`rounded-full px-3 py-1 ${f === filter ? "bg-deep text-white" : "border border-zinc-300"}`}>{label}</Link>)}
+          {ITEM_FILTERS.map(([f, label]) => <Link key={f} href={query(f)} className={`pill ${f === filter ? "pill-on" : ""}`}>{label}</Link>)}
         </nav>
         <form method="get" action="/inventory" className="ml-auto flex items-center gap-2 text-sm">
           <input type="hidden" name="filter" value={filter} />
@@ -62,8 +63,7 @@ async function Register({ searchParams }: { searchParams: Search }) {
 export default function InventoryPage({ searchParams }: PageProps<"/inventory">) {
   return (
     <main>
-      <h1 className="page-title">Inventory</h1>
-      <p className="mt-1 mb-6 text-sm text-zinc-600">Stock lines and serialised assets: receipts, issues, returns, transfers, adjustments, damage and retirement.</p>
+      <PageHeader title="Inventory" subtitle="Stock lines and serialised assets: receipts, issues, returns, transfers, adjustments, damage and retirement." crumbs={[["Inventory"]]} />
       <Suspense fallback={<p className="text-sm text-zinc-500">Loading…</p>}>
         <Register searchParams={searchParams as Search} />
       </Suspense>

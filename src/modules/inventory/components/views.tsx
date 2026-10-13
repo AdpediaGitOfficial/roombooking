@@ -4,7 +4,7 @@ import { describeCondition, describeLocation, describeTransaction, isLowStock, t
 
 export function ConditionBadge({ condition }: { condition: AssetCondition }) {
   const tone = condition === "DAMAGED" ? "bg-red-100 text-red-900" : condition === "RETIRED" ? "bg-zinc-100 text-zinc-700" : condition === "FAIR" ? "bg-amber-100 text-amber-900" : "bg-green-100 text-green-900";
-  return <span data-condition={condition} className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${tone}`}>{describeCondition(condition)}</span>;
+  return <span data-condition={condition} className={`chip ${tone}`}>{describeCondition(condition)}</span>;
 }
 
 /** One-line state for the register: on hand / issued / low / retired. */

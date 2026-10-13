@@ -34,7 +34,7 @@ export default function MyRequestsPage() {
     <main>
       <div className="flex items-center justify-between gap-3">
         <h1 className="page-title">Requests</h1>
-        <Link href="/my/requests/new" className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-ink">New request</Link>
+        <Link href="/my/requests/new" className="btn btn-primary">New request</Link>
       </div>
       <div className="mt-4">
         <Suspense fallback={<p className="text-sm text-zinc-500">Loading…</p>}>

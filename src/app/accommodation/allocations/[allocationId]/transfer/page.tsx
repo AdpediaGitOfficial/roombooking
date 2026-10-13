@@ -76,7 +76,7 @@ async function TransferView({ params, searchParams }: { params: Promise<{ alloca
             </label>
             {query.requestId && <input type="hidden" name="requestId" value={query.requestId} />}
             <div className="sm:col-span-3">
-              <button type="submit" className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-ink">Find available beds</button>
+              <button type="submit" className="btn btn-primary">Find available beds</button>
               <span className="ml-3 text-xs text-zinc-500">
                 {effectiveDate === today ? "Same-day: the resident moves immediately." : `Future-dated: current bed is held until ${effectiveDate}.`}
               </span>
