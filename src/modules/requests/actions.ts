@@ -2,11 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import type { DecisionAction } from "@prisma/client";
+import type { DecisionAction, Role } from "@prisma/client";
 import { requireRole, requireUser } from "@/lib/auth/authorize";
 import { APPROVALS_AREA_ROLES } from "./access";
 import { RequestError } from "./errors";
-import { decideRequest, resubmitRequest, submitRequest, withDelegations, withdrawRequest } from "./service";
+import { decideRequest, reassignStep, resubmitRequest, submitRequest, withDelegations, withdrawRequest } from "./service";
 
 export type FormState = { error?: string; fieldErrors?: Record<string, string>; values?: Record<string, string> };
 export type ActionState = { error?: string; message?: string };
@@ -94,4 +94,17 @@ export async function decideRequestAction(_prev: ActionState, formData: FormData
   revalidateRequests(requestId);
   const label = action === "APPROVE" ? "Approved." : action === "REJECT" ? "Rejected." : "Returned to the requester for changes.";
   return { message: label };
+}
+
+export async function reassignStepAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const user = await requireRole(APPROVALS_AREA_ROLES, "/approvals");
+  const requestId = String(formData.get("requestId") ?? "");
+  try {
+    await reassignStep({ requestId, actor: { id: user.id, roles: user.roleAssignments.map((r) => r.role) }, role: String(formData.get("role") ?? "") as Role, reason: String(formData.get("reason") ?? "") });
+  } catch (error) {
+    if (error instanceof RequestError) return { error: error.message };
+    throw error;
+  }
+  revalidateRequests(requestId);
+  return { message: "Step reassigned; the new approvers have been notified." };
 }

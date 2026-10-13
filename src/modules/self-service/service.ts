@@ -207,6 +207,16 @@ export function describeNotification(event: string, payload: unknown): { title: 
       return { title: "Booking declined", body: `${p.facility} on ${p.date} at ${p.startTime}${p.reason ? `: ${p.reason}` : "."}` };
     case "booking.cancelled":
       return { title: "Booking cancelled", body: `${p.facility} on ${p.date} at ${p.startTime}${p.reason ? `: ${p.reason}` : "."}` };
+    case "request.reminder":
+      return { title: "Approval waiting", body: `${p.type} at "${p.step}" for ${p.days} day(s).` };
+    case "request.escalated":
+      return { title: "Request escalated to you", body: `${p.type} at "${p.step}" after ${p.days} day(s).` };
+    case "request.escalated_requester":
+      return { title: "Request escalated", body: `Your ${p.type} has been escalated to a senior approver.` };
+    case "request.reassigned":
+      return { title: "Approval step reassigned to you", body: `${p.type} · ${p.step}${p.reason ? `: ${p.reason}` : ""}` };
+    case "request.expired":
+      return { title: "Request expired", body: `Your ${p.type} was not decided in time. You can resubmit it.` };
     case "delegation.started":
       return { title: "You are covering approvals", body: `For ${p.delegator}, ${p.startsAt} to ${p.endsAt}.` };
     case "delegation.arranged":

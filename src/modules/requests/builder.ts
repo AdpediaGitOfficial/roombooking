@@ -135,12 +135,22 @@ export async function createType(input: { organizationId: string; actorId: strin
   }
 }
 
-export async function updateType(input: { typeId: string; actorId: string; name: string; description?: string | null; status: "ACTIVE" | "INACTIVE" }) {
-  if (!input.name.trim()) throw new RequestError("VALIDATION", "Enter a name.", { name: "Required." });
+export type PolicyInput = { reminderAfterDays?: number | null; escalateAfterDays?: number | null; escalateToRole?: Role | null; expireAfterDays?: number | null };
+
+export async function updateType(input: { typeId: string; actorId: string; name: string; description?: string | null; status: "ACTIVE" | "INACTIVE"; policy?: PolicyInput }) {
+  const errors: Record<string, string> = {};
+  if (!input.name.trim()) errors.name = "Enter a name.";
+  const p = input.policy ?? {};
+  for (const k of ["reminderAfterDays", "escalateAfterDays", "expireAfterDays"] as const) {
+    const v = p[k];
+    if (v != null && (!Number.isInteger(v) || v < 0 || v > 365)) errors[k] = "Whole number of days, 0 to switch off.";
+  }
+  if (p.escalateToRole && !APPROVER_ROLES.includes(p.escalateToRole)) errors.escalateToRole = "Choose an approver role.";
+  if (Object.keys(errors).length) throw new RequestError("VALIDATION", "Please correct the highlighted fields.", errors);
   const before = await prisma.requestType.findUnique({ where: { id: input.typeId } });
   if (!before) throw new RequestError("NOT_FOUND", "Request type not found.");
-  const after = await prisma.requestType.update({ where: { id: input.typeId }, data: { name: input.name.trim(), description: input.description?.trim() || null, status: input.status } });
-  await recordAudit({ actorId: input.actorId, action: "REQUEST_TYPE_UPDATED", entityType: "RequestType", entityId: input.typeId, before: { name: before.name, description: before.description, status: before.status }, after: { name: after.name, description: after.description, status: after.status } });
+  const after = await prisma.requestType.update({ where: { id: input.typeId }, data: { name: input.name.trim(), description: input.description?.trim() || null, status: input.status, ...(p.reminderAfterDays != null ? { reminderAfterDays: p.reminderAfterDays } : {}), ...(p.escalateAfterDays != null ? { escalateAfterDays: p.escalateAfterDays } : {}), ...(p.expireAfterDays != null ? { expireAfterDays: p.expireAfterDays } : {}), ...(input.policy && "escalateToRole" in input.policy ? { escalateToRole: p.escalateToRole ?? null } : {}) } });
+  await recordAudit({ actorId: input.actorId, action: "REQUEST_TYPE_UPDATED", entityType: "RequestType", entityId: input.typeId, before: { name: before.name, description: before.description, status: before.status, reminderAfterDays: before.reminderAfterDays, escalateAfterDays: before.escalateAfterDays, escalateToRole: before.escalateToRole, expireAfterDays: before.expireAfterDays }, after: { name: after.name, description: after.description, status: after.status, reminderAfterDays: after.reminderAfterDays, escalateAfterDays: after.escalateAfterDays, escalateToRole: after.escalateToRole, expireAfterDays: after.expireAfterDays } });
   return after;
 }
 

@@ -41,7 +41,8 @@ export function CreateTypeForm() {
   );
 }
 
-export function TypeSettingsForm({ type }: { type: { id: string; name: string; description: string | null; status: string } }) {
+type PolicyFields = { reminderAfterDays: number; escalateAfterDays: number; escalateToRole: Role | null; expireAfterDays: number };
+export function TypeSettingsForm({ type, roles }: { type: { id: string; name: string; description: string | null; status: string } & PolicyFields; roles: Role[] }) {
   const [state, action, pending] = useActionState<BuilderState, FormData>(updateTypeAction, {});
   const v = state.values ?? {};
   const e = state.fieldErrors ?? {};
@@ -53,6 +54,13 @@ export function TypeSettingsForm({ type }: { type: { id: string; name: string; d
         <label className="block text-sm">Name *<input name="name" defaultValue={v.name ?? type.name} className={input} />{err(e.name)}</label>
         <label className="block text-sm">Description<input name="description" defaultValue={v.description ?? type.description ?? ""} className={input} /></label>
         <label className="block text-sm">Status<select name="status" defaultValue={v.status ?? type.status} className={input}><option value="ACTIVE">Active (residents can submit)</option><option value="INACTIVE">Inactive (hidden)</option></select></label>
+      </div>
+      <h4 className="mt-4 text-sm font-medium">Pending-step policy <span className="font-normal text-zinc-500">(days from when a step starts; 0 switches a rule off)</span></h4>
+      <div className="mt-1 grid gap-3 sm:grid-cols-4" data-policy>
+        <label className="block text-sm">Remind approvers after<input type="number" name="reminderAfterDays" min={0} max={365} defaultValue={v.reminderAfterDays ?? String(type.reminderAfterDays)} className={input} />{err(e.reminderAfterDays)}</label>
+        <label className="block text-sm">Escalate after<input type="number" name="escalateAfterDays" min={0} max={365} defaultValue={v.escalateAfterDays ?? String(type.escalateAfterDays)} className={input} />{err(e.escalateAfterDays)}</label>
+        <label className="block text-sm">Escalate to<select name="escalateToRole" defaultValue={v.escalateToRole ?? type.escalateToRole ?? ""} className={input}><option value="">Nobody (no escalation)</option>{roles.map((r) => <option key={r} value={r}>{r.toLowerCase().replaceAll("_", " ")}</option>)}</select>{err(e.escalateToRole)}</label>
+        <label className="block text-sm">Expire after<input type="number" name="expireAfterDays" min={0} max={365} defaultValue={v.expireAfterDays ?? String(type.expireAfterDays)} className={input} />{err(e.expireAfterDays)}</label>
       </div>
       <button type="submit" disabled={pending} className={`${secondary} mt-3`}>{pending ? "Saving…" : "Save settings"}</button>
       <Feedback state={state} />

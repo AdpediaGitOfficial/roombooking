@@ -74,7 +74,7 @@ async function Content({ params }: { params: Params }) {
         </div>
       </section>
 
-      <section className="mt-8"><TypeSettingsForm type={{ id: type.id, name: type.name, description: type.description, status: type.status }} /></section>
+      <section className="mt-8"><TypeSettingsForm type={{ id: type.id, name: type.name, description: type.description, status: type.status, reminderAfterDays: type.reminderAfterDays, escalateAfterDays: type.escalateAfterDays, escalateToRole: type.escalateToRole, expireAfterDays: type.expireAfterDays }} roles={APPROVER_ROLES} /></section>
       <p className="mt-6 text-sm"><Link href="/admin/forms" className="underline">← All request types</Link></p>
     </>
   );

@@ -2,11 +2,12 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
-import { requireRole } from "@/lib/auth/authorize";
-import { APPROVALS_AREA_ROLES } from "@/modules/requests/access";
-import { canDecide, currentStep, getRequest, requestAccessFor, withDelegations } from "@/modules/requests/service";
+import { hasRole, requireRole } from "@/lib/auth/authorize";
+import { APPROVALS_AREA_ROLES, REQUEST_ADMIN_ROLES } from "@/modules/requests/access";
+import { canDecide, currentStep, effectiveStepRole, getRequest, requestAccessFor, withDelegations } from "@/modules/requests/service";
+import { APPROVER_ROLES } from "@/modules/requests/builder";
 import { RequestDetails, RequestHistory, RequestStatusBadge, RequestSteps } from "@/modules/requests/components/request-view";
-import { DecisionForm } from "@/modules/requests/components/forms";
+import { DecisionForm, ReassignForm } from "@/modules/requests/components/forms";
 import { isoDate } from "@/modules/accommodation/occupancy";
 
 async function ApprovalContent({ params }: { params: Promise<{ requestId: string }> }) {
@@ -15,7 +16,7 @@ async function ApprovalContent({ params }: { params: Promise<{ requestId: string
   const actor = await withDelegations({ id: user.id, roles: user.roleAssignments.map((r) => r.role) });
   const request = await getRequest(requestId);
   if (!request) notFound();
-  const access = requestAccessFor(request, actor);
+  const access = requestAccessFor(request, actor) ?? (hasRole(user, ...REQUEST_ADMIN_ROLES) ? "admin" : null);
   if (!access) notFound();
 
   const staff = request.requester.staffProfile;
@@ -76,6 +77,8 @@ async function ApprovalContent({ params }: { params: Promise<{ requestId: string
         ) : request.status === "PENDING_APPROVAL" ? (
           <p className="text-sm text-zinc-500">{decision.ok ? "" : decision.reason}</p>
         ) : null}
+        {request.status === "PENDING_APPROVAL" && request.escalationNote && <p data-escalation className="mt-3 text-xs text-amber-700 dark:text-amber-300">{request.escalatedAt ? "Escalated" : "Reassigned"}: {request.escalationNote}{request.stepStartedAt ? ` · step started ${request.stepStartedAt.toISOString().slice(0, 10)}` : ""}</p>}
+        {request.status === "PENDING_APPROVAL" && access === "admin" && step && <div className="mt-4"><ReassignForm requestId={request.id} currentRole={effectiveStepRole(request) ?? step.approverRole} roles={APPROVER_ROLES} /></div>}
       </section>
     </>
   );

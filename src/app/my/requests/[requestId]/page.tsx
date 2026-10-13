@@ -16,7 +16,8 @@ async function RequestContent({ params }: { params: Promise<{ requestId: string 
   if (!request || request.requesterId !== user.id) notFound();
 
   const schema = parseSchema(request.workflowVersion.formSchema);
-  const fields = request.status === "CHANGES_REQUESTED" ? fieldsWithOptions(schema, await resolveFieldOptions(schema)) : [];
+  const canResubmit = request.status === "CHANGES_REQUESTED" || request.status === "EXPIRED";
+  const fields = canResubmit ? fieldsWithOptions(schema, await resolveFieldOptions(schema)) : [];
   const lastReturn = request.decisions.filter((d) => d.action === "REQUEST_CHANGES").at(-1);
 
   return (
@@ -28,11 +29,11 @@ async function RequestContent({ params }: { params: Promise<{ requestId: string 
       <p className="mt-1 text-xs text-zinc-500">Submitted {request.createdAt.toISOString().slice(0, 10)} · reference {request.id.slice(-8).toUpperCase()}</p>
       <RequestSteps request={request} />
 
-      {request.status === "CHANGES_REQUESTED" ? (
+      {canResubmit ? (
         <section className="mt-6">
           <div className="rounded-lg bg-orange-50 p-3 text-sm text-orange-900 dark:bg-orange-950 dark:text-orange-200">
-            <div className="font-medium">Returned for changes</div>
-            {lastReturn?.comment && <p className="mt-1 whitespace-pre-line">{lastReturn.comment}</p>}
+            <div className="font-medium">{request.status === "EXPIRED" ? "Expired without a decision" : "Returned for changes"}</div>
+            {request.status === "EXPIRED" ? <p className="mt-1">It was not decided within the time allowed. Resubmit it below if it is still needed.</p> : lastReturn?.comment && <p className="mt-1 whitespace-pre-line">{lastReturn.comment}</p>}
           </div>
           <h2 className="mt-4 text-lg font-semibold">Update and resubmit</h2>
           <div className="mt-2">

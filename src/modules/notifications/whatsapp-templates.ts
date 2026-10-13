@@ -37,6 +37,11 @@ const T: Record<string, WaTemplate> = {
   "delegation.started": { name: "delegation_update", body: "Hello {{1}}, approval cover: {{2}}. Open the staff portal for details.", params: (p, n) => [n, `you are covering for ${str(p, "delegator")} from ${str(p, "startsAt")} to ${str(p, "endsAt")}`] },
   "delegation.arranged": { name: "delegation_update", body: "Hello {{1}}, approval cover: {{2}}. Open the staff portal for details.", params: (p, n) => [n, `${str(p, "delegate")} will cover your approvals from ${str(p, "startsAt")} to ${str(p, "endsAt")}`] },
   "delegation.ended": { name: "delegation_update", body: "Hello {{1}}, approval cover: {{2}}. Open the staff portal for details.", params: (p, n) => [n, `your cover for ${str(p, "delegator")} has ended`] },
+  "request.reminder": { name: "approval_update", body: "Hello {{1}}, approvals: {{2}}. Open the staff portal to act.", params: (p, n) => [n, `a ${str(p, "type", "request").toLowerCase()} is waiting for your decision`] },
+  "request.escalated": { name: "approval_update", body: "Hello {{1}}, approvals: {{2}}. Open the staff portal to act.", params: (p, n) => [n, `a ${str(p, "type", "request").toLowerCase()} has been escalated to you`] },
+  "request.escalated_requester": { name: "request_decided", body: "Hello {{1}}, your {{2}} has been {{3}}. Open the staff portal for details.", params: (p, n) => [n, str(p, "type", "request").toLowerCase(), "escalated to a senior approver"] },
+  "request.reassigned": { name: "approval_update", body: "Hello {{1}}, approvals: {{2}}. Open the staff portal to act.", params: (p, n) => [n, `a ${str(p, "type", "request").toLowerCase()} step has been reassigned to you`] },
+  "request.expired": { name: "request_decided", body: "Hello {{1}}, your {{2}} has been {{3}}. Open the staff portal for details.", params: (p, n) => [n, str(p, "type", "request").toLowerCase(), "expired without a decision; you may resubmit it"] },
   "test.whatsapp": { name: "test_message", body: "Hello {{1}}, this is a test message from Staff Accommodation Management. No action is needed.", params: (_p, n) => [n] },
 };
 const GENERIC: WaTemplate = { name: "notification", body: "Hello {{1}}, you have a new notification in the staff accommodation portal: {{2}}. Please open the portal for details.", params: (_p, n) => [n, "update"] };

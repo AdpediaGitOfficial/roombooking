@@ -22,7 +22,7 @@ export async function withDelegations(actor: Actor, now: Date = new Date()): Pro
 export const requestInclude = {
   requestType: true,
   workflowVersion: { include: { steps: { orderBy: { order: "asc" } } } },
-  requester: { select: { id: true, name: true, email: true, staffProfile: { select: { id: true, employeeId: true, firstName: true, lastName: true, department: true } } } },
+  requester: { select: { id: true, name: true, email: true, organizationId: true, staffProfile: { select: { id: true, employeeId: true, firstName: true, lastName: true, department: true } } } },
   decisions: { include: { approver: { select: { id: true, name: true } }, onBehalfOf: { select: { id: true, name: true } }, step: true }, orderBy: { createdAt: "asc" } },
   submissions: { orderBy: { version: "asc" } },
   allocations: { include: { bed: true } },
@@ -104,6 +104,7 @@ export async function submitRequest(input: SubmitInput) {
           data: data as Prisma.InputJsonObject,
           status: steps.length > 0 ? "PENDING_APPROVAL" : "APPROVED",
           currentStepOrder: steps.length > 0 ? steps[0].order : null,
+          stepStartedAt: steps.length > 0 ? new Date() : null,
           submissionVersion: 1,
           decidedAt: steps.length > 0 ? null : new Date(),
           submissions: { create: { version: 1, data: data as Prisma.InputJsonObject } },
@@ -128,7 +129,7 @@ export async function resubmitRequest(input: { requestId: string; requesterId: s
   const request = await prisma.request.findUnique({ where: { id: input.requestId }, include: { requestType: true, workflowVersion: { include: { steps: { orderBy: { order: "asc" } } } } } });
   if (!request) throw new RequestError("NOT_FOUND", "Request not found.");
   if (request.requesterId !== input.requesterId) throw new RequestError("FORBIDDEN", "You can only edit your own requests.");
-  if (request.status !== "CHANGES_REQUESTED") throw new RequestError("INVALID_STATE", "Only requests returned for changes can be resubmitted.");
+  if (request.status !== "CHANGES_REQUESTED" && request.status !== "EXPIRED") throw new RequestError("INVALID_STATE", "Only requests returned for changes or expired can be resubmitted.");
 
   const schema = parseSchema(request.workflowVersion.formSchema);
   const data = await validateForType(request.requestType.code, schema, input.raw, prisma);
@@ -142,6 +143,12 @@ export async function resubmitRequest(input: { requestId: string; requesterId: s
         data: data as Prisma.InputJsonObject,
         status: "PENDING_APPROVAL",
         currentStepOrder: firstStep?.order ?? null,
+        stepStartedAt: new Date(),
+        stepRoleOverride: null,
+        remindedAt: null,
+        escalatedAt: null,
+        escalationNote: null,
+        expiredAt: null,
         submissionVersion: version,
         submissions: { create: { version, data: data as Prisma.InputJsonObject } },
       },
@@ -174,17 +181,25 @@ export function currentStep(request: { currentStepOrder: number | null; workflow
   return request.workflowVersion.steps.find((s) => s.order === request.currentStepOrder) ?? null;
 }
 
+/** The role that may decide the current step: the route's role unless escalation or an administrator reassigned it (WF-07). */
+export function effectiveStepRole(request: Pick<RequestRecord, "currentStepOrder" | "workflowVersion"> & { stepRoleOverride?: Role | null }): Role | null {
+  const step = currentStep(request);
+  if (!step) return null;
+  return request.stepRoleOverride ?? step.approverRole;
+}
+
 /** Whether the actor may decide the request at its current step. */
-export function canDecide(request: Pick<RequestRecord, "status" | "requesterId" | "currentStepOrder" | "workflowVersion">, actor: Actor): { ok: true; onBehalfOf: DelegatedRole | null } | { ok: false; reason: string } {
+export function canDecide(request: Pick<RequestRecord, "status" | "requesterId" | "currentStepOrder" | "workflowVersion" | "stepRoleOverride">, actor: Actor): { ok: true; onBehalfOf: DelegatedRole | null } | { ok: false; reason: string } {
   if (request.status !== "PENDING_APPROVAL") return { ok: false, reason: "This request is not awaiting approval." };
   const step = currentStep(request);
   if (!step) return { ok: false, reason: "No approval step is pending." };
   if (request.requesterId === actor.id) return { ok: false, reason: "You cannot approve your own request." };
-  if (actor.roles.includes(step.approverRole)) return { ok: true, onBehalfOf: null };
+  const role = request.stepRoleOverride ?? step.approverRole;
+  if (actor.roles.includes(role)) return { ok: true, onBehalfOf: null };
   // Delegated authority never covers the delegator's own request (WF-06).
-  const cover = (actor.delegated ?? []).find((d) => d.role === step.approverRole && d.delegatorId !== request.requesterId);
+  const cover = (actor.delegated ?? []).find((d) => d.role === role && d.delegatorId !== request.requesterId);
   if (cover) return { ok: true, onBehalfOf: cover };
-  return { ok: false, reason: `This step needs a ${step.approverRole.toLowerCase().replace(/_/g, " ")}.` };
+  return { ok: false, reason: `This step needs a ${role.toLowerCase().replace(/_/g, " ")}.` };
 }
 
 export type DecideInput = { requestId: string; actor: Actor; action: DecisionAction; comment?: string | null };
@@ -211,7 +226,7 @@ export async function decideRequest(input: DecideInput) {
     // Guard against two approvers deciding the same step at once.
     const moved = await tx.request.updateMany({
       where: { id: request.id, status: "PENDING_APPROVAL", currentStepOrder: step.order },
-      data: { status: nextStatus, currentStepOrder: nextStep?.order ?? null, decidedAt: nextStep ? null : new Date() },
+      data: { status: nextStatus, currentStepOrder: nextStep?.order ?? null, decidedAt: nextStep ? null : new Date(), stepStartedAt: nextStep ? new Date() : null, stepRoleOverride: null, remindedAt: null, escalatedAt: null },
     });
     if (moved.count !== 1) throw new RequestError("CONFLICT", "Another approver has just decided this step. Refresh to see the result.");
 
@@ -313,6 +328,7 @@ export function requestAccessFor(request: Pick<RequestRecord, "requesterId" | "w
   if (actor.roles.some((r) => REQUEST_ADMIN_ROLES.includes(r))) return "admin";
   const roles = [...actor.roles, ...(actor.delegated ?? []).map((d) => d.role)];
   if (request.workflowVersion.steps.some((s) => roles.includes(s.approverRole))) return "approver";
+  if ((request as { stepRoleOverride?: Role | null }).stepRoleOverride && roles.includes((request as { stepRoleOverride?: Role | null }).stepRoleOverride!)) return "approver";
   return null;
 }
 
@@ -369,8 +385,10 @@ export function describeStatus(request: { status: string; currentStepOrder: numb
   switch (request.status) {
     case "PENDING_APPROVAL": {
       const step = request.workflowVersion.steps.find((s) => s.order === request.currentStepOrder);
-      return step ? `Awaiting: ${step.name}` : "Awaiting approval";
+      const override = (request as { stepRoleOverride?: Role | null }).stepRoleOverride;
+      return step ? `Awaiting: ${step.name}${override ? ` (escalated to ${override.toLowerCase().replaceAll("_", " ")})` : ""}` : "Awaiting approval";
     }
+    case "EXPIRED": return "Expired without a decision";
     case "CHANGES_REQUESTED": return "Returned for changes";
     case "APPROVED": return "Approved, being actioned";
     case "FULFILLED": return "Completed";
@@ -378,4 +396,90 @@ export function describeStatus(request: { status: string; currentStepOrder: numb
     case "CANCELLED": return "Withdrawn";
     default: return request.status.toLowerCase().replace(/_/g, " ");
   }
+}
+
+// ---------------------------------------------------------------------------
+// Pending-step policy (WF-07): reminders, escalation, expiry, reassignment
+// ---------------------------------------------------------------------------
+
+const DAY_MS = 86400000;
+
+/** Active users holding a role in the organisation, other than the requester. */
+async function roleHolders(tx: Tx, organizationId: string, role: Role, excludeId: string) {
+  return tx.user.findMany({ where: { organizationId, status: "ACTIVE", id: { not: excludeId }, roleAssignments: { some: { role } } }, select: { id: true } });
+}
+
+/** An administrator moves the current step to another role, for example when the usual approver has left (WF-07 reassignment). */
+export async function reassignStep(input: { requestId: string; actor: Actor; role: Role; reason: string }) {
+  if (!input.actor.roles.some((r) => REQUEST_ADMIN_ROLES.includes(r))) throw new RequestError("FORBIDDEN", "Only an administrator can reassign an approval step.");
+  if (!input.reason.trim()) throw new RequestError("VALIDATION", "Give a reason for the reassignment.", { reason: "Required." });
+  return prisma.$transaction(async (tx) => {
+    const request = await tx.request.findUnique({ where: { id: input.requestId }, include: requestInclude });
+    if (!request) throw new RequestError("NOT_FOUND", "Request not found.");
+    if (request.status !== "PENDING_APPROVAL") throw new RequestError("INVALID_STATE", "Only a pending step can be reassigned.");
+    const step = currentStep(request)!;
+    const before = request.stepRoleOverride ?? step.approverRole;
+    if (before === input.role) throw new RequestError("VALIDATION", "That role already holds this step.", { role: "No change." });
+    const updated = await tx.request.update({ where: { id: request.id }, data: { stepRoleOverride: input.role === step.approverRole ? null : input.role, escalationNote: input.reason.trim(), remindedAt: null } });
+    await recordAudit({ actorId: input.actor.id, action: "REQUEST_STEP_REASSIGNED", entityType: "Request", entityId: request.id, before: { step: step.order, role: before }, after: { role: input.role, reason: input.reason } }, tx);
+    for (const u of await roleHolders(tx, request.requester.organizationId, input.role, request.requesterId)) {
+      await enqueueNotification(tx, { recipientId: u.id, event: "request.reassigned", idempotencyKey: `request.reassigned:${request.id}:${request.submissionVersion}:${step.order}:${u.id}`, payload: { requestId: request.id, type: request.requestType.name, step: step.name, reason: input.reason } });
+    }
+    return updated;
+  });
+}
+
+export type SweepResult = { reminded: number; escalated: number; expired: number };
+
+/**
+ * Applies each request type's policy to pending steps: a reminder to the
+ * approvers after `reminderAfterDays`, escalation of the step to
+ * `escalateToRole` after `escalateAfterDays`, and expiry after
+ * `expireAfterDays` (the requester may resubmit). Safe to run repeatedly.
+ */
+export async function sweepRequests(now: Date = new Date()): Promise<SweepResult> {
+  const result: SweepResult = { reminded: 0, escalated: 0, expired: 0 };
+  const pending = await prisma.request.findMany({ where: { status: "PENDING_APPROVAL", stepStartedAt: { not: null } }, include: requestInclude });
+  for (const r of pending) {
+    const policy = r.requestType;
+    const ageDays = (now.getTime() - r.stepStartedAt!.getTime()) / DAY_MS;
+    const step = currentStep(r);
+    if (!step) continue;
+    const role = r.stepRoleOverride ?? step.approverRole;
+    const payload = { requestId: r.id, type: r.requestType.name, step: step.name, days: Math.floor(ageDays) };
+    if (policy.expireAfterDays > 0 && ageDays >= policy.expireAfterDays) {
+      await prisma.$transaction(async (tx) => {
+        const moved = await tx.request.updateMany({ where: { id: r.id, status: "PENDING_APPROVAL", currentStepOrder: step.order }, data: { status: "EXPIRED", expiredAt: now, decidedAt: now } });
+        if (moved.count !== 1) return;
+        await recordAudit({ actorId: null, action: "REQUEST_EXPIRED", entityType: "Request", entityId: r.id, before: { status: "PENDING_APPROVAL", step: step.order }, after: { status: "EXPIRED", afterDays: policy.expireAfterDays }, source: "policy" }, tx);
+        await enqueueNotification(tx, { recipientId: r.requesterId, event: "request.expired", idempotencyKey: `request.expired:${r.id}:${r.submissionVersion}`, payload });
+        result.expired++;
+      });
+      continue;
+    }
+    if (policy.escalateToRole && policy.escalateAfterDays > 0 && ageDays >= policy.escalateAfterDays && !r.escalatedAt && role !== policy.escalateToRole) {
+      await prisma.$transaction(async (tx) => {
+        const moved = await tx.request.updateMany({ where: { id: r.id, status: "PENDING_APPROVAL", currentStepOrder: step.order, escalatedAt: null }, data: { stepRoleOverride: policy.escalateToRole, escalatedAt: now, escalationNote: `Escalated after ${policy.escalateAfterDays} days without a decision` } });
+        if (moved.count !== 1) return;
+        await recordAudit({ actorId: null, action: "REQUEST_ESCALATED", entityType: "Request", entityId: r.id, before: { role }, after: { role: policy.escalateToRole, afterDays: policy.escalateAfterDays }, source: "policy" }, tx);
+        for (const u of await roleHolders(tx, r.requester.organizationId, policy.escalateToRole!, r.requesterId)) {
+          await enqueueNotification(tx, { recipientId: u.id, event: "request.escalated", idempotencyKey: `request.escalated:${r.id}:${r.submissionVersion}:${step.order}:${u.id}`, payload: { ...payload, from: role.toLowerCase().replaceAll("_", " ") } });
+        }
+        await enqueueNotification(tx, { recipientId: r.requesterId, event: "request.escalated_requester", idempotencyKey: `request.escalated_requester:${r.id}:${r.submissionVersion}:${step.order}`, payload });
+        result.escalated++;
+      });
+      continue;
+    }
+    if (policy.reminderAfterDays > 0 && ageDays >= policy.reminderAfterDays && !r.remindedAt) {
+      await prisma.$transaction(async (tx) => {
+        const moved = await tx.request.updateMany({ where: { id: r.id, status: "PENDING_APPROVAL", currentStepOrder: step.order, remindedAt: null }, data: { remindedAt: now } });
+        if (moved.count !== 1) return;
+        for (const u of await roleHolders(tx, r.requester.organizationId, role, r.requesterId)) {
+          await enqueueNotification(tx, { recipientId: u.id, event: "request.reminder", idempotencyKey: `request.reminder:${r.id}:${r.submissionVersion}:${step.order}:${u.id}`, payload });
+        }
+        result.reminded++;
+      });
+    }
+  }
+  return result;
 }

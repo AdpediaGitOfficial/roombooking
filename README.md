@@ -150,6 +150,21 @@ fields are neither required nor stored on submission. Types can be set
 inactive to hide them from residents. Every create, save, publish, discard and
 settings change is audited.
 
+### Expiry, escalation and reassignment
+
+Each request type carries a pending-step policy, set on its form builder page
+(WF-07): remind the approvers after N days, escalate the step to a chosen role
+after N days, and expire the request after N days; 0 switches a rule off. The
+clock starts when a step begins and restarts at each step and on
+resubmission. The jobs endpoint applies the policy (`sweepRequests`): a
+reminder goes once to the approvers of the step; escalation moves the step to
+the escalation role, notifies that role and the requester, and shows on the
+request as escalated; expiry marks the request expired, notifies the
+requester, and lets them resubmit, which restarts the route. Administrators
+can also reassign a pending step to another role with a reason, for example
+when the usual approver has left; the new role's holders are notified. Every
+policy action and reassignment is audited.
+
 ### Delegation and absence cover
 
 Approvers hand their approvals to a colleague for a period of leave at

@@ -1,7 +1,8 @@
 "use client";
 
 import { useActionState } from "react";
-import { decideRequestAction, withdrawRequestAction, type ActionState } from "../actions";
+import { decideRequestAction, withdrawRequestAction, type ActionState, reassignStepAction } from "../actions";
+import type { Role } from "@prisma/client";
 
 function Feedback({ state }: { state: ActionState }) {
   if (state.error) return <p role="alert" className="mt-2 text-sm text-red-700 dark:text-red-300">{state.error}</p>;
@@ -42,6 +43,24 @@ export function WithdrawForm({ requestId }: { requestId: string }) {
         {pending ? "Withdrawing…" : "Withdraw"}
       </button>
       <Feedback state={state} />
+    </form>
+  );
+}
+
+export function ReassignForm({ requestId, currentRole, roles }: { requestId: string; currentRole: Role; roles: Role[] }) {
+  const [state, action, pending] = useActionState<ActionState, FormData>(reassignStepAction, {});
+  return (
+    <form action={action} className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800" data-reassign>
+      <input type="hidden" name="requestId" value={requestId} />
+      <h3 className="font-medium">Reassign this step</h3>
+      <p className="mt-1 text-xs text-zinc-500">Currently with the {currentRole.toLowerCase().replaceAll("_", " ")}. Use this when the usual approver is unavailable; the new role&apos;s holders are notified.</p>
+      <div className="mt-2 grid gap-2 sm:grid-cols-[1fr_2fr_auto] sm:items-end">
+        <label className="block text-sm">To role<select name="role" defaultValue="" className="mt-1 block w-full rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"><option value="">Choose…</option>{roles.filter((r) => r !== currentRole).map((r) => <option key={r} value={r}>{r.toLowerCase().replaceAll("_", " ")}</option>)}</select></label>
+        <label className="block text-sm">Reason *<input name="reason" className="mt-1 block w-full rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900" /></label>
+        <button type="submit" disabled={pending} className="rounded-md border border-zinc-300 px-3 py-2 text-sm font-medium disabled:opacity-60 dark:border-zinc-700">{pending ? "Saving…" : "Reassign"}</button>
+      </div>
+      {state.error && <p role="alert" className="mt-2 text-sm text-red-700 dark:text-red-300">{state.error}</p>}
+      {state.message && <p role="status" className="mt-2 text-sm text-green-700 dark:text-green-300">{state.message}</p>}
     </form>
   );
 }

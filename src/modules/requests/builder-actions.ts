@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import type { Role } from "@prisma/client";
 import { requireRole } from "@/lib/auth/authorize";
 import { FORM_BUILDER_ROLES, createDraft, createType, discardDraft, publishVersion, saveDraft, updateType } from "./builder";
 import { RequestError } from "./errors";
@@ -37,9 +38,10 @@ export async function createTypeAction(_prev: BuilderState, formData: FormData):
 export async function updateTypeAction(_prev: BuilderState, formData: FormData): Promise<BuilderState> {
   const user = await requireRole(FORM_BUILDER_ROLES, "/admin/forms");
   const typeId = str(formData, "typeId");
-  const values = { name: str(formData, "name"), description: str(formData, "description"), status: str(formData, "status") };
+  const values = { name: str(formData, "name"), description: str(formData, "description"), status: str(formData, "status"), reminderAfterDays: str(formData, "reminderAfterDays"), escalateAfterDays: str(formData, "escalateAfterDays"), escalateToRole: str(formData, "escalateToRole"), expireAfterDays: str(formData, "expireAfterDays") };
+  const num = (v: string) => (v === "" ? null : Number(v));
   try {
-    await updateType({ typeId, actorId: user.id, name: values.name, description: values.description, status: values.status === "INACTIVE" ? "INACTIVE" : "ACTIVE" });
+    await updateType({ typeId, actorId: user.id, name: values.name, description: values.description, status: values.status === "INACTIVE" ? "INACTIVE" : "ACTIVE", policy: { reminderAfterDays: num(values.reminderAfterDays), escalateAfterDays: num(values.escalateAfterDays), expireAfterDays: num(values.expireAfterDays), escalateToRole: (values.escalateToRole || null) as Role | null } });
   } catch (error) {
     return fail(error, values);
   }

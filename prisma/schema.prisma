@@ -378,14 +378,19 @@ model Allocation {
 // ---------------------------------------------------------------------------
 
 model RequestType {
-  id             String       @id @default(cuid())
-  organizationId String
-  code           String
-  name           String
-  description    String?
-  status         RecordStatus @default(ACTIVE)
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  id                String       @id @default(cuid())
+  organizationId    String
+  code              String
+  name              String
+  description       String?
+  status            RecordStatus @default(ACTIVE)
+  // Pending-step policy (WF-07), in whole days from when the step started; 0 switches a rule off.
+  reminderAfterDays Int          @default(2)
+  escalateAfterDays Int          @default(5)
+  escalateToRole    Role?
+  expireAfterDays   Int          @default(14)
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
 
   organization Organization      @relation(fields: [organizationId], references: [id])
   versions     WorkflowVersion[]
@@ -455,6 +460,13 @@ model Request {
   data              Json
   status            RequestStatus @default(DRAFT)
   currentStepOrder  Int?
+  // When the current step began, and what the policy or an administrator did about it (WF-07).
+  stepStartedAt     DateTime?
+  stepRoleOverride  Role?
+  remindedAt        DateTime?
+  escalatedAt       DateTime?
+  escalationNote    String?
+  expiredAt         DateTime?
   submissionVersion Int           @default(1)
   decidedAt         DateTime?
   fulfilledAt       DateTime?
