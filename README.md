@@ -51,6 +51,7 @@ The seed creates three demo accounts, all with password `ChangeMe123!`
 | vendor@example.com | Vendor technician (CoolAir Services) |
 | custodian@example.com | Inventory / key custodian |
 | facility@example.com | Facility manager |
+| auditor@example.com | Auditor (read-only, reports without names) |
 
 ## Accommodation and bed management
 
@@ -250,6 +251,33 @@ relevant queue. `GET /api/reports/occupancy.csv?siteId=` exports the bed list;
 every export is audited (RPT-07). Chart colours come from the validated
 reference palette in `src/app/globals.css` with light and dark steps, legends
 and table views.
+
+## Report suite
+
+`/reports` is the hub for the filtered reports (RPT-02..RPT-08), each with
+date range, site, building and report-specific filters and a CSV export that
+is recorded in the audit log:
+
+- **Movements** (`/reports/movements`): allocations overlapping the range with
+  arrivals, departures, transfers and cancellations; status and person
+  filters.
+- **Maintenance** (`/reports/maintenance`): backlog by status and priority,
+  overdue tickets, resolution times (mean and median hours, SLA met), workload
+  per assignee and vendor, categories, and the ticket list.
+- **Facility use** (`/reports/facilities`): bookings, attendance, no-shows,
+  cancellations, declined and pending requests, people, booked and open hours
+  and utilisation per facility.
+- **Keys** (`/reports/keys`): register by site (available, issued, overdue,
+  lost, damaged, under repair, retired), transactions in the range and the
+  outstanding keys with holders.
+
+Row-level access (RPT-07): a person whose reporting role is scoped to sites or
+buildings sees only those sites, and a site outside their scope yields an
+empty report. Auditors see employee IDs only; names appear for administrators
+and officers. Every page explains its formulas and time-zone boundaries
+(RPT-08): a report day runs midnight to midnight in the selected site's time
+zone, or UTC when all sites are shown; facility days follow the facility
+site's calendar. `src/modules/reports/suite.ts` holds the definitions.
 
 ## Email delivery
 

@@ -66,6 +66,7 @@ async function main() {
   const engineer = await ensureUser("engineer@example.com", "Maintenance Engineer", Role.MAINTENANCE);
   const custodian = await ensureUser("custodian@example.com", "Key Custodian", Role.INVENTORY_KEY_CUSTODIAN);
   await ensureUser("facility@example.com", "Facility Manager", Role.FACILITY_MANAGER);
+  await ensureUser("auditor@example.com", "Read-only Auditor", Role.AUDITOR);
   const vendor = await prisma.vendor.upsert({
     where: { id: "demo-vendor-coolair" },
     update: {},
