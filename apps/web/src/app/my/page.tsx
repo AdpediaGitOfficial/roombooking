@@ -4,7 +4,7 @@ import { api } from "@/lib/api";
 import { describeNotification } from "@sam/core/modules/self-service/rules";
 import Link from "next/link";
 import { markReadAction } from "@/modules/self-service/actions";
-import { isoDate } from "@sam/core/modules/accommodation/occupancy";
+import { isoDate } from "@sam/core/modules/accommodation/occupancy-rules";
 
 async function HomeContent() {
   const user = await requireUser("/my");

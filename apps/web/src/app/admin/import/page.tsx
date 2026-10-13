@@ -1,13 +1,14 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { requireRole } from "@/lib/auth/authorize";
-import { IMPORT_ROLES, KINDS, listBatches, type Summary } from "@sam/core/modules/imports/service";
+import { IMPORT_ROLES, KINDS, type Summary } from "@sam/core/modules/imports/rules";
+import { api } from "@/lib/api";
 import { UploadForm } from "@/modules/imports/components/forms";
 import { PageHeader } from "@/components/shell/page-header";
 
 async function Content() {
-  const user = await requireRole(IMPORT_ROLES, "/admin/import");
-  const batches = await listBatches(user.organizationId);
+  await requireRole(IMPORT_ROLES, "/admin/import");
+  const batches = await api.imports.list();
   return (
     <>
       <div className="grid gap-4 md:grid-cols-2">

@@ -1,26 +1,21 @@
 import { NextResponse } from "next/server";
-import { parseStatusWebhook, verifyWebhookSignature } from "@sam/core/modules/notifications/whatsapp";
-import { applyStatusUpdates } from "@sam/core/modules/notifications/worker";
 
-/** Meta webhook verification handshake: echoes hub.challenge when the verify token matches. */
-export async function GET(request: Request) {
-  const p = new URL(request.url).searchParams;
-  const token = process.env.WHATSAPP_VERIFY_TOKEN;
-  if (p.get("hub.mode") === "subscribe" && token && p.get("hub.verify_token") === token) {
-    return new NextResponse(p.get("hub.challenge") ?? "", { status: 200, headers: { "Content-Type": "text/plain" } });
-  }
-  return NextResponse.json({ error: "verification failed" }, { status: 403 });
+// The provider's webhook lands here when it is pointed at the web address. The API owns the
+// logic (signature check, status updates); this only relays the raw request. In production
+// the reverse proxy can route /api/webhooks/whatsapp straight to the API's /webhooks/whatsapp.
+const API_URL = process.env.API_URL ?? "http://127.0.0.1:4000";
+
+async function relay(upstream: Response) {
+  return new NextResponse(await upstream.text(), { status: upstream.status, headers: { "Content-Type": upstream.headers.get("content-type") ?? "application/json" } });
 }
 
-/** Delivery status receipts (COM-04). The body is authenticated with X-Hub-Signature-256 over the raw payload. */
+export async function GET(request: Request) {
+  return relay(await fetch(`${API_URL}/webhooks/whatsapp${new URL(request.url).search}`, { cache: "no-store" }));
+}
+
 export async function POST(request: Request) {
-  const raw = await request.text();
-  const secret = process.env.WHATSAPP_APP_SECRET ?? "";
-  if (!verifyWebhookSignature(raw, request.headers.get("x-hub-signature-256"), secret)) {
-    return NextResponse.json({ error: "invalid signature" }, { status: 401 });
-  }
-  let body: unknown;
-  try { body = JSON.parse(raw); } catch { return NextResponse.json({ error: "invalid json" }, { status: 400 }); }
-  const result = await applyStatusUpdates(parseStatusWebhook(body));
-  return NextResponse.json(result);
+  const headers: Record<string, string> = { "content-type": "application/json" };
+  const signature = request.headers.get("x-hub-signature-256");
+  if (signature) headers["x-hub-signature-256"] = signature;
+  return relay(await fetch(`${API_URL}/webhooks/whatsapp`, { method: "POST", headers, body: await request.text(), cache: "no-store" }));
 }

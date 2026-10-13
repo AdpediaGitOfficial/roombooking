@@ -1,11 +1,11 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { requireUser } from "@/lib/auth/authorize";
-import { myAnnouncements } from "@sam/core/modules/broadcasts/service";
+import { api } from "@/lib/api";
 
 async function Content() {
-  const user = await requireUser("/my/announcements");
-  const rows = await myAnnouncements(user.id);
+  await requireUser("/my/announcements");
+  const rows = await api.broadcasts.announcements();
   return (
     <ul className="mt-4 space-y-2">
       {rows.map((n) => {

@@ -92,7 +92,7 @@ export function createClient<C extends Contract>(contract: C, options: ClientOpt
         if (!res.ok) {
           let parsed: ErrorBody | null = null;
           try { parsed = (await res.json()) as ErrorBody; } catch { /* not JSON */ }
-          throw new ApiError(res.status, parsed?.error.code ?? "ERROR", parsed?.error.message ?? `Request failed (${res.status}).`, parsed?.error.fieldErrors ?? {}, parsed?.error.requestId);
+          throw new ApiError(res.status, parsed?.error.code ?? "ERROR", parsed?.error.message ?? `Request failed (${res.status}).`, parsed?.error.fieldErrors ?? {}, parsed?.error.requestId, parsed?.error.details ?? {});
         }
         if (def.kind === "file") {
           const disposition = res.headers.get("content-disposition") ?? "";

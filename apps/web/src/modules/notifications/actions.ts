@@ -1,43 +1,35 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { prisma } from "@sam/core/lib/db";
 import { requireRole, requireUser } from "@/lib/auth/authorize";
 import { api } from "@/lib/api";
 import { ApiError } from "@sam/contract/index";
-import { recordAudit } from "@sam/core/lib/audit";
-import { enqueueNotification } from "@sam/core/lib/notifications";
 import { USER_ADMIN_ROLES } from "@sam/core/modules/admin/access";
-import { processOutbox, retryNotification } from "@sam/core/modules/notifications/worker";
 
 export type ActionState = { error?: string; message?: string; values?: Record<string, string> };
 
 export async function runWorkerAction(): Promise<ActionState> {
-  const actor = await requireRole(USER_ADMIN_ROLES, "/admin/notifications");
-  const result = await processOutbox({ limit: 50 });
-  await recordAudit({ actorId: actor.id, action: "NOTIFICATION_WORKER_RUN", entityType: "Notification", entityId: "outbox", after: result });
+  await requireRole(USER_ADMIN_ROLES, "/admin/notifications");
+  const result = await api.notifications.runWorker();
   revalidatePath("/admin/notifications");
   return { message: `Processed ${result.claimed}: ${result.sent} sent, ${result.failed} to retry, ${result.permanentlyFailed} failed permanently.` };
 }
 
 export async function retryAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
-  const actor = await requireRole(USER_ADMIN_ROLES, "/admin/notifications");
-  const id = String(formData.get("id") ?? "");
-  const ok = await retryNotification(id, actor.id);
+  await requireRole(USER_ADMIN_ROLES, "/admin/notifications");
+  const { queued } = await api.notifications.retry({ id: String(formData.get("id") ?? "") });
   revalidatePath("/admin/notifications");
-  return ok ? { message: "Queued for another attempt." } : { error: "Only failed notifications can be retried." };
+  return queued ? { message: "Queued for another attempt." } : { error: "Only failed notifications can be retried." };
 }
 
-export async function sendTestEmailAction(): Promise<ActionState> {
-  const actor = await requireRole(USER_ADMIN_ROLES, "/admin/notifications");
-  const key = `test.email:${actor.id}:${Date.now()}`;
-  await prisma.$transaction((tx) => enqueueNotification(tx, { recipientId: actor.id, channel: "EMAIL", event: "test.email", idempotencyKey: key, payload: { sentBy: actor.email } }));
-  const result = await processOutbox({ limit: 5 });
+async function test(channel: "EMAIL" | "WHATSAPP"): Promise<ActionState> {
+  await requireRole(USER_ADMIN_ROLES, "/admin/notifications");
+  const result = await api.notifications.sendTest({ channel });
   revalidatePath("/admin/notifications");
-  const row = await prisma.notification.findUnique({ where: { idempotencyKey: key } });
-  if (row?.status === "SENT") return { message: `Test email sent to ${row.deliveredTo} (message id ${row.providerMessageId}).` };
-  return { error: `Test email not sent: ${row?.lastError ?? "transport disabled or queue busy"} (${result.claimed} processed).` };
+  return result.ok ? { message: result.message } : { error: result.message };
 }
+
+export const sendTestEmailAction = async (): Promise<ActionState> => test("EMAIL");
 
 export async function setEmailPreferenceAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
   await requireUser("/my/profile");
@@ -48,16 +40,7 @@ export async function setEmailPreferenceAction(_prev: ActionState, formData: For
 }
 
 export async function sendTestWhatsAppAction(): Promise<ActionState> {
-  const actor = await requireRole(USER_ADMIN_ROLES, "/admin/notifications");
-  const me = await prisma.user.findUniqueOrThrow({ where: { id: actor.id }, select: { whatsappNumber: true, whatsappNotifications: true, whatsappConsentAt: true } });
-  if (!me.whatsappNumber || !me.whatsappNotifications || !me.whatsappConsentAt) return { error: "Add your WhatsApp number and consent in your profile first (My profile → Notifications)." };
-  const key = `test.whatsapp:${actor.id}:${Date.now()}`;
-  await prisma.$transaction((tx) => enqueueNotification(tx, { recipientId: actor.id, channel: "WHATSAPP", event: "test.whatsapp", idempotencyKey: key, payload: { sentBy: actor.email } }));
-  const result = await processOutbox({ limit: 5, channels: ["WHATSAPP"] });
-  revalidatePath("/admin/notifications");
-  const row = await prisma.notification.findUnique({ where: { idempotencyKey: key } });
-  if (row?.status === "SENT") return { message: `Test message sent to ${row.deliveredTo} (provider id ${row.providerMessageId}).` };
-  return { error: `Test message not sent: ${row?.lastError ?? "transport disabled or queue busy"} (${result.claimed} processed).` };
+  return test("WHATSAPP");
 }
 
 export async function setWhatsAppPreferenceAction(_prev: ActionState, formData: FormData): Promise<ActionState> {

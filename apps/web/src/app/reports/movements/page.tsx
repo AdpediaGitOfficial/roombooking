@@ -3,7 +3,8 @@ import Link from "next/link";
 import type { AllocationStatus } from "@prisma/client";
 import { requireRole } from "@/lib/auth/authorize";
 import { REPORT_VIEW_ROLES } from "@sam/core/modules/reports/access";
-import { DEFINITIONS, filterOptions, movementReport, parseRange, scopeFor } from "@sam/core/modules/reports/suite";
+import { DEFINITIONS } from "@sam/core/modules/reports/rules";
+import { api } from "@/lib/api";
 import { Definitions, ReportFilters, Stat, qs, table, tbody, td, th, thead, wrap } from "@/modules/reports/components/report-filters";
 import { PageHeader } from "@/components/shell/page-header";
 
@@ -11,13 +12,11 @@ type Search = Promise<Record<string, string | undefined>>;
 const STATUSES: AllocationStatus[] = ["CONFIRMED", "CHECKED_IN", "CHECKED_OUT", "CANCELLED", "PENDING_APPROVAL", "DRAFT", "REJECTED", "EXPIRED"];
 
 async function Content({ searchParams }: { searchParams: Search }) {
-  const user = await requireRole(REPORT_VIEW_ROLES, "/reports/movements");
-  const scope = await scopeFor(user);
+  await requireRole(REPORT_VIEW_ROLES, "/reports/movements");
   const sp = await searchParams;
-  const range = parseRange(sp.from, sp.to);
   const status = STATUSES.includes(sp.status as AllocationStatus) ? (sp.status as AllocationStatus) : null;
-  const f = { siteId: sp.siteId || null, buildingId: sp.buildingId || null, status, q: sp.q || null, range };
-  const [r, options] = await Promise.all([movementReport(scope, f), filterOptions(scope)]);
+  const f = { siteId: sp.siteId || null, buildingId: sp.buildingId || null, status, q: sp.q || null };
+  const { report: r, options, range, canSeeNames } = await api.reports.movements({ siteId: f.siteId ?? undefined, buildingId: f.buildingId ?? undefined, status: status ?? undefined, q: f.q ?? undefined, from: sp.from || undefined, to: sp.to || undefined });
   const query = qs({ from: range.from, to: range.to, siteId: f.siteId, buildingId: f.buildingId, status, q: f.q });
   return (
     <>
@@ -44,7 +43,7 @@ async function Content({ searchParams }: { searchParams: Search }) {
           </tbody>
         </table>
       </div>
-      <Definitions lines={DEFINITIONS.movements} masked={!scope.canSeeNames} />
+      <Definitions lines={DEFINITIONS.movements} masked={!canSeeNames} />
     </>
   );
 }

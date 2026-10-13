@@ -1,24 +1,18 @@
 import { Suspense } from "react";
-import { notFound } from "next/navigation";
 import { hasRole, requireRole } from "@/lib/auth/authorize";
 import { ADMIN_VIEW_ROLES, ALL_ROLES, ROLE_DESCRIPTIONS, USER_ADMIN_ROLES } from "@sam/core/modules/admin/access";
-import { getUser, listAudit, scopeLabel, scopeOptions, unlinkedStaff } from "@sam/core/modules/admin/users-service";
+import { scopeLabel } from "@sam/core/modules/admin/rules";
+import { api, orNotFound } from "@/lib/api";
 import { AddRoleForm, EditUserForm, RemoveRoleButton, SignOutEverywhereForm, StatusForm, TokenForm } from "@/modules/admin/components/forms";
 import { UserStatusBadge } from "../page";
-import { prisma } from "@sam/core/lib/db";
 
 async function Content({ params, searchParams }: { params: Promise<{ userId: string }>; searchParams: Promise<{ invited?: string }> }) {
   const { userId } = await params;
   const { invited } = await searchParams;
   const actor = await requireRole(ADMIN_VIEW_ROLES, `/admin/users/${userId}`);
   const canManage = hasRole(actor, ...USER_ADMIN_ROLES);
-  const user = await getUser(userId);
-  if (!user || user.organizationId !== actor.organizationId) notFound();
-  const [options, staff, audit] = await Promise.all([scopeOptions(), unlinkedStaff(actor.organizationId, user.id), listAudit({ entityId: user.id, entityType: "User" }, 30)]);
+  const { user, hasPassword, options, staff, audit, inviteLink: initialLink } = await orNotFound(api.users.get({ id: userId, invited: Boolean(invited) }));
   const isVendor = user.roleAssignments.some((r) => r.role === "VENDOR");
-  // The invite link is only recoverable right after creation (from the queued email payload).
-  const pendingInvite = invited && user.status === "INVITED" ? await prisma.notification.findFirst({ where: { recipientId: user.id, event: "user.invited" }, orderBy: { createdAt: "desc" } }) : null;
-  const initialLink = (pendingInvite?.payload as { invitePath?: string } | null)?.invitePath ?? null;
 
   return (
     <>
@@ -46,7 +40,7 @@ async function Content({ params, searchParams }: { params: Promise<{ userId: str
           {canManage && <EditUserForm userId={user.id} name={user.name} email={user.email} staffProfileId={user.staffProfile?.id ?? ""} vendorId={user.vendor?.id ?? ""} accessExpiresAt={user.accessExpiresAt?.toISOString().slice(0, 10) ?? ""} options={options} staff={staff} isVendor={isVendor} />}
         </section>
         <section className="space-y-4">
-          {canManage && user.id !== actor.id && <StatusForm userId={user.id} status={user.status} hasPassword={!!user.passwordHash} />}
+          {canManage && user.id !== actor.id && <StatusForm userId={user.id} status={user.status} hasPassword={hasPassword} />}
           {canManage && user.id === actor.id && <p className="card p-4 text-sm text-zinc-500">This is your own account. Another administrator must change its status or administrator role.</p>}
           {canManage && user.status === "INVITED" && <TokenForm userId={user.id} purpose="INVITE" initialLink={initialLink} />}
           {canManage && user.status === "ACTIVE" && <TokenForm userId={user.id} purpose="RESET" />}

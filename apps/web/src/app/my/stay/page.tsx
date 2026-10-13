@@ -2,7 +2,7 @@ import { Suspense } from "react";
 import { requireUser } from "@/lib/auth/authorize";
 import { api } from "@/lib/api";
 import { StayCard } from "@/modules/self-service/components/stay-card";
-import { isoDate } from "@sam/core/modules/accommodation/occupancy";
+import { isoDate } from "@sam/core/modules/accommodation/occupancy-rules";
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (

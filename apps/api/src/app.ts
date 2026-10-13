@@ -14,6 +14,7 @@ import { toHttpError } from "./errors";
 import { handlers } from "./handlers";
 import { createMetrics } from "./metrics";
 import { buildOpenApi } from "./openapi";
+import { registerRawRoutes } from "./raw-routes";
 import { registerOps } from "./register";
 
 export interface BuildOptions {
@@ -107,5 +108,6 @@ export async function buildApp(options: BuildOptions = {}): Promise<FastifyInsta
 
   registerOps(app, contract, handlers, { authenticator, maxUploadBytes: config.maxUploadBytes });
   if (options.extraOps) registerOps(app, options.extraOps.contract, options.extraOps.handlers as never, { authenticator, maxUploadBytes: config.maxUploadBytes });
+  await registerRawRoutes(app);
   return app;
 }

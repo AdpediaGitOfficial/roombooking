@@ -2,16 +2,12 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { requireRole } from "@/lib/auth/authorize";
 import { REPORT_VIEW_ROLES } from "@sam/core/modules/reports/access";
-import { getDashboard } from "@sam/core/modules/reports/service";
-import { defaultRange, facilityReport, keyReport, maintenanceReport, movementReport, scopeFor } from "@sam/core/modules/reports/suite";
+import { api } from "@/lib/api";
 import { PageHeader } from "@/components/shell/page-header";
 
 async function Overview() {
-  const user = await requireRole(REPORT_VIEW_ROLES, "/reports");
-  const scope = await scopeFor(user);
-  const range = defaultRange();
-  const siteId = scope.siteIds?.length === 1 ? scope.siteIds[0] : null;
-  const [dash, moves, maint, fac, keys] = await Promise.all([getDashboard(siteId), movementReport(scope, { siteId, range }), maintenanceReport(scope, { siteId, range }), facilityReport(scope, { siteId, range }), keyReport(scope, { siteId, range })]);
+  await requireRole(REPORT_VIEW_ROLES, "/reports");
+  const { dash, moves, maint, fac, keys } = await api.reports.overview();
   const util = fac.filter((f) => f.utilisation !== null);
   const cards: Array<[string, string, string, Array<[string, string | number]>]> = [
     ["Occupancy", "/dashboard", "Beds, arrivals, departures and pending actions today.", [["Occupancy", `${dash.occupancyRate}%`], ["Occupied", dash.summary.occupied], ["Vacant", dash.summary.vacant]]],

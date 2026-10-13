@@ -8,29 +8,16 @@ import { hashPassword, validatePasswordStrength } from "../../lib/auth/password"
 import { revokeUserSessions } from "../../lib/auth/session-store";
 import { AdminError } from "./errors";
 import { ALL_ROLES } from "./access";
+import { userInclude, type RoleGrant } from "./rules";
+
+export * from "./rules";
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const INVITE_TTL_HOURS = Number(process.env.INVITE_TTL_HOURS ?? 7 * 24);
 const RESET_TTL_HOURS = Number(process.env.RESET_TTL_HOURS ?? 24);
 
-export const userInclude = {
-  roleAssignments: { include: { site: { select: { id: true, name: true } }, building: { select: { id: true, name: true } } }, orderBy: { createdAt: "asc" } },
-  staffProfile: { select: { id: true, employeeId: true, firstName: true, lastName: true, department: true } },
-  vendor: { select: { id: true, name: true } },
-  _count: { select: { sessions: { where: { revokedAt: null, expiresAt: { gt: new Date() } } } } },
-} satisfies Prisma.UserInclude;
-
-export type UserRecord = Prisma.UserGetPayload<{ include: typeof userInclude }>;
-export type RoleGrant = { role: Role; siteId?: string | null; buildingId?: string | null };
-
 function hashToken(token: string) {
   return createHash("sha256").update(token).digest("hex");
-}
-
-export function scopeLabel(a: { site?: { name: string } | null; building?: { name: string } | null }): string {
-  if (a.building) return a.building.name;
-  if (a.site) return a.site.name;
-  return "All sites";
 }
 
 // ---------------------------------------------------------------------------
@@ -311,4 +298,31 @@ export async function listAudit(filter: AuditFilter, take = 200) {
 export async function auditEntityTypes() {
   const rows = await prisma.auditEvent.findMany({ distinct: ["entityType"], select: { entityType: true }, orderBy: { entityType: "asc" } });
   return rows.map((r) => r.entityType);
+}
+
+// ---------------------------------------------------------------------------
+// Views for the API
+// ---------------------------------------------------------------------------
+
+/** One user for the admin pages, with the pick-lists and recent audit trail they need. */
+export async function getUserView(organizationId: string, userId: string, withInviteLink: boolean) {
+  const user = await getUser(userId);
+  if (!user || user.organizationId !== organizationId) throw new AdminError("NOT_FOUND", "User not found.");
+  const [options, staff, audit] = await Promise.all([scopeOptions(), unlinkedStaff(organizationId, user.id), listAudit({ entityId: user.id, entityType: "User" }, 30)]);
+  // The invite link is only recoverable right after creation, from the queued email payload.
+  const pending = withInviteLink && user.status === "INVITED" ? await prisma.notification.findFirst({ where: { recipientId: user.id, event: "user.invited" }, orderBy: { createdAt: "desc" } }) : null;
+  const inviteLink = (pending?.payload as { invitePath?: string } | null)?.invitePath ?? null;
+  return { user, hasPassword: !!user.passwordHash, options, staff, audit, inviteLink };
+}
+
+/** Pick-lists for the new-user form. */
+export async function newUserOptions(organizationId: string) {
+  const [options, staff] = await Promise.all([scopeOptions(), unlinkedStaff(organizationId)]);
+  return { options, staff };
+}
+
+/** The audit log with the entity types to filter by. */
+export async function auditView(filter: AuditFilter) {
+  const [events, types] = await Promise.all([listAudit(filter), auditEntityTypes()]);
+  return { events, types };
 }

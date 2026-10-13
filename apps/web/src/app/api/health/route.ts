@@ -1,15 +1,15 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@sam/core/lib/db";
+
+/** The web app is up when it answers; it is healthy when the API behind it is ready. */
+const API_URL = process.env.API_URL ?? "http://127.0.0.1:4000";
 
 export async function GET() {
   try {
-    await prisma.$queryRaw`SELECT 1`;
-    return NextResponse.json({ status: "ok", database: "up" });
+    const res = await fetch(`${API_URL}/ready`, { cache: "no-store", signal: AbortSignal.timeout(3000) });
+    const body = (await res.json().catch(() => ({}))) as { database?: string };
+    if (res.ok) return NextResponse.json({ status: "ok", api: "up", database: body.database ?? "up" });
+    return NextResponse.json({ status: "degraded", api: "unavailable", database: body.database ?? "unknown" }, { status: 503 });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "unknown error";
-    return NextResponse.json(
-      { status: "degraded", database: "down", error: message },
-      { status: 503 },
-    );
+    return NextResponse.json({ status: "degraded", api: "down", error: error instanceof Error ? error.message : "unknown error" }, { status: 503 });
   }
 }

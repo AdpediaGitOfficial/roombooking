@@ -3,7 +3,8 @@ import Link from "next/link";
 import type { Role, UserStatus } from "@prisma/client";
 import { requireRole } from "@/lib/auth/authorize";
 import { ADMIN_VIEW_ROLES, ALL_ROLES } from "@sam/core/modules/admin/access";
-import { listUsers, scopeLabel } from "@sam/core/modules/admin/users-service";
+import { scopeLabel } from "@sam/core/modules/admin/rules";
+import { api } from "@/lib/api";
 import { PageHeader } from "@/components/shell/page-header";
 
 const STATUSES: UserStatus[] = ["INVITED", "ACTIVE", "SUSPENDED", "DEACTIVATED"];
@@ -20,9 +21,9 @@ export function UserStatusBadge({ status }: { status: UserStatus }) {
 }
 
 async function Users({ searchParams }: { searchParams: Promise<{ q?: string; status?: string; role?: string }> }) {
-  const actor = await requireRole(ADMIN_VIEW_ROLES, "/admin/users");
+  await requireRole(ADMIN_VIEW_ROLES, "/admin/users");
   const { q, status, role } = await searchParams;
-  const users = await listUsers(actor.organizationId, { q, status: STATUSES.includes(status as UserStatus) ? (status as UserStatus) : null, role: ALL_ROLES.includes(role as Role) ? (role as Role) : null });
+  const users = await api.users.list({ q: q || undefined, status: STATUSES.includes(status as UserStatus) ? (status as UserStatus) : undefined, role: ALL_ROLES.includes(role as Role) ? (role as Role) : undefined });
   return (
     <>
       <form method="get" className="grid gap-3 sm:grid-cols-[1fr_160px_200px_auto]">

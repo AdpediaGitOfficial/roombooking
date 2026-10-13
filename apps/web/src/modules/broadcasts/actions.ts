@@ -2,10 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { ApiError } from "@sam/contract/index";
+import { api } from "@/lib/api";
 import { requireRole } from "@/lib/auth/authorize";
 import { BROADCAST_ROLES } from "@sam/core/modules/broadcasts/access";
-import { BroadcastError } from "@sam/core/modules/broadcasts/errors";
-import { cancelBroadcast, createBroadcast, parseAudience, resolveAudience, sendBroadcast, updateBroadcast, type Audience } from "@sam/core/modules/broadcasts/service";
+import { parseAudience } from "@sam/core/modules/broadcasts/rules";
 
 export type FormState = { error?: string; message?: string; fieldErrors?: Record<string, string>; values?: Record<string, string>; preview?: { count: number; sample: string[] } };
 
@@ -26,37 +27,36 @@ function revalidate(id?: string) {
 }
 
 function fail(error: unknown, values?: Record<string, string>): FormState {
-  if (error instanceof BroadcastError) return { error: error.message, fieldErrors: error.fieldErrors, values };
+  if (error instanceof ApiError && error.status < 500) return { error: error.message, fieldErrors: error.fieldErrors, values };
   throw error;
 }
 
 /** Compose form: "preview" counts the audience, "draft" saves, "send" saves and sends. */
 export async function composeAction(_prev: FormState, formData: FormData): Promise<FormState> {
-  const user = await requireRole(BROADCAST_ROLES, "/admin/broadcasts");
+  await requireRole(BROADCAST_ROLES, "/admin/broadcasts");
   const intent = str(formData, "intent");
   const broadcastId = str(formData, "broadcastId");
   const { audience, values, input } = read(formData);
   if (intent === "preview") {
-    const recipients = await resolveAudience(user.organizationId, audience as Audience);
-    return { values, preview: { count: recipients.length, sample: recipients.slice(0, 8).map((r) => r.name) } };
+    return { values, preview: await api.broadcasts.preview({ audience }) };
   }
-  let id = broadcastId;
+  let id: string;
   try {
-    if (id) await updateBroadcast({ broadcastId: id, actorId: user.id, ...input });
-    else id = (await createBroadcast({ organizationId: user.organizationId, actorId: user.id, ...input })).id;
-    if (intent === "send") await sendBroadcast({ broadcastId: id, actorId: user.id });
+    ({ id } = await api.broadcasts.save({ broadcastId: broadcastId || undefined, ...input, send: intent === "send" }));
   } catch (error) {
-    return fail(error, { ...values, broadcastId: id });
+    // A draft that was saved before the send failed keeps its id, so a retry updates it.
+    const savedId = error instanceof ApiError && typeof error.details.broadcastId === "string" ? error.details.broadcastId : broadcastId;
+    return fail(error, { ...values, broadcastId: savedId });
   }
   revalidate(id);
   redirect(`/admin/broadcasts/${id}`);
 }
 
 export async function sendAction(_prev: FormState, formData: FormData): Promise<FormState> {
-  const user = await requireRole(BROADCAST_ROLES, "/admin/broadcasts");
+  await requireRole(BROADCAST_ROLES, "/admin/broadcasts");
   const id = str(formData, "broadcastId");
   try {
-    const { recipients } = await sendBroadcast({ broadcastId: id, actorId: user.id });
+    const { recipients } = await api.broadcasts.send({ id });
     revalidate(id);
     return { message: `Sent to ${recipients} ${recipients === 1 ? "person" : "people"}.` };
   } catch (error) {
@@ -65,10 +65,10 @@ export async function sendAction(_prev: FormState, formData: FormData): Promise<
 }
 
 export async function cancelAction(_prev: FormState, formData: FormData): Promise<FormState> {
-  const user = await requireRole(BROADCAST_ROLES, "/admin/broadcasts");
+  await requireRole(BROADCAST_ROLES, "/admin/broadcasts");
   const id = str(formData, "broadcastId");
   try {
-    await cancelBroadcast({ broadcastId: id, actorId: user.id });
+    await api.broadcasts.cancel({ id });
   } catch (error) {
     return fail(error);
   }

@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import { requireRole } from "@/lib/auth/authorize";
 import { ADMIN_VIEW_ROLES } from "@sam/core/modules/admin/access";
-import { auditEntityTypes, listAudit } from "@sam/core/modules/admin/users-service";
+import { api } from "@/lib/api";
 import { PageHeader } from "@/components/shell/page-header";
 
 const input = "mt-1 block w-full rounded-md border border-zinc-300 px-3 py-2 text-sm";
@@ -9,7 +9,7 @@ const input = "mt-1 block w-full rounded-md border border-zinc-300 px-3 py-2 tex
 async function Log({ searchParams }: { searchParams: Promise<{ entityType?: string; action?: string; entityId?: string }> }) {
   await requireRole(ADMIN_VIEW_ROLES, "/admin/audit");
   const { entityType, action, entityId } = await searchParams;
-  const [events, types] = await Promise.all([listAudit({ entityType, action, entityId }), auditEntityTypes()]);
+  const { events, types } = await api.audit.list({ entityType: entityType || undefined, action: action || undefined, entityId: entityId || undefined });
   return (
     <>
       <form method="get" className="grid gap-3 sm:grid-cols-[200px_1fr_1fr_auto]">
