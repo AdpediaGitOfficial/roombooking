@@ -1,15 +1,83 @@
+# Local development: `docker compose up -d db` and run the app with `npm run dev`.
+# Production-style stack (app, migrations, scheduler and database):
+#   docker compose --profile app up -d --build
+# See README.md, "Deployment".
 services:
   db:
     image: postgres:16
     restart: unless-stopped
     environment:
-      POSTGRES_USER: sam
-      POSTGRES_PASSWORD: sam
-      POSTGRES_DB: sam
+      POSTGRES_USER: ${POSTGRES_USER:-sam}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sam}
+      POSTGRES_DB: ${POSTGRES_DB:-sam}
     ports:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-sam} -d ${POSTGRES_DB:-sam}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  # One-shot: applies pending migrations before the app starts. Re-run it for
+  # the demo data: docker compose --profile app run --rm migrate npm run db:seed
+  migrate:
+    profiles: ["app"]
+    build:
+      context: .
+      target: build
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-sam}:${POSTGRES_PASSWORD:-sam}@db:5432/${POSTGRES_DB:-sam}?schema=public
+    command: ["npx", "prisma", "migrate", "deploy"]
+    depends_on:
+      db:
+        condition: service_healthy
+
+  app:
+    profiles: ["app"]
+    build:
+      context: .
+      target: runner
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-sam}:${POSTGRES_PASSWORD:-sam}@db:5432/${POSTGRES_DB:-sam}?schema=public
+      UPLOAD_DIR: /app/uploads
+    ports:
+      - "${APP_PORT:-3000}:3000"
+    volumes:
+      - uploads:/app/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  # Calls POST /api/jobs/notifications on a schedule: delivers the email and
+  # WhatsApp outbox and runs the booking and request sweeps (reminders,
+  # escalation, expiry). JOBS_SECRET must be set in .env.
+  scheduler:
+    profiles: ["app"]
+    image: curlimages/curl:8.11.1
+    restart: unless-stopped
+    environment:
+      JOBS_SECRET: ${JOBS_SECRET:?set JOBS_SECRET in .env}
+      JOBS_INTERVAL_SECONDS: ${JOBS_INTERVAL_SECONDS:-60}
+    command:
+      - sh
+      - -c
+      - |
+        while true; do
+          curl -fsS -X POST -H "Authorization: Bearer $$JOBS_SECRET" http://app:3000/api/jobs/notifications || echo "jobs call failed"
+          echo
+          sleep "$$JOBS_INTERVAL_SECONDS"
+        done
+    depends_on:
+      app:
+        condition: service_healthy
 
 volumes:
   pgdata:
+  uploads:

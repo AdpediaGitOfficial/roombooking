@@ -437,6 +437,70 @@ directly:
 Not yet implemented: password reset / account recovery (SS-08), SSO and
 MFA (client decision), and per-site scoping of role checks.
 
+## Deployment
+
+The repository ships a production image and a compose stack. The image is a
+Next.js standalone server running as the unprivileged `node` user; the only
+state outside PostgreSQL is the photo store under `UPLOAD_DIR`, which the
+stack keeps on a named volume.
+
+```bash
+cp .env.example .env                           # then set the values below
+docker compose --profile app up -d --build     # db, migrate, app, scheduler
+docker compose --profile app run --rm migrate npm run db:seed   # optional demo data
+curl -fsS http://localhost:3000/api/health     # {"status":"ok","database":"up"}
+```
+
+Services in the `app` profile:
+
+| Service | Role |
+|---------|------|
+| `db` | PostgreSQL 16 on the `pgdata` volume (also used alone for development) |
+| `migrate` | One-shot `prisma migrate deploy`; the app waits for it to finish |
+| `app` | The web app on `APP_PORT` (default 3000) with the `uploads` volume mounted at `/app/uploads` |
+| `scheduler` | Calls `POST /api/jobs/notifications` every `JOBS_INTERVAL_SECONDS` (default 60): outbox delivery plus booking and request sweeps |
+
+Before go-live, set in `.env`:
+
+- `POSTGRES_PASSWORD`: a real password; the compose default `sam`/`sam` is
+  for development only. Inside the stack the app and migrations reach the
+  database as `db` with the `POSTGRES_*` values, so `DATABASE_URL` in `.env`
+  only matters for commands run on the host.
+- `JOBS_SECRET`: random, at least 32 characters; the scheduler refuses to
+  start without it and the jobs endpoint rejects every call without it.
+- `APP_BASE_URL`: the public `https://` origin, used in email and WhatsApp
+  links.
+- `MAIL_FROM` and the `SMTP_*` settings, or `EMAIL_TRANSPORT=disabled`.
+- The `WHATSAPP_*` settings if WhatsApp is in use, including the webhook
+  verify token and app secret, and `DEFAULT_COUNTRY_CODE` for local numbers.
+- `SEED_PASSWORD` only if the demo accounts are seeded on a shared
+  environment; change those passwords or delete the accounts afterwards.
+
+Run the app behind a TLS-terminating reverse proxy. Session cookies carry the
+`Secure` flag in production, so sign-in over plain HTTP will not keep a
+session. The WhatsApp webhook must be reachable at
+`APP_BASE_URL/api/webhooks/whatsapp`.
+
+Operational notes:
+
+- Migrations run on every `up`; a failed migration stops the stack before
+  the app starts, and nothing is applied twice.
+- Run exactly one scheduler. The app itself is stateless and can be scaled
+  behind the proxy as long as every replica mounts the same `uploads`
+  volume (or a shared filesystem).
+- Back up the `pgdata` volume and the `uploads` volume together; the
+  database holds the attachment metadata and the volume holds the files.
+- `GET /api/health` reports `503` when the database is unreachable; the
+  container health check uses it.
+- Logs go to stdout. The notification worker inside the jobs endpoint
+  retries failed deliveries up to `EMAIL_MAX_ATTEMPTS` and the admin page
+  at `/admin/notifications` shows what failed permanently.
+
+Without Docker, the same steps are `npm ci`, `npm run db:deploy`,
+`npm run build`, then `npm start` with `NODE_ENV=production`, plus a cron
+entry or `npm run notifications:worker` for delivery (the worker delivers
+the outbox but does not run the sweeps; the jobs endpoint does both).
+
 ## Scripts
 
 | Script | Purpose |
@@ -482,6 +546,8 @@ scripts/notifications-worker.ts  standalone delivery process
   lib/audit.ts         append-only audit writer
   proxy.ts             request gate (redirect to /login)
 tests/                 vitest suites
+Dockerfile             production image (standalone server, node user)
+docker-compose.yml     db for development; --profile app adds migrate, app, scheduler
 docs/
   requirements-analysis.md
 ```
