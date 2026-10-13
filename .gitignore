@@ -14,11 +14,11 @@
 /coverage
 
 # next.js
-/.next/
-/out/
+.next/
+out/
 
 # production
-/build
+build/
 
 # misc
 .DS_Store
@@ -44,4 +44,8 @@ next-env.d.ts
 !.env.example
 
 # uploaded files (photos)
-/uploads
+uploads/
+
+# build and cache output of the workspaces
+dist/
+.cache/

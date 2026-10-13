@@ -1,51 +1,43 @@
 {
   "name": "staff-accommodation",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
   "engines": {
     "node": ">=22"
   },
   "scripts": {
-    "dev": "next dev",
-    "build": "prisma generate && next build",
-    "start": "next start",
+    "dev": "npm run dev -w @sam/web",
+    "dev:web": "npm run dev -w @sam/web",
+    "dev:api": "npm run dev -w @sam/api",
+    "dev:worker": "npm run dev -w @sam/worker",
+    "build": "npm run db:generate && npm run build --workspaces --if-present",
+    "start": "npm run start -w @sam/web",
+    "start:web": "npm run start -w @sam/web",
+    "start:api": "npm run start -w @sam/api",
+    "start:worker": "npm run start -w @sam/worker",
     "lint": "eslint",
-    "typecheck": "next typegen && tsc --noEmit",
-    "db:migrate": "prisma migrate dev",
-    "db:deploy": "prisma migrate deploy",
-    "db:seed": "prisma db seed",
-    "db:studio": "prisma studio",
-    "db:reset": "prisma migrate reset",
-    "postinstall": "prisma generate",
-    "test": "vitest run",
-    "notifications:worker": "tsx scripts/notifications-worker.ts",
-    "jobs": "node scripts/jobs.mjs"
-  },
-  "dependencies": {
-    "@prisma/client": "^6.19.3",
-    "next": "16.4.0",
-    "nodemailer": "^7.0.6",
-    "react": "19.3.0",
-    "react-dom": "19.3.0",
-    "server-only": "^0.0.1"
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "db:generate": "prisma generate --schema packages/core/prisma/schema.prisma",
+    "db:migrate": "prisma migrate dev --schema packages/core/prisma/schema.prisma",
+    "db:deploy": "prisma migrate deploy --schema packages/core/prisma/schema.prisma",
+    "db:seed": "tsx packages/core/prisma/seed.ts",
+    "db:studio": "prisma studio --schema packages/core/prisma/schema.prisma",
+    "db:reset": "prisma migrate reset --schema packages/core/prisma/schema.prisma",
+    "notifications:worker": "npm run start -w @sam/worker",
+    "jobs": "node scripts/jobs.mjs",
+    "postinstall": "npm run db:generate"
   },
   "devDependencies": {
-    "@tailwindcss/turbopack": "^4",
     "@types/node": "^22.20.5",
-    "@types/nodemailer": "^6.4.17",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
-    "@types/smtp-server": "^3.5.10",
     "eslint": "^9",
     "eslint-config-next": "16.4.0",
     "prisma": "^6.19.3",
-    "smtp-server": "^3.13.6",
-    "tailwindcss": "^4",
     "tsx": "^4.23.15",
-    "typescript": "^5",
-    "vitest": "^5.0.4"
-  },
-  "prisma": {
-    "seed": "tsx prisma/seed.ts"
+    "typescript": "^5"
   }
 }

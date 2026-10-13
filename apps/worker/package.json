@@ -1,0 +1,14 @@
+{
+  "name": "@sam/worker",
+  "version": "0.2.0",
+  "private": true,
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@sam/core": "*",
+    "tsx": "^4.23.15"
+  }
+}
