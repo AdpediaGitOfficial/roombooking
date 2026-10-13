@@ -8,7 +8,9 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@prisma/client": "^6.19.3",
     "@sam/core": "*",
+    "nodemailer": "^7.0.6",
     "tsx": "^4.23.15"
   }
 }

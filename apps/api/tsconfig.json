@@ -1,0 +1,5 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": { "lib": ["dom", "esnext"], "types": ["node"], "tsBuildInfoFile": "./.cache/tsconfig.tsbuildinfo" },
+  "include": ["src/**/*.ts", "tests/**/*.ts", "*.ts", "*.mts"]
+}
