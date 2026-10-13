@@ -172,6 +172,20 @@ auditors read the audit log at `/admin/audit`. Rules in
 - you cannot remove your own administrator role or change your own status, and the last active system administrator cannot be demoted, suspended or deactivated;
 - every change writes an audit event with actor, target and before/after values; the user page shows the account's history and `/admin/audit` the whole log with filters.
 
+## Occupancy dashboard and reports
+
+`/dashboard` (administrators, officers, auditors) shows, per site or across
+all sites as of the site's local date: occupancy rate and bed counts, capacity
+by building as a stacked bar, occupied beds over the last 30 days from actual
+check-in and check-out times, arrivals and departures due in the next 14 days
+with overdue arrivals and overstays flagged, and pending-action counts
+(overdue arrivals, overstays, approved room changes awaiting a move, requests
+awaiting approval, overdue keys, unassigned maintenance) that link to the
+relevant queue. `GET /api/reports/occupancy.csv?siteId=` exports the bed list;
+every export is audited (RPT-07). Chart colours come from the validated
+reference palette in `src/app/globals.css` with light and dark steps, legends
+and table views.
+
 ## Authentication
 
 Sessions are owned by the application, not a third-party provider, so the
@@ -234,6 +248,7 @@ src/
   modules/maintenance/    work order service, actions, components
   modules/keys/           key register service, actions, components
   modules/admin/          users and roles administration, audit log
+  modules/reports/        occupancy dashboard, trend, CSV export, chart components
   lib/uploads.ts          photo validation and storage
   lib/notifications.ts   notification outbox writer
   lib/audit.ts         append-only audit writer

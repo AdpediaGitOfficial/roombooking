@@ -6,6 +6,7 @@ import { isResidentOnly } from "@/modules/self-service/context";
 import { logout } from "./login/actions";
 
 const modules: Array<[string, string, string?]> = [
+  ["Dashboard", "Occupancy, arrivals, departures and pending actions", "/dashboard"],
   ["Accommodation", "Sites, buildings, rooms, beds, allocations, check-in/out", "/accommodation"],
   ["Staff self-service", "My stay, profile, requests", "/my"],
   ["Maintenance", "Work orders, assignment, contractor access", "/maintenance"],
@@ -15,7 +16,7 @@ const modules: Array<[string, string, string?]> = [
   ["Inventory", "Stock and serialised assets"],
   ["Lost & found", "Items, claims and handover"],
   ["Notifications", "In-app, email and WhatsApp"],
-  ["Reports", "Occupancy, movements, maintenance, utilisation"],
+  ["Reports", "Occupancy, movements, maintenance, utilisation", "/dashboard"],
   ["Administration", "Users, roles, audit, configuration", "/admin/users"],
 ];
 

@@ -24,3 +24,31 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Chart tokens (validated reference palette; dark steps are their own values, not a flip). */
+.viz-root {
+  color-scheme: light;
+  --viz-surface: #fcfcfb;
+  --viz-ink-1: #0b0b0b;
+  --viz-ink-2: #52514e;
+  --viz-ink-3: #898781;
+  --viz-grid: #e1e0d9;
+  --viz-axis: #c3c2b7;
+  --viz-1: #2a78d6;
+  --viz-2: #eb6834;
+  --viz-3: #1baf7a;
+}
+@media (prefers-color-scheme: dark) {
+  .viz-root {
+    color-scheme: dark;
+    --viz-surface: #1a1a19;
+    --viz-ink-1: #f0efec;
+    --viz-ink-2: #c3c2b7;
+    --viz-ink-3: #898781;
+    --viz-grid: #2c2c2a;
+    --viz-axis: #383835;
+    --viz-1: #3987e5;
+    --viz-2: #d95926;
+    --viz-3: #199e70;
+  }
+}
