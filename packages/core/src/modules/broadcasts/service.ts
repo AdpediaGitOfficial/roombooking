@@ -5,24 +5,18 @@
 // writes one in-app notification per recipient through the outbox, so email
 // and WhatsApp copies, retries and delivery tracking all work as for any
 // other notification (COM-04, COM-06, COM-07).
-import type { BroadcastStatus, Prisma, Role } from "@prisma/client";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/db";
 import { recordAudit } from "../../lib/audit";
 import { enqueueNotification } from "../../lib/notifications";
-import { ALL_ROLES } from "../admin/access";
 import { OCCUPYING_STATUSES } from "../accommodation/occupancy";
 import { BroadcastError } from "./errors";
+import { ALL_ROLES, ROLE_DESCRIPTIONS } from "../admin/access";
+import { BODY_MAX, TITLE_MAX, parseAudience, type Audience } from "./rules";
 
-export type Audience = { roles: Role[]; siteIds: string[]; buildingIds: string[] };
-export const TITLE_MAX = 120;
-export const BODY_MAX = 2000;
+export * from "./rules";
+
 const CHUNK = 200;
-
-export function parseAudience(raw: unknown): Audience {
-  const o = (raw ?? {}) as Partial<Record<keyof Audience, unknown>>;
-  const list = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string" && x.length > 0) : []);
-  return { roles: list(o.roles).filter((r): r is Role => (ALL_ROLES as string[]).includes(r)), siteIds: list(o.siteIds), buildingIds: list(o.buildingIds) };
-}
 
 export type Recipient = { id: string; name: string; email: string };
 
@@ -165,6 +159,56 @@ export async function openAnnouncement(userId: string, broadcastId: string) {
   return b ? { ...b, readAt: n.readAt ?? new Date() } : null;
 }
 
-export function describeStatus(status: BroadcastStatus): string {
-  return { DRAFT: "Draft", SENT: "Sent", CANCELLED: "Cancelled" }[status];
+
+// ---------------------------------------------------------------------------
+// Views and actions for the API
+// ---------------------------------------------------------------------------
+
+/** Sites, buildings and roles the compose form offers as audience choices. */
+export async function audienceOptions(organizationId: string) {
+  const sites = await prisma.site.findMany({ where: { organizationId, status: "ACTIVE" }, include: { buildings: { where: { status: "ACTIVE" }, orderBy: { code: "asc" } } }, orderBy: { name: "asc" } });
+  return {
+    sites: sites.map((s) => ({ id: s.id, label: s.name })),
+    buildings: sites.flatMap((s) => s.buildings.map((b) => ({ id: b.id, label: `${s.name} · ${b.name}`, siteId: s.id }))),
+    roles: ALL_ROLES.map((r) => ({ id: r, label: r === "STAFF" ? "Residents (staff)" : r.toLowerCase().replaceAll("_", " "), hint: ROLE_DESCRIPTIONS[r] })),
+  };
+}
+
+/** Every broadcast with a plain-language audience, plus the compose form's choices. */
+export async function broadcastsView(organizationId: string) {
+  const [rows, options] = await Promise.all([listBroadcasts(organizationId), audienceOptions(organizationId)]);
+  const described = await Promise.all(rows.map((b) => describeAudience(parseAudience(b.audience))));
+  return { rows, described, options };
+}
+
+/** One broadcast: audience, delivery progress and (for a draft) who it would reach now. */
+export async function broadcastView(organizationId: string, id: string) {
+  const b = await getBroadcast(id);
+  if (!b || b.organizationId !== organizationId) throw new BroadcastError("NOT_FOUND", "Broadcast not found.");
+  const audience = parseAudience(b.audience);
+  const draft = b.status === "DRAFT";
+  const [who, delivery, recipients, options] = await Promise.all([describeAudience(audience), broadcastDelivery(b.id), draft ? resolveAudience(organizationId, audience) : Promise.resolve([]), draft ? audienceOptions(organizationId) : Promise.resolve(null)]);
+  return { broadcast: b, audience, who, delivery, recipients, options };
+}
+
+/** How many people an audience reaches right now, with a few names. */
+export async function previewAudience(organizationId: string, audience: Audience) {
+  const recipients = await resolveAudience(organizationId, audience);
+  return { count: recipients.length, sample: recipients.slice(0, 8).map((r) => r.name) };
+}
+
+/** Saves a new or existing draft, and optionally sends it. */
+export async function saveBroadcast(input: Input & { organizationId: string; actorId: string; broadcastId?: string | null; send: boolean }) {
+  let id = input.broadcastId ?? "";
+  const { title, body, audience, emailCopy, whatsappCopy } = input;
+  try {
+    if (id) await updateBroadcast({ broadcastId: id, actorId: input.actorId, title, body, audience, emailCopy, whatsappCopy });
+    else id = (await createBroadcast({ organizationId: input.organizationId, actorId: input.actorId, title, body, audience, emailCopy, whatsappCopy })).id;
+    if (input.send) await sendBroadcast({ broadcastId: id, actorId: input.actorId });
+  } catch (error) {
+    // Hand the draft's id back so a retry updates it rather than creating a second one.
+    if (error instanceof BroadcastError) error.details = { ...(error.details ?? {}), broadcastId: id };
+    throw error;
+  }
+  return { id };
 }

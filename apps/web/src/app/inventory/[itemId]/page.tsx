@@ -1,9 +1,8 @@
 import { Suspense } from "react";
-import { notFound } from "next/navigation";
 import { hasRole, requireRole } from "@/lib/auth/authorize";
 import { INVENTORY_MANAGE_ROLES, INVENTORY_OPERATE_ROLES, INVENTORY_VIEW_ROLES } from "@sam/core/modules/inventory/access";
-import { describeLocation, getItem, isLowStock, targetLabel } from "@sam/core/modules/inventory/service";
-import { targetOptions } from "@/modules/inventory/context";
+import { describeLocation, isLowStock, targetLabel } from "@sam/core/modules/inventory/rules";
+import { api, orNotFound } from "@/lib/api";
 import { ConditionBadge, ItemStateBadge, TransactionTable } from "@/modules/inventory/components/views";
 import { EditItemForm, MovementForm } from "@/modules/inventory/components/forms";
 
@@ -18,13 +17,12 @@ async function Content({ params }: { params: Params }) {
   const user = await requireRole(INVENTORY_VIEW_ROLES, `/inventory/${itemId}`);
   const canOperate = hasRole(user, ...INVENTORY_OPERATE_ROLES);
   const canManage = hasRole(user, ...INVENTORY_MANAGE_ROLES);
-  const detail = await getItem(itemId);
-  if (!detail) notFound();
+  const detail = await orNotFound(api.inventory.get({ id: itemId }));
   const { item, transactions, outstanding } = detail;
   const serialised = item.trackingType === "SERIALIZED";
   const active = item.status === "ACTIVE";
   const open = item.assignments[0] ?? null;
-  const options = canOperate ? await targetOptions() : null;
+  const options = canOperate ? await api.inventory.targetOptions() : null;
   const openValue = open ? (open.roomId ? `room:${open.roomId}` : open.staffId ? `staff:${open.staffId}` : `facility:${open.facilityId}`) : undefined;
   const outstandingOptions = serialised
     ? (open ? [{ value: openValue!, label: targetLabel(open) }] : [])

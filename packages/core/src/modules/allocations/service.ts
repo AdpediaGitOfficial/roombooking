@@ -5,9 +5,11 @@ import type { GenderPolicy, Prisma, PrismaClient } from "@prisma/client";
 import { prisma } from "../../lib/db";
 import { recordAudit } from "../../lib/audit";
 import { enqueueNotification } from "../../lib/notifications";
-import { OCCUPYING_STATUSES, isoDate, todayInTimezone } from "../accommodation/occupancy";
+import { OCCUPYING_STATUSES, isoDate, todayInTimezone } from "../accommodation/occupancy-rules";
 import { itemsHeldBy } from "../inventory/service";
 import { AllocationError } from "./errors";
+import { pageArgs, toPaged, type PageRequest } from "../../lib/paging";
+import { isIsoDate, type AllocationListFilter, type ClearanceBlocker } from "./rules";
 import { fulfilRoomChangeTx } from "../requests/service";
 
 type Tx = Prisma.TransactionClient;
@@ -15,9 +17,7 @@ type Db = Tx | PrismaClient;
 
 const INFINITY = "9999-12-31";
 
-export function isIsoDate(value: unknown): value is string {
-  return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(value));
-}
+export { isIsoDate };
 
 /** Calendar date string to the UTC-midnight Date that @db.Date columns store. */
 export function toDate(iso: string): Date {
@@ -257,7 +257,7 @@ export async function checkIn(input: CheckInInput) {
 // Check-out (ACM-08, edge case "Check-out with outstanding key/assets")
 // ---------------------------------------------------------------------------
 
-export type ClearanceBlocker = { type: "KEY" | "ASSET"; label: string };
+export type { ClearanceBlocker };
 
 export async function clearanceBlockers(staffId: string, db: Db = prisma): Promise<ClearanceBlocker[]> {
   const [keys, items] = await Promise.all([
@@ -450,9 +450,10 @@ export async function getAllocation(id: string) {
   return prisma.allocation.findUnique({ where: { id }, include: allocationDetailInclude });
 }
 
-export type AllocationListFilter = "active" | "upcoming" | "history" | "all";
+export type { AllocationListFilter };
 
-export async function listAllocations(filter: AllocationListFilter, staffId?: string | null) {
+export async function listAllocations(filter: AllocationListFilter, staffId?: string | null, req: PageRequest = {}) {
+  const paging = pageArgs(req);
   const byStatus: Prisma.AllocationWhereInput =
     filter === "active"
       ? { status: "CHECKED_IN" }
@@ -462,10 +463,40 @@ export async function listAllocations(filter: AllocationListFilter, staffId?: st
           ? { status: { in: ["CHECKED_OUT", "CANCELLED", "REJECTED", "EXPIRED"] } }
           : {};
   const where: Prisma.AllocationWhereInput = staffId ? { ...byStatus, staffId } : byStatus;
-  return prisma.allocation.findMany({
+  const [rows, total] = await Promise.all([
+    prisma.allocation.findMany({
     where,
-    include: { staff: true, bed: { include: bedWithLocation } },
-    orderBy: [{ startDate: "desc" }, { createdAt: "desc" }],
-    take: 200,
-  });
+    // A list row needs the person's name and the bed's place, not their whole profile and site record.
+    include: {
+      staff: { select: { id: true, employeeId: true, firstName: true, lastName: true } },
+      bed: { select: { id: true, code: true, room: { select: { id: true, code: true, building: { select: { id: true, name: true } } } } } },
+    },
+    orderBy: [{ startDate: "desc" }, { createdAt: "desc" }, { id: "asc" }],
+    skip: paging.skip,
+    take: paging.take,
+    }),
+    prisma.allocation.count({ where }),
+  ]);
+  return toPaged(rows, total, paging);
+}
+
+/** One allocation with its resident, bed, transfer chain and (when checked in) outstanding check-out blockers. */
+export async function getAllocationDetail(id: string) {
+  const allocation = await getAllocation(id);
+  if (!allocation) return null;
+  const blockers = allocation.status === "CHECKED_IN" ? await clearanceBlockers(allocation.staffId) : [];
+  return { allocation, blockers };
+}
+
+/** What the new-allocation and transfer forms need to render: active staff (with any current bed) and buildings. */
+export async function allocationFormOptions() {
+  const [staff, buildings] = await Promise.all([
+    prisma.staffProfile.findMany({
+      where: { employmentStatus: "ACTIVE" },
+      orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
+      include: { allocations: { where: { status: { in: OCCUPYING_STATUSES } }, include: { bed: true }, take: 1 } },
+    }),
+    prisma.building.findMany({ where: { status: "ACTIVE" }, include: { site: true }, orderBy: [{ site: { name: "asc" } }, { code: "asc" }] }),
+  ]);
+  return { staff, buildings, today: todayInTimezone(buildings[0]?.site.timezone ?? "UTC") };
 }

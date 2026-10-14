@@ -2,7 +2,9 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { requireRole } from "@/lib/auth/authorize";
 import { REPORT_VIEW_ROLES } from "@sam/core/modules/reports/access";
-import { ARRIVAL_WINDOW_DAYS, getDashboard, getOccupancyTrend, type MovementRow } from "@sam/core/modules/reports/service";
+import { ARRIVAL_WINDOW_DAYS } from "@sam/core/modules/reports/rules";
+import type { MovementRow } from "@sam/core/modules/reports/service";
+import { api } from "@/lib/api";
 import { OccupancyStackChart, OccupancyTrendChart } from "@/modules/reports/components/charts";
 import { PageHeader } from "@/components/shell/page-header";
 
@@ -49,7 +51,7 @@ async function Dashboard({ searchParams }: { searchParams: Promise<{ siteId?: st
   await requireRole(REPORT_VIEW_ROLES, "/dashboard");
   const { siteId: raw } = await searchParams;
   const siteId = raw || null;
-  const [d, trend] = await Promise.all([getDashboard(siteId), getOccupancyTrend(siteId, 30)]);
+  const { d, trend } = await api.reports.dashboard({ siteId: siteId ?? undefined });
   const s = d.summary;
   const p = d.pending;
   const pendingItems: Array<[string, string, number, string, Severity]> = [

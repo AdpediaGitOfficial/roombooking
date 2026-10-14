@@ -1,12 +1,13 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { requireUser } from "@/lib/auth/authorize";
-import { listMyWorkOrders, locationLabel } from "@sam/core/modules/maintenance/service";
+import { locationLabel } from "@sam/core/modules/maintenance/rules";
+import { api } from "@/lib/api";
 import { WorkOrderStatusBadge } from "@/modules/maintenance/components/views";
 
 async function List() {
-  const user = await requireUser("/my/maintenance");
-  const orders = await listMyWorkOrders(user.id);
+  await requireUser("/my/maintenance");
+  const orders = await api.maintenance.mine();
   if (orders.length === 0) return <p className="rounded-lg border border-dashed border-zinc-300 p-6 text-center text-sm text-zinc-500">No maintenance requests yet.</p>;
   return (
     <ul className="divide-y divide-zinc-200 card">

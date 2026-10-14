@@ -6,7 +6,9 @@ import { recordAudit } from "../../lib/audit";
 import { enqueueNotification } from "../../lib/notifications";
 import { addDaysIso, addMinutes, minutesOfDay, zonedDateTime, zonedToUtc, type DayKey } from "../../lib/time";
 import { FacilityError } from "./errors";
-import { parseOpeningHours, parseRules, type BookingRules, type OpeningHours } from "./rules";
+import { bookingInclude, facilityConfig, facilityInclude, validateHoursInput, validateRulesInput, type Actor, type BookingRules, type FacilityRecord, type OpeningHours, type Slot } from "./rules";
+
+export * from "./rules";
 
 type Tx = Prisma.TransactionClient;
 type Db = Tx | PrismaClient;
@@ -14,25 +16,10 @@ type Db = Tx | PrismaClient;
 /** Bookings that hold capacity (pending approvals hold their place until decided). */
 export const HOLDING_STATUSES: BookingStatus[] = ["PENDING_APPROVAL", "CONFIRMED", "CHECKED_IN"];
 
-export const facilityInclude = { site: { select: { id: true, name: true, timezone: true } } } satisfies Prisma.FacilityInclude;
-export type FacilityRecord = Prisma.FacilityGetPayload<{ include: typeof facilityInclude }>;
-export const bookingInclude = {
-  facility: { include: facilityInclude },
-  user: { select: { id: true, name: true, email: true, staffProfile: { select: { employeeId: true, firstName: true, lastName: true } } } },
-} satisfies Prisma.FacilityBookingInclude;
-export type BookingRecord = Prisma.FacilityBookingGetPayload<{ include: typeof bookingInclude }>;
-
-export type Actor = { id: string; isManager: boolean; isOperator: boolean };
-
-export function facilityConfig(f: Pick<FacilityRecord, "openingHours" | "bookingRules">): { hours: OpeningHours; rules: BookingRules } {
-  return { hours: parseOpeningHours(f.openingHours), rules: parseRules(f.bookingRules) };
-}
-
 // ---------------------------------------------------------------------------
 // Availability (FAC-02, FAC-04)
 // ---------------------------------------------------------------------------
 
-export type Slot = { start: Date; end: Date; label: string; open: boolean; booked: number; remaining: number; past: boolean };
 
 /** Headcount already held during [start, end) including the buffer around each existing booking. */
 export function heldDuring(bookings: Array<{ startsAt: Date; endsAt: Date; headcount: number; status: BookingStatus; id?: string }>, start: Date, end: Date, bufferMinutes: number, excludeId?: string | null): number {
@@ -344,6 +331,73 @@ export async function facilityReports(days = 30, now: Date = new Date(), siteId?
   return out;
 }
 
-export function describeBookingStatus(status: BookingStatus): string {
-  return { PENDING_APPROVAL: "Awaiting approval", CONFIRMED: "Confirmed", CHECKED_IN: "In use", COMPLETED: "Completed", CANCELLED: "Cancelled", REJECTED: "Declined", EXPIRED: "Expired", NO_SHOW: "No-show" }[status];
+// ---------------------------------------------------------------------------
+// Views and actions for the API
+// ---------------------------------------------------------------------------
+
+const isDate = (s?: string | null): s is string => !!s && /^\d{4}-\d{2}-\d{2}$/.test(s);
+
+/** Users who can be booked on behalf of: active staff with an account. */
+export async function bookableUsers() {
+  const staff = await prisma.staffProfile.findMany({ where: { employmentStatus: "ACTIVE", userId: { not: null } }, orderBy: [{ lastName: "asc" }, { firstName: "asc" }] });
+  return staff.filter((s) => s.userId).map((s) => ({ id: s.userId as string, label: `${s.lastName}, ${s.firstName} (${s.employeeId})` }));
+}
+
+/** The operations overview: every facility, 30-day utilisation, bookings awaiting approval and next-24-hour load. */
+export async function getOverview(now: Date = new Date()) {
+  const [facilities, reports, pending, sites] = await Promise.all([
+    listFacilities({ includeInactive: true }),
+    facilityReports(30, now),
+    prisma.facilityBooking.findMany({ where: { status: "PENDING_APPROVAL", startsAt: { gt: now } }, include: { facility: { include: { site: true } }, user: { select: { name: true } } }, orderBy: { startsAt: "asc" } }),
+    prisma.site.findMany({ where: { status: "ACTIVE" }, orderBy: { name: "asc" } }),
+  ]);
+  const counts = await prisma.facilityBooking.groupBy({
+    by: ["facilityId"],
+    where: { status: { in: ["CONFIRMED", "CHECKED_IN", "PENDING_APPROVAL"] }, endsAt: { gt: now }, startsAt: { lt: new Date(now.getTime() + 24 * 3600000) } },
+    _count: { _all: true },
+  });
+  const next24h: Record<string, number> = Object.fromEntries(counts.map((c) => [c.facilityId, c._count._all]));
+  return { facilities, reports, pending, sites: sites.map((s) => ({ id: s.id, label: s.name })), next24h, now };
+}
+
+/** One facility's schedule for a day, as operations staff see it. */
+export async function getFacilityView(id: string, rawDate: string | null | undefined, includeUsers: boolean, now: Date = new Date()) {
+  const facility = await getFacility(id);
+  if (!facility) throw new FacilityError("NOT_FOUND", "Facility not found.");
+  const today = zonedDateTime(now, facility.site.timezone).date;
+  const date = isDate(rawDate) ? rawDate : today;
+  const [slots, bookings, users] = await Promise.all([availabilityForDay(facility, date, now), bookingsForDay(facility, date), includeUsers ? bookableUsers() : Promise.resolve(null)]);
+  return { facility, today, date, slots, bookings, users, now };
+}
+
+/** A resident's booking home: facilities open for booking plus their own bookings. */
+export async function getMyOverview(userId: string, now: Date = new Date()) {
+  const [facilities, mine] = await Promise.all([listFacilities(), myBookings(userId, now)]);
+  return { facilities, mine, now };
+}
+
+/** A facility's availability for a resident, optionally with one of their bookings loaded for amendment. */
+export async function getMyFacilityView(userId: string, id: string, rawDate: string | null | undefined, amendId: string | null | undefined, now: Date = new Date()) {
+  const facility = await getFacility(id);
+  if (!facility || facility.status !== "ACTIVE") throw new FacilityError("NOT_FOUND", "Facility not found.");
+  const today = zonedDateTime(now, facility.site.timezone).date;
+  const date = isDate(rawDate) && rawDate >= today ? rawDate : today;
+  const slots = await availabilityForDay(facility, date, now);
+  const booking = amendId ? await getBooking(amendId) : null;
+  const amending = booking && booking.userId === userId && ["CONFIRMED", "PENDING_APPROVAL"].includes(booking.status) && booking.facilityId === facility.id ? booking : null;
+  return { facility, today, date, slots, amending, now };
+}
+
+/** Saves the facility settings form: validates opening hours and booking rules from the raw fields, then updates. */
+export async function saveFacilitySettings(actorId: string, facilityId: string, raw: Record<string, string>) {
+  const { hours, errors: hourErrors } = validateHoursInput(raw);
+  const { rules, errors: ruleErrors } = validateRulesInput(raw);
+  const fieldErrors = { ...hourErrors, ...ruleErrors };
+  if (Object.keys(fieldErrors).length) throw new FacilityError("VALIDATION", "Please correct the highlighted fields.", fieldErrors);
+  const capacity = Number(raw.capacity);
+  return updateFacility({
+    facilityId, actorId, name: raw.name ?? "", location: raw.location || null, description: raw.description || null,
+    capacity: Number.isFinite(capacity) ? Math.trunc(capacity) : NaN, requiresApproval: raw.requiresApproval === "on",
+    status: raw.status === "INACTIVE" ? "INACTIVE" : "ACTIVE", hours, rules,
+  });
 }

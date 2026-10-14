@@ -1,8 +1,7 @@
 import { Suspense } from "react";
 import Link from "next/link";
-import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth/authorize";
-import { prisma } from "@sam/core/lib/db";
+import { api, orNotFound } from "@/lib/api";
 import { OutcomeBadge, PhotoStrip, StatusBadge, when } from "@/modules/lost-found/components/views";
 import { ItemForm, MyClaimForm } from "@/modules/lost-found/components/forms";
 
@@ -10,11 +9,9 @@ type Params = Promise<{ itemId: string }>;
 
 async function Content({ params }: { params: Params }) {
   const { itemId } = await params;
-  const user = await requireUser(`/my/lost-found/${itemId}`);
+  await requireUser(`/my/lost-found/${itemId}`);
   // Residents see the public description only; never other people's claims or where it is kept.
-  const item = await prisma.lostFoundItem.findUnique({ where: { id: itemId }, select: { id: true, reference: true, description: true, category: true, foundLocation: true, foundAt: true, status: true, handedOverAt: true, site: { select: { name: true } }, claims: { where: { claimantUserId: user.id }, orderBy: { createdAt: "desc" } } } });
-  if (!item) notFound();
-  const photos = await prisma.attachment.findMany({ where: { entityType: "LostFoundItem", entityId: item.id }, orderBy: { createdAt: "asc" } });
+  const { item, photos } = await orNotFound(api.lostFound.getMine({ id: itemId }));
   const mine = item.claims[0] ?? null;
   const open = ["REPORTED", "STORED", "CLAIM_PENDING"].includes(item.status);
   const canClaim = open && (!mine || (mine.outcome !== "PENDING" && mine.outcome !== "VERIFIED"));

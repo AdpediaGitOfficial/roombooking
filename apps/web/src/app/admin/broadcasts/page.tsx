@@ -2,15 +2,14 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { requireRole } from "@/lib/auth/authorize";
 import { BROADCAST_ROLES } from "@sam/core/modules/broadcasts/access";
-import { describeAudience, describeStatus, listBroadcasts, parseAudience } from "@sam/core/modules/broadcasts/service";
-import { audienceOptions } from "@/modules/broadcasts/context";
+import { describeStatus } from "@sam/core/modules/broadcasts/rules";
+import { api } from "@/lib/api";
 import { ComposeForm } from "@/modules/broadcasts/components/forms";
 import { PageHeader } from "@/components/shell/page-header";
 
 async function Content() {
-  const user = await requireRole(BROADCAST_ROLES, "/admin/broadcasts");
-  const [rows, options] = await Promise.all([listBroadcasts(user.organizationId), audienceOptions(user.organizationId)]);
-  const described = await Promise.all(rows.map((b) => describeAudience(parseAudience(b.audience))));
+  await requireRole(BROADCAST_ROLES, "/admin/broadcasts");
+  const { rows, described, options } = await api.broadcasts.list();
   return (
     <>
       <ComposeForm options={options} defaults={{ title: "", body: "", roles: [], siteIds: [], buildingIds: [], emailCopy: true, whatsappCopy: false }} />

@@ -1,14 +1,14 @@
 import Link from "next/link";
 import { Suspense } from "react";
-import { prisma } from "@sam/core/lib/db";
-import { hasRole, requireUser, type CurrentUser } from "@/lib/auth/authorize";
+import { cache } from "react";
+import { api } from "@/lib/api";
+import { requireUser } from "@/lib/auth/authorize";
 import { logout } from "@/app/login/actions";
-import { countUnreadNotifications } from "@sam/core/modules/self-service/service";
-import { ALLOCATION_OPERATE_ROLES } from "@sam/core/modules/allocations/access";
-import { APPROVALS_AREA_ROLES } from "@sam/core/modules/requests/access";
-import { MAINTENANCE_COORDINATOR_ROLES } from "@sam/core/modules/maintenance/access";
 import { visibleGroups } from "./nav";
 import { SidebarNav } from "./sidebar-nav";
+
+/** One API call per request, however many shell parts need it. */
+const getShell = cache(() => api.me.shell());
 
 function roleLabel(role: string) {
   return role.replaceAll("_", " ").toLowerCase().replace(/^\w/, (c) => c.toUpperCase());
@@ -18,28 +18,11 @@ function initials(name: string) {
   return name.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase() ?? "").join("") || "?";
 }
 
-/** Attention counts shown next to navigation entries, for the roles that act on them. */
-async function navCounts(user: CurrentUser): Promise<Record<string, number>> {
-  const counts: Record<string, number> = {};
-  const jobs: Promise<void>[] = [];
-  if (hasRole(user, ...ALLOCATION_OPERATE_ROLES)) {
-    jobs.push(prisma.allocation.count({ where: { status: "CONFIRMED", startDate: { lt: new Date() } } }).then((n) => { if (n) counts["/accommodation/allocations"] = n; }));
-  }
-  if (hasRole(user, ...APPROVALS_AREA_ROLES)) {
-    jobs.push(prisma.request.count({ where: { status: { in: ["SUBMITTED", "PENDING_APPROVAL", "RESUBMITTED"] } } }).then((n) => { if (n) counts["/approvals"] = n; }));
-  }
-  if (hasRole(user, ...MAINTENANCE_COORDINATOR_ROLES)) {
-    jobs.push(prisma.workOrder.count({ where: { status: { in: ["NEW", "TRIAGED"] }, assigneeId: null, vendorId: null } }).then((n) => { if (n) counts["/maintenance"] = n; }));
-  }
-  await Promise.all(jobs);
-  return counts;
-}
-
 /** Navigation and account block for the signed-in user (dynamic: reads the session cookie). */
 async function UserNav({ returnTo }: { returnTo: string }) {
   const user = await requireUser(returnTo);
   const roles = user.roleAssignments.map((r) => r.role);
-  const counts = await navCounts(user);
+  const { navCounts: counts } = await getShell();
   return (
     <>
       <SidebarNav groups={visibleGroups(roles)} counts={counts} />
@@ -62,12 +45,8 @@ async function UserNav({ returnTo }: { returnTo: string }) {
 /** Top bar: search, site scope, notifications and the account. */
 async function TopBar({ returnTo }: { returnTo: string }) {
   const user = await requireUser(returnTo);
-  const siteIds = [...new Set(user.roleAssignments.map((r) => r.siteId).filter((id): id is string => !!id))];
-  const [sites, unread] = await Promise.all([
-    siteIds.length ? prisma.site.findMany({ where: { id: { in: siteIds } }, select: { name: true } }) : Promise.resolve([]),
-    countUnreadNotifications(user.id),
-  ]);
-  const scope = sites.length === 0 ? "All sites" : sites.length === 1 ? sites[0].name : `${sites.length} sites`;
+  const { unread, siteNames } = await getShell();
+  const scope = siteNames.length === 0 ? "All sites" : siteNames.length === 1 ? siteNames[0] : `${siteNames.length} sites`;
   return (
     <>
       <form action="/search" className="topbar-search" role="search">

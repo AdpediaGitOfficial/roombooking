@@ -2,23 +2,23 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { hasRole, requireRole } from "@/lib/auth/authorize";
 import { MAINTENANCE_AREA_ROLES, MAINTENANCE_COORDINATOR_ROLES } from "@sam/core/modules/maintenance/access";
-import { listWorkOrders, locationLabel, queueSummary, type QueueFilter } from "@sam/core/modules/maintenance/service";
-import { actorOf } from "@/modules/maintenance/context";
+import { locationLabel, type QueueFilter } from "@sam/core/modules/maintenance/rules";
+import { api } from "@/lib/api";
 import { PriorityLabel, SlaLabel, WorkOrderStatusBadge } from "@/modules/maintenance/components/views";
 import { PageHeader } from "@/components/shell/page-header";
+import { Pager, pageHref } from "@/components/shell/pager";
 
 const FILTERS: Array<[QueueFilter, string]> = [
   ["open", "Open"], ["unassigned", "Unassigned"], ["mine", "Assigned to me"], ["waiting", "Waiting"], ["resolved", "Resolved · to close"], ["closed", "Closed"], ["all", "All"],
 ];
 
-async function Queue({ searchParams }: { searchParams: Promise<{ filter?: string }> }) {
+async function Queue({ searchParams }: { searchParams: Promise<{ filter?: string; page?: string }> }) {
   const user = await requireRole(MAINTENANCE_AREA_ROLES, "/maintenance");
-  const actor = actorOf(user);
   const isCoordinator = hasRole(user, ...MAINTENANCE_COORDINATOR_ROLES);
-  const { filter: raw } = await searchParams;
+  const { filter: raw, page: rawPage } = await searchParams;
   const filter = (FILTERS.some(([f]) => f === raw) ? raw : "open") as QueueFilter;
-  const now = new Date();
-  const [orders, summary] = await Promise.all([listWorkOrders(actor, filter), queueSummary(actor, now)]);
+  const { orders: queue, summary, now } = await api.maintenance.queue({ filter, page: Number(rawPage) || 1 });
+  const orders = queue.rows;
 
   const tiles: Array<[string, number, string, string]> = [
     ["Open", summary.open, "var(--deep)", "open"], ["Unassigned", summary.unassigned, "var(--warning)", "unassigned"], ["Overdue", summary.overdue, "var(--danger)", "open"], ["Waiting", summary.waiting, "var(--info)", "waiting"], ["To close", summary.awaitingClose, "var(--primary)", "resolved"],
@@ -40,7 +40,7 @@ async function Queue({ searchParams }: { searchParams: Promise<{ filter?: string
               <Link key={f} href={`/maintenance?filter=${f}`} className={`pill${f === filter ? " pill-on" : ""}`}>{label}</Link>
             ))}
           </nav>
-          <span className="ml-auto text-xs text-zinc-500">{orders.length} tickets</span>
+          <span className="ml-auto text-xs text-zinc-500">{queue.total} tickets</span>
         </div>
         <div className="overflow-x-auto">
           <table className="table">
@@ -63,6 +63,7 @@ async function Queue({ searchParams }: { searchParams: Promise<{ filter?: string
             </tbody>
           </table>
         </div>
+        <Pager page={queue.page} pages={queue.pages} total={queue.total} pageSize={queue.pageSize} hrefFor={pageHref("/maintenance", { filter })} />
       </section>
     </>
   );
@@ -74,7 +75,7 @@ export default function MaintenancePage({ searchParams }: PageProps<"/maintenanc
       <PageHeader crumbs={[["Maintenance"]]} title="Maintenance" subtitle="Work orders, assignment and progress." actions={<Link href="/maintenance/new" className="btn btn-primary">＋ Raise a ticket</Link>} />
       <div>
         <Suspense fallback={<p className="text-sm text-zinc-500">Loading…</p>}>
-          <Queue searchParams={searchParams as Promise<{ filter?: string }>} />
+          <Queue searchParams={searchParams as Promise<{ filter?: string; page?: string }>} />
         </Suspense>
       </div>
     </main>

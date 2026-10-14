@@ -1,4 +1,5 @@
 // Facility configuration shapes stored as JSON on Facility (FAC-01, FAC-05).
+import type { BookingStatus, Prisma } from "@prisma/client";
 import { DAY_KEYS, type DayKey } from "../../lib/time";
 
 export type DayHours = { open: string; close: string } | null;
@@ -109,3 +110,23 @@ export function describeHours(hours: OpeningHours): string {
 }
 
 function cap(s: string) { return s.charAt(0).toUpperCase() + s.slice(1); }
+
+export const facilityInclude = { site: { select: { id: true, name: true, timezone: true } } } satisfies Prisma.FacilityInclude;
+export type FacilityRecord = Prisma.FacilityGetPayload<{ include: typeof facilityInclude }>;
+export const bookingInclude = {
+  facility: { include: facilityInclude },
+  user: { select: { id: true, name: true, email: true, staffProfile: { select: { employeeId: true, firstName: true, lastName: true } } } },
+} satisfies Prisma.FacilityBookingInclude;
+export type BookingRecord = Prisma.FacilityBookingGetPayload<{ include: typeof bookingInclude }>;
+
+export type Actor = { id: string; isManager: boolean; isOperator: boolean };
+
+export function facilityConfig(f: Pick<FacilityRecord, "openingHours" | "bookingRules">): { hours: OpeningHours; rules: BookingRules } {
+  return { hours: parseOpeningHours(f.openingHours), rules: parseRules(f.bookingRules) };
+}
+
+export type Slot = { start: Date; end: Date; label: string; open: boolean; booked: number; remaining: number; past: boolean };
+
+export function describeBookingStatus(status: BookingStatus): string {
+  return { PENDING_APPROVAL: "Awaiting approval", CONFIRMED: "Confirmed", CHECKED_IN: "In use", COMPLETED: "Completed", CANCELLED: "Cancelled", REJECTED: "Declined", EXPIRED: "Expired", NO_SHOW: "No-show" }[status];
+}

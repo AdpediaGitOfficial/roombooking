@@ -1,14 +1,14 @@
 import Link from "next/link";
-import { holderLabel, keysForRoom } from "@sam/core/modules/keys/service";
-import { staffOptions } from "../context";
+import { holderLabel } from "@sam/core/modules/keys/rules";
+import { api } from "@/lib/api";
 import { KeyStatusBadge } from "./views";
 import { IssueKeyForm, ReturnKeyForm } from "./forms";
 
 /** Handover panel for an allocation: keys of the resident's room (KEY-05). */
 export async function RoomKeysPanel({ roomId, staffId, canOperate, returnPath }: { roomId: string; staffId: string; canOperate: boolean; returnPath: string }) {
-  const rows = await keysForRoom(roomId);
+  const rows = await api.keys.forRoom({ roomId });
   if (rows.length === 0) return null;
-  const staff = canOperate ? await staffOptions() : [];
+  const staff = canOperate ? await api.lookups.staff() : [];
   return (
     <div className="card p-4" data-room-keys>
       <h3 className="font-medium">Room keys</h3>

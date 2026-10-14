@@ -1,5 +1,5 @@
 import type { WorkOrderPriority, WorkOrderStatus } from "@prisma/client";
-import { describeStatus, isOverdue, type WorkOrderRecord } from "@sam/core/modules/maintenance/service";
+import { describeStatus, isOverdue, type WorkOrderRecord } from "@sam/core/modules/maintenance/rules";
 
 const STATUS_STYLE: Partial<Record<WorkOrderStatus, string>> = {
   NEW: "chip-warning",

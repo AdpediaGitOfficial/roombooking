@@ -2,19 +2,18 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { requireRole } from "@/lib/auth/authorize";
 import { REPORT_VIEW_ROLES } from "@sam/core/modules/reports/access";
-import { DEFINITIONS, facilityReport, filterOptions, parseRange, scopeFor } from "@sam/core/modules/reports/suite";
+import { DEFINITIONS } from "@sam/core/modules/reports/rules";
+import { api } from "@/lib/api";
 import { Definitions, ReportFilters, Stat, qs, table, tbody, td, th, thead, wrap } from "@/modules/reports/components/report-filters";
 import { PageHeader } from "@/components/shell/page-header";
 
 type Search = Promise<Record<string, string | undefined>>;
 
 async function Content({ searchParams }: { searchParams: Search }) {
-  const user = await requireRole(REPORT_VIEW_ROLES, "/reports/facilities");
-  const scope = await scopeFor(user);
+  await requireRole(REPORT_VIEW_ROLES, "/reports/facilities");
   const sp = await searchParams;
-  const range = parseRange(sp.from, sp.to);
-  const f = { siteId: sp.siteId || null, facilityId: sp.facilityId || null, range };
-  const [rows, options] = await Promise.all([facilityReport(scope, f), filterOptions(scope)]);
+  const f = { siteId: sp.siteId || null, facilityId: sp.facilityId || null };
+  const { report: rows, options, range, canSeeNames } = await api.reports.facilities({ siteId: f.siteId ?? undefined, facilityId: f.facilityId ?? undefined, from: sp.from || undefined, to: sp.to || undefined });
   const query = qs({ from: range.from, to: range.to, siteId: f.siteId, facilityId: f.facilityId });
   const sum = (k: "bookings" | "attended" | "noShows" | "cancelled") => rows.reduce((s, r) => s + r[k], 0);
   const util = rows.filter((r) => r.utilisation !== null);
@@ -38,7 +37,7 @@ async function Content({ searchParams }: { searchParams: Search }) {
           </tbody>
         </table>
       </div>
-      <Definitions lines={DEFINITIONS.facilities} masked={!scope.canSeeNames} />
+      <Definitions lines={DEFINITIONS.facilities} masked={!canSeeNames} />
     </>
   );
 }

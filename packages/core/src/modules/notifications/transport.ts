@@ -1,6 +1,6 @@
 // Mail transports (ADM-07): SMTP via nodemailer for real delivery, a log
 // transport for development, or disabled.
-import nodemailer from "nodemailer";
+import nodemailer, { type Transporter } from "nodemailer";
 
 export type OutgoingMail = { to: string; subject: string; text: string; html: string };
 export type SendResult = { messageId: string };
@@ -35,7 +35,7 @@ export type SmtpConfig = { host: string; port: number; secure: boolean; user?: s
 export class SmtpTransport implements MailTransport {
   readonly name = "smtp";
   readonly description: string;
-  private readonly mailer: nodemailer.Transporter;
+  private readonly mailer: Transporter;
   constructor(private readonly config: SmtpConfig) {
     this.description = `SMTP ${config.host}:${config.port}${config.secure ? " (TLS)" : ""} as ${config.from}`;
     this.mailer = nodemailer.createTransport({

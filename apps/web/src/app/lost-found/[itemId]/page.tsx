@@ -1,10 +1,9 @@
 import { Suspense } from "react";
 import Link from "next/link";
-import { notFound } from "next/navigation";
 import { hasRole, requireRole } from "@/lib/auth/authorize";
 import { LOST_FOUND_MANAGE_ROLES, LOST_FOUND_OPERATE_ROLES, LOST_FOUND_VIEW_ROLES } from "@sam/core/modules/lost-found/access";
-import { CATEGORIES, DISPOSAL_METHODS, claimantLabel, getItem, isDueForDisposal, similarItems } from "@sam/core/modules/lost-found/service";
-import { registerOptions } from "@/modules/lost-found/context";
+import { CATEGORIES, DISPOSAL_METHODS, claimantLabel, isDueForDisposal } from "@sam/core/modules/lost-found/rules";
+import { api, orNotFound } from "@/lib/api";
 import { OutcomeBadge, PhotoStrip, StatusBadge, when } from "@/modules/lost-found/components/views";
 import { EditItemForm, ItemForm } from "@/modules/lost-found/components/forms";
 
@@ -19,14 +18,11 @@ async function Content({ params }: { params: Params }) {
   const user = await requireRole(LOST_FOUND_VIEW_ROLES, `/lost-found/${itemId}`);
   const canOperate = hasRole(user, ...LOST_FOUND_OPERATE_ROLES);
   const canManage = hasRole(user, ...LOST_FOUND_MANAGE_ROLES);
-  const detail = await getItem(itemId);
-  if (!detail) notFound();
-  const { item, photos } = detail;
-  const now = new Date();
+  const { item, photos, similar, now } = await orNotFound(api.lostFound.get({ id: itemId }));
   const open = ["REPORTED", "STORED", "CLAIM_PENDING"].includes(item.status);
   const pending = item.claims.filter((c) => c.outcome === "PENDING");
   const verified = item.claims.find((c) => c.id === item.resolvedClaimId);
-  const [similar, options] = await Promise.all([open ? similarItems({ description: item.description, category: item.category, foundAt: item.foundAt, siteId: item.siteId, excludeId: item.id }) : [], canOperate ? registerOptions() : null]);
+  const options = canOperate ? await api.lostFound.options() : null;
   const due = isDueForDisposal(item, now);
   return (
     <>

@@ -1,25 +1,17 @@
 import { Suspense } from "react";
 import Link from "next/link";
-import { notFound } from "next/navigation";
 import { requireRole } from "@/lib/auth/authorize";
 import { MAINTENANCE_AREA_ROLES } from "@sam/core/modules/maintenance/access";
-import { CATEGORIES, accessFor, allowedTransitions, getWorkOrder, listAssignees, listAttachments, locationLabel, reopenWindowOpen, visibleNotes } from "@sam/core/modules/maintenance/service";
-import { actorOf } from "@/modules/maintenance/context";
+import { CATEGORIES, locationLabel } from "@sam/core/modules/maintenance/rules";
+import { api, orNotFound } from "@/lib/api";
 import { NoteList, PriorityLabel, SlaLabel, WorkOrderStatusBadge } from "@/modules/maintenance/components/views";
 import { AssignForm, NoteForm, StatusForm, TriageForm } from "@/modules/maintenance/components/forms";
 import { PageHeader } from "@/components/shell/page-header";
 
 async function Content({ params }: { params: Promise<{ workOrderId: string }> }) {
   const { workOrderId } = await params;
-  const user = await requireRole(MAINTENANCE_AREA_ROLES, `/maintenance/${workOrderId}`);
-  const actor = actorOf(user);
-  const wo = await getWorkOrder(workOrderId);
-  if (!wo) notFound();
-  const access = accessFor(wo, actor);
-  if (!access) notFound();
-  const now = new Date();
-  const [photos, assignees] = await Promise.all([listAttachments(wo.id), access === "coordinator" ? listAssignees() : null]);
-  const options = allowedTransitions(wo.status, access, { reopenWindowOpen: reopenWindowOpen(wo, now) });
+  await requireRole(MAINTENANCE_AREA_ROLES, `/maintenance/${workOrderId}`);
+  const { workOrder: wo, access, notes, photos, transitions: options, assignees, now } = await orNotFound(api.maintenance.get({ id: workOrderId }));
   const isTerminal = wo.status === "CLOSED" || wo.status === "CANCELLED";
   const staff = wo.requester.staffProfile;
   const limited = access === "vendor"; // contractors get location and contact only (MNT-07)
@@ -46,7 +38,7 @@ async function Content({ params }: { params: Promise<{ workOrderId: string }> })
           <section className="panel">
             <div className="panel-head"><div><h2>Activity</h2><p>Newest first</p></div></div>
             <div className="panel-body">
-              <NoteList notes={visibleNotes(wo, access)} photos={photos} />
+              <NoteList notes={notes} photos={photos} />
               {!isTerminal && access !== "auditor" && <div className="mt-4 border-t border-zinc-200 pt-4"><NoteForm workOrderId={wo.id} allowInternal={access === "coordinator" || access === "assignee"} /></div>}
             </div>
           </section>

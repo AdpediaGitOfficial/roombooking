@@ -1,5 +1,5 @@
 import type { KeyStatus } from "@prisma/client";
-import { describeKeyStatus, holderLabel, isOverdue, type KeyTransactionRecord } from "@sam/core/modules/keys/service";
+import { describeKeyStatus, holderLabel, isOverdue, type KeyTransactionRecord } from "@sam/core/modules/keys/rules";
 
 const STYLE: Record<KeyStatus, string> = {
   AVAILABLE: "bg-green-100 text-green-800",

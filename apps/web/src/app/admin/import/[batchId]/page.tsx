@@ -1,8 +1,8 @@
 import { Suspense } from "react";
 import Link from "next/link";
-import { notFound } from "next/navigation";
 import { requireRole } from "@/lib/auth/authorize";
-import { IMPORT_ROLES, KINDS, getBatch, type RowResult, type Summary } from "@sam/core/modules/imports/service";
+import { IMPORT_ROLES, KINDS, type RowResult, type Summary } from "@sam/core/modules/imports/rules";
+import { api, orNotFound } from "@/lib/api";
 import { CommitForm, DiscardButton } from "@/modules/imports/components/forms";
 
 type Params = Promise<{ batchId: string }>;
@@ -10,9 +10,8 @@ const TONE: Record<RowResult["action"], string> = { create: "bg-green-100 text-g
 
 async function Content({ params }: { params: Params }) {
   const { batchId } = await params;
-  const user = await requireRole(IMPORT_ROLES, `/admin/import/${batchId}`);
-  const batch = await getBatch(batchId);
-  if (!batch || batch.organizationId !== user.organizationId) notFound();
+  await requireRole(IMPORT_ROLES, `/admin/import/${batchId}`);
+  const batch = await orNotFound(api.imports.get({ id: batchId }));
   const spec = KINDS.find((k) => k.kind === batch.kind)!;
   const rows = batch.rows as unknown as RowResult[];
   const s = batch.summary as Summary;

@@ -1,10 +1,8 @@
 import { Suspense } from "react";
-import { requireResident } from "@/modules/self-service/context";
-import { getMyStay } from "@sam/core/modules/self-service/service";
+import { requireUser } from "@/lib/auth/authorize";
+import { api } from "@/lib/api";
 import { StayCard } from "@/modules/self-service/components/stay-card";
-import { isoDate } from "@sam/core/modules/accommodation/occupancy";
-import { itemsHeldBy } from "@sam/core/modules/inventory/service";
-import { keysHeldBy } from "@sam/core/modules/keys/service";
+import { isoDate } from "@sam/core/modules/accommodation/occupancy-rules";
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -16,11 +14,11 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 }
 
 async function StayContent() {
-  const { staff } = await requireResident("/my/stay");
-  if (!staff) {
+  await requireUser("/my/stay");
+  const [{ staff, stay }, heldKeys, heldItems] = await Promise.all([api.me.stay(), api.me.heldKeys(), api.me.heldItems()]);
+  if (!staff || !stay) {
     return <p className="mt-4 text-sm text-zinc-600">Your account is not linked to a staff record yet. Contact the accommodation office.</p>;
   }
-  const [stay, heldKeys, heldItems] = await Promise.all([getMyStay(staff.id), keysHeldBy(staff.id), itemsHeldBy({ staffId: staff.id })]);
   const site = stay.current?.bed.room.building.site ?? stay.upcoming?.bed.room.building.site ?? null;
 
   return (

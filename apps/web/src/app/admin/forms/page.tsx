@@ -1,13 +1,14 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { requireRole } from "@/lib/auth/authorize";
-import { FORM_BUILDER_ROLES, currentOf, draftOf, listTypes } from "@sam/core/modules/requests/builder";
+import { FORM_BUILDER_ROLES, currentOf, draftOf } from "@sam/core/modules/requests/builder-rules";
+import { api } from "@/lib/api";
 import { CreateTypeForm } from "@/modules/requests/components/form-builder";
 import { PageHeader } from "@/components/shell/page-header";
 
 async function Content() {
-  const user = await requireRole(FORM_BUILDER_ROLES, "/admin/forms");
-  const types = await listTypes(user.organizationId);
+  await requireRole(FORM_BUILDER_ROLES, "/admin/forms");
+  const types = await api.forms.list();
   return (
     <>
       <div className="overflow-x-auto card">

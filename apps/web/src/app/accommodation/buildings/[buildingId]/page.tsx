@@ -1,23 +1,23 @@
 import { Suspense } from "react";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { api, orNotFound } from "@/lib/api";
 import { requireRole } from "@/lib/auth/authorize";
 import { ACCOMMODATION_VIEW_ROLES } from "@sam/core/modules/accommodation/access";
-import { getBuildingOccupancy } from "@sam/core/modules/accommodation/occupancy";
 import { SummaryTiles } from "@/modules/accommodation/components/summary-tiles";
 import { PageHeader } from "@/components/shell/page-header";
 
 async function BuildingView({ params }: { params: Promise<{ buildingId: string }> }) {
   const { buildingId } = await params;
   await requireRole(ACCOMMODATION_VIEW_ROLES, `/accommodation/buildings/${buildingId}`);
-  const data = await getBuildingOccupancy(buildingId);
-  if (!data) notFound();
+  const data = await orNotFound(api.accommodation.building({ buildingId }));
   const { building, today, rooms, summary } = data;
   return (
     <>
-      <PageHeader title="{building.name}" subtitle="
-        {building.site.name} · {building.type.toLowerCase()} · as of {today}
-      " />
+      <PageHeader
+        title={building.name}
+        subtitle={`${building.site.name} · ${building.type.toLowerCase()} · as of ${today}`}
+        crumbs={[["Accommodation", "/accommodation"], [building.name]]}
+      />
       <SummaryTiles summary={summary} />
       <h2 className="mt-8 text-lg font-semibold">Rooms</h2>
       <ul className="mt-3 grid gap-3 sm:grid-cols-2">

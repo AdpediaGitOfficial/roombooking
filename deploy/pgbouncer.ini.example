@@ -1,0 +1,27 @@
+; PgBouncer sits between the API/worker and PostgreSQL so many API processes can share
+; a small number of real database connections. Needed once the total of
+; (API processes x connection_limit) approaches PostgreSQL's max_connections.
+;
+; Install:  sudo apt install pgbouncer
+; Copy to /etc/pgbouncer/pgbouncer.ini, add the sam user to /etc/pgbouncer/userlist.txt
+; ("sam" "md5<hash>" or the plain password), then point DATABASE_URL at port 6432:
+;
+;   DATABASE_URL="postgresql://sam:PASSWORD@127.0.0.1:6432/sam?schema=public&pgbouncer=true&connection_limit=10"
+;
+; `pgbouncer=true` tells Prisma not to use prepared statements, which transaction
+; pooling cannot support. Run migrations (npm run db:deploy) against PostgreSQL on port
+; 5432 directly, not through PgBouncer.
+
+[databases]
+sam = host=127.0.0.1 port=5432 dbname=sam
+
+[pgbouncer]
+listen_addr = 127.0.0.1
+listen_port = 6432
+auth_type = scram-sha-256
+auth_file = /etc/pgbouncer/userlist.txt
+pool_mode = transaction
+max_client_conn = 500       ; app-side connections allowed
+default_pool_size = 20      ; real connections to PostgreSQL per database/user
+reserve_pool_size = 5
+server_idle_timeout = 600

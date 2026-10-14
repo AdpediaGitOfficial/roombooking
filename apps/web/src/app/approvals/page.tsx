@@ -1,8 +1,9 @@
 import { Suspense } from "react";
 import Link from "next/link";
-import { hasRole, requireRole } from "@/lib/auth/authorize";
-import { APPROVALS_AREA_ROLES, REQUEST_ADMIN_ROLES } from "@sam/core/modules/requests/access";
-import { listAllRequests, listInbox, withDelegations, type RequestListFilter, type RequestRecord } from "@sam/core/modules/requests/service";
+import { requireRole } from "@/lib/auth/authorize";
+import { APPROVALS_AREA_ROLES } from "@sam/core/modules/requests/access";
+import type { RequestListFilter, RequestRecord } from "@sam/core/modules/requests/rules";
+import { api } from "@/lib/api";
 import { RequestStatusBadge } from "@/modules/requests/components/request-view";
 import { PageHeader } from "@/components/shell/page-header";
 
@@ -31,13 +32,11 @@ function Row({ r }: { r: RequestRecord & { coveringFor?: string | null } }) {
 }
 
 async function Inbox({ searchParams }: { searchParams: Promise<{ filter?: string }> }) {
-  const user = await requireRole(APPROVALS_AREA_ROLES, "/approvals");
-  const isAdmin = hasRole(user, ...REQUEST_ADMIN_ROLES);
+  await requireRole(APPROVALS_AREA_ROLES, "/approvals");
   const { filter: raw } = await searchParams;
-  const filter = (isAdmin && FILTERS.some(([f]) => f === raw) ? raw : "inbox") as RequestListFilter | "inbox";
-  const actor = await withDelegations({ id: user.id, roles: user.roleAssignments.map((r) => r.role) });
-  const requests = filter === "inbox" ? await listInbox(actor) : await listAllRequests(filter);
-  const covering = [...new Set((actor.delegated ?? []).map((d) => d.delegatorName))];
+  const asked = (FILTERS.some(([f]) => f === raw) ? raw : "inbox") as RequestListFilter | "inbox";
+  // The API ignores a list filter for anyone who is not an administrator.
+  const { requests, covering, isAdmin, filter } = await api.approvals.inbox({ filter: asked });
 
   return (
     <>

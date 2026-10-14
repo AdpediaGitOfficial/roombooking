@@ -28,12 +28,16 @@
     "db:seed": "tsx packages/core/prisma/seed.ts",
     "db:studio": "prisma studio --schema packages/core/prisma/schema.prisma",
     "db:reset": "prisma migrate reset --schema packages/core/prisma/schema.prisma",
-    "notifications:worker": "npm run start -w @sam/worker",
     "jobs": "node scripts/jobs.mjs",
-    "postinstall": "npm run db:generate"
+    "postinstall": "npm run db:generate",
+    "loadtest:data": "node --env-file-if-exists=.env scripts/loadtest/generate-data.cjs",
+    "loadtest:tokens": "tsx scripts/loadtest/tokens.mts",
+    "loadtest:bench": "node scripts/loadtest/bench.mjs",
+    "loadtest:simulate": "node scripts/loadtest/simulate.mjs"
   },
   "devDependencies": {
     "@types/node": "^22.20.5",
+    "autocannon": "^8.0.0",
     "eslint": "^9",
     "eslint-config-next": "16.4.0",
     "prisma": "^6.19.3",

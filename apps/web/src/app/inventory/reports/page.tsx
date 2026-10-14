@@ -2,9 +2,9 @@ import { Suspense } from "react";
 import Link from "next/link";
 import type { InventoryTransactionType } from "@prisma/client";
 import { requireRole } from "@/lib/auth/authorize";
-import { prisma } from "@sam/core/lib/db";
 import { INVENTORY_VIEW_ROLES } from "@sam/core/modules/inventory/access";
-import { allocatedReport, conditionReport, describeCondition, describeTransaction, movementReport, stockBalanceReport } from "@sam/core/modules/inventory/service";
+import { describeCondition, describeTransaction } from "@sam/core/modules/inventory/rules";
+import { api } from "@/lib/api";
 import { TransactionTable } from "@/modules/inventory/components/views";
 import { PageHeader } from "@/components/shell/page-header";
 
@@ -20,13 +20,7 @@ async function Reports({ searchParams }: { searchParams: Search }) {
   const now = new Date();
   const to = isDate(sp.to) ? sp.to! : now.toISOString().slice(0, 10);
   const from = isDate(sp.from) ? sp.from! : new Date(now.getTime() - 30 * 86400000).toISOString().slice(0, 10);
-  const [sites, balance, movements, allocated, conditions] = await Promise.all([
-    prisma.site.findMany({ where: { status: "ACTIVE" }, orderBy: { name: "asc" } }),
-    stockBalanceReport(siteId),
-    movementReport({ siteId, from, to, type }, 200),
-    allocatedReport(siteId),
-    conditionReport(siteId),
-  ]);
+  const { sites, balance, movements, allocated, conditions } = await api.inventory.reports({ siteId: siteId || undefined, from, to, type: type ?? undefined });
   const qs = new URLSearchParams({ ...(siteId ? { siteId } : {}), from, to, ...(type ? { type } : {}) }).toString();
   const sel = "rounded-md border border-zinc-300 px-2 py-1.5 text-sm";
   return (

@@ -1,21 +1,17 @@
 import { Suspense } from "react";
 import Link from "next/link";
-import { notFound } from "next/navigation";
 import { requireRole } from "@/lib/auth/authorize";
 import { BROADCAST_ROLES } from "@sam/core/modules/broadcasts/access";
-import { broadcastDelivery, describeAudience, describeStatus, getBroadcast, parseAudience, resolveAudience } from "@sam/core/modules/broadcasts/service";
-import { audienceOptions } from "@/modules/broadcasts/context";
+import { describeStatus } from "@sam/core/modules/broadcasts/rules";
+import { api, orNotFound } from "@/lib/api";
 import { CancelButton, ComposeForm, SendButton } from "@/modules/broadcasts/components/forms";
 
 type Params = Promise<{ broadcastId: string }>;
 
 async function Content({ params }: { params: Params }) {
   const { broadcastId } = await params;
-  const user = await requireRole(BROADCAST_ROLES, `/admin/broadcasts/${broadcastId}`);
-  const b = await getBroadcast(broadcastId);
-  if (!b || b.organizationId !== user.organizationId) notFound();
-  const audience = parseAudience(b.audience);
-  const [who, delivery, recipients, options] = await Promise.all([describeAudience(audience), broadcastDelivery(b.id), b.status === "DRAFT" ? resolveAudience(user.organizationId, audience) : [], b.status === "DRAFT" ? audienceOptions(user.organizationId) : null]);
+  await requireRole(BROADCAST_ROLES, `/admin/broadcasts/${broadcastId}`);
+  const { broadcast: b, audience, who, delivery, recipients, options } = await orNotFound(api.broadcasts.get({ id: broadcastId }));
   const sum = (o: Record<string, number>) => Object.values(o).reduce((a, c) => a + c, 0);
   return (
     <>

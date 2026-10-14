@@ -1,22 +1,16 @@
 import { Suspense } from "react";
 import Link from "next/link";
-import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth/authorize";
-import { accessFor, allowedTransitions, getWorkOrder, listAttachments, locationLabel, reopenWindowOpen, visibleNotes } from "@sam/core/modules/maintenance/service";
-import { actorOf } from "@/modules/maintenance/context";
+import { locationLabel } from "@sam/core/modules/maintenance/rules";
+import { api, orNotFound } from "@/lib/api";
 import { NoteList, PriorityLabel, WorkOrderStatusBadge } from "@/modules/maintenance/components/views";
 import { NoteForm, StatusForm } from "@/modules/maintenance/components/forms";
 
 async function Content({ params }: { params: Promise<{ workOrderId: string }> }) {
   const { workOrderId } = await params;
-  const user = await requireUser(`/my/maintenance/${workOrderId}`);
-  const wo = await getWorkOrder(workOrderId);
-  // Residents only see their own tickets.
-  if (!wo || wo.requesterId !== user.id) notFound();
-  const actor = actorOf(user);
-  const access = accessFor(wo, actor) === "coordinator" ? "requester" : accessFor(wo, actor);
-  const photos = await listAttachments(wo.id);
-  const options = allowedTransitions(wo.status, "requester", { reopenWindowOpen: reopenWindowOpen(wo) });
+  await requireUser(`/my/maintenance/${workOrderId}`);
+  // Residents only see their own tickets; the API answers 404 for anyone else's.
+  const { workOrder: wo, notes, photos, transitions: options } = await orNotFound(api.maintenance.getMine({ id: workOrderId }));
 
   return (
     <>
@@ -34,7 +28,7 @@ async function Content({ params }: { params: Promise<{ workOrderId: string }> })
 
       <section className="mt-6">
         <h2 className="section-title">Updates</h2>
-        <div className="mt-2"><NoteList notes={visibleNotes(wo, access)} photos={photos} /></div>
+        <div className="mt-2"><NoteList notes={notes} photos={photos} /></div>
       </section>
 
       <section className="mt-6 space-y-4">

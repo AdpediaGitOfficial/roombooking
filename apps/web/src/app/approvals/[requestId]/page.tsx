@@ -1,30 +1,18 @@
 import { Suspense } from "react";
 import Link from "next/link";
-import { notFound } from "next/navigation";
-import { prisma } from "@sam/core/lib/db";
-import { hasRole, requireRole } from "@/lib/auth/authorize";
-import { APPROVALS_AREA_ROLES, REQUEST_ADMIN_ROLES } from "@sam/core/modules/requests/access";
-import { canDecide, currentStep, effectiveStepRole, getRequest, requestAccessFor, withDelegations } from "@sam/core/modules/requests/service";
-import { APPROVER_ROLES } from "@sam/core/modules/requests/builder";
+import { requireRole } from "@/lib/auth/authorize";
+import { APPROVALS_AREA_ROLES } from "@sam/core/modules/requests/access";
+import { APPROVER_ROLES } from "@sam/core/modules/requests/builder-rules";
+import { api, orNotFound } from "@/lib/api";
 import { RequestDetails, RequestHistory, RequestStatusBadge, RequestSteps } from "@/modules/requests/components/request-view";
 import { DecisionForm, ReassignForm } from "@/modules/requests/components/forms";
-import { isoDate } from "@sam/core/modules/accommodation/occupancy";
+import { isoDate } from "@sam/core/modules/accommodation/occupancy-rules";
 
 async function ApprovalContent({ params }: { params: Promise<{ requestId: string }> }) {
   const { requestId } = await params;
-  const user = await requireRole(APPROVALS_AREA_ROLES, `/approvals/${requestId}`);
-  const actor = await withDelegations({ id: user.id, roles: user.roleAssignments.map((r) => r.role) });
-  const request = await getRequest(requestId);
-  if (!request) notFound();
-  const access = requestAccessFor(request, actor) ?? (hasRole(user, ...REQUEST_ADMIN_ROLES) ? "admin" : null);
-  if (!access) notFound();
-
+  await requireRole(APPROVALS_AREA_ROLES, `/approvals/${requestId}`);
+  const { request, access, currentAllocation, decision, step, effectiveRole } = await orNotFound(api.approvals.get({ id: requestId }));
   const staff = request.requester.staffProfile;
-  const currentAllocation = staff
-    ? await prisma.allocation.findFirst({ where: { staffId: staff.id, status: { in: ["CONFIRMED", "CHECKED_IN"] } }, include: { bed: { include: { room: { include: { building: true } } } } }, orderBy: { startDate: "desc" } })
-    : null;
-  const decision = canDecide(request, actor);
-  const step = currentStep(request);
 
   return (
     <>
@@ -78,7 +66,7 @@ async function ApprovalContent({ params }: { params: Promise<{ requestId: string
           <p className="text-sm text-zinc-500">{decision.ok ? "" : decision.reason}</p>
         ) : null}
         {request.status === "PENDING_APPROVAL" && request.escalationNote && <p data-escalation className="mt-3 text-xs text-amber-700">{request.escalatedAt ? "Escalated" : "Reassigned"}: {request.escalationNote}{request.stepStartedAt ? ` · step started ${request.stepStartedAt.toISOString().slice(0, 10)}` : ""}</p>}
-        {request.status === "PENDING_APPROVAL" && access === "admin" && step && <div className="mt-4"><ReassignForm requestId={request.id} currentRole={effectiveStepRole(request) ?? step.approverRole} roles={APPROVER_ROLES} /></div>}
+        {request.status === "PENDING_APPROVAL" && access === "admin" && step && <div className="mt-4"><ReassignForm requestId={request.id} currentRole={effectiveRole ?? step.approverRole} roles={APPROVER_ROLES} /></div>}
       </section>
     </>
   );

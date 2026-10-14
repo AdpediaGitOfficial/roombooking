@@ -1,11 +1,13 @@
 import { Suspense } from "react";
 import Link from "next/link";
+import { api } from "@/lib/api";
 import { requireRole } from "@/lib/auth/authorize";
 import { ALLOCATION_VIEW_ROLES } from "@sam/core/modules/allocations/access";
-import { listAllocations, type AllocationListFilter } from "@sam/core/modules/allocations/service";
+import type { AllocationListFilter } from "@sam/core/modules/allocations/rules";
 import { AllocationStatusBadge } from "@/modules/allocations/components/status-badge";
-import { isoDate } from "@sam/core/modules/accommodation/occupancy";
+import { isoDate } from "@sam/core/modules/accommodation/occupancy-rules";
 import { PageHeader } from "@/components/shell/page-header";
+import { Pager, pageHref } from "@/components/shell/pager";
 
 const FILTERS: Array<[AllocationListFilter, string]> = [
   ["active", "Checked in"],
@@ -14,13 +16,11 @@ const FILTERS: Array<[AllocationListFilter, string]> = [
   ["all", "All"],
 ];
 
-async function AllocationList({ searchParams }: { searchParams: Promise<{ filter?: string; staffId?: string; requestId?: string }> }) {
+async function AllocationList({ searchParams }: { searchParams: Promise<{ filter?: string; staffId?: string; requestId?: string; page?: string }> }) {
   await requireRole(ALLOCATION_VIEW_ROLES, "/accommodation/allocations");
-  const { filter: raw, staffId, requestId } = await searchParams;
+  const { filter: raw, staffId, requestId, page: rawPage } = await searchParams;
   const filter = (FILTERS.some(([f]) => f === raw) ? raw : "active") as AllocationListFilter;
-  const allocations = await listAllocations(filter, staffId || null);
-
-  const counts = { active: allocations.filter((a) => a.status === "CHECKED_IN").length };
+  const { rows: allocations, total, page, pages, pageSize } = await api.allocations.list({ filter, staffId: staffId || undefined, page: Number(rawPage) || 1 });
   return (
     <section className="panel">
       <div className="toolbar">
@@ -30,7 +30,7 @@ async function AllocationList({ searchParams }: { searchParams: Promise<{ filter
           ))}
         </nav>
         {staffId && <Link href={`/accommodation/allocations?filter=${filter}`} className="chip chip-info">Filtered to one person · clear ×</Link>}
-        <span className="ml-auto text-xs text-zinc-500">{allocations.length} shown{filter === "active" ? ` · ${counts.active} checked in` : ""}</span>
+        <span className="ml-auto text-xs text-zinc-500">{total} {filter === "active" ? "checked in" : total === 1 ? "allocation" : "allocations"}</span>
       </div>
       <div className="overflow-x-auto">
         <table className="table">
@@ -67,6 +67,7 @@ async function AllocationList({ searchParams }: { searchParams: Promise<{ filter
           </tbody>
         </table>
       </div>
+      <Pager page={page} pages={pages} total={total} pageSize={pageSize} hrefFor={pageHref("/accommodation/allocations", { filter, staffId, requestId })} />
     </section>
   );
 }
@@ -77,7 +78,7 @@ export default function AllocationsPage({ searchParams }: PageProps<"/accommodat
       <PageHeader crumbs={[["Accommodation", "/accommodation"], ["Allocations"]]} title="Allocations" subtitle="Who is in which bed, who is arriving and who is leaving." actions={<><Link href="/accommodation" className="btn">Buildings &amp; rooms</Link><Link href="/accommodation/allocations/new" className="btn btn-primary">＋ New allocation</Link></>} />
       <div>
         <Suspense fallback={<p className="text-sm text-zinc-500">Loading…</p>}>
-          <AllocationList searchParams={searchParams as Promise<{ filter?: string; staffId?: string; requestId?: string }>} />
+          <AllocationList searchParams={searchParams as Promise<{ filter?: string; staffId?: string; requestId?: string; page?: string }>} />
         </Suspense>
       </div>
     </main>

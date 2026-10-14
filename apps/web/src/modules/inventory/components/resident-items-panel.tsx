@@ -1,16 +1,13 @@
 import Link from "next/link";
-import { prisma } from "@sam/core/lib/db";
-import { itemsHeldBy } from "@sam/core/modules/inventory/service";
-import { targetOptions } from "../context";
+import { api } from "@/lib/api";
 import { MovementForm } from "./forms";
 import { IssuePicker } from "./issue-picker";
 
 /** Handover panel for an allocation: items issued to the resident, return and issue (INV-03). */
 export async function ResidentItemsPanel({ staffId, canOperate, returnPath }: { staffId: string; canOperate: boolean; returnPath: string }) {
-  const held = await itemsHeldBy({ staffId });
-  const available = canOperate ? await prisma.inventoryItem.findMany({ where: { status: "ACTIVE", quantity: { gt: 0 }, condition: { not: "DAMAGED" } }, orderBy: [{ category: "asc" }, { name: "asc" }], take: 200 }) : [];
+  const { held, available } = canOperate ? await api.inventory.residentHandover({ staffId }) : { held: [], available: [] };
   if (held.length === 0 && available.length === 0) return null;
-  const options = canOperate ? await targetOptions() : null;
+  const options = canOperate ? await api.inventory.targetOptions() : null;
   const target = `staff:${staffId}`;
   return (
     <div className="card p-4" data-resident-items>

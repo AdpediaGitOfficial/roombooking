@@ -3,26 +3,13 @@
 // the batch is then committed in one transaction (nothing is written if any
 // row fails) or discarded. Exports produce files in the same layout, so a
 // download can be edited and re-imported.
-import type { EmploymentStatus, GenderPolicy, Prisma, Role } from "@prisma/client";
+import type { EmploymentStatus, GenderPolicy, Prisma } from "@prisma/client";
 import { prisma } from "../../lib/db";
 import { recordAudit } from "../../lib/audit";
 import { parseCsv, toCsv, toRecords } from "./csv";
+import { ImportError, KINDS, MAX_ROWS, type ImportKind, type RowResult, type Summary } from "./rules";
 
-export const IMPORT_ROLES: Role[] = ["SYSTEM_ADMIN", "ACCOMMODATION_ADMIN"];
-export type ImportKind = "staff" | "accommodation";
-export const KINDS: Array<{ kind: ImportKind; label: string; columns: string[]; blurb: string }> = [
-  { kind: "staff", label: "Staff profiles", columns: ["employeeId", "firstName", "lastName", "gender", "department", "company", "phone", "employmentStatus"], blurb: "One row per employee. Existing employee IDs are updated; new ones are created. Gender: MALE, FEMALE or blank. Employment status: ACTIVE, ON_LEAVE or TERMINATED." },
-  { kind: "accommodation", label: "Buildings, rooms and beds", columns: ["site", "building", "buildingName", "buildingType", "room", "roomType", "floor", "genderPolicy", "beds"], blurb: "One row per room. Site is an existing site code. Buildings are created when new (name required then) or matched by code. Beds: a count (e.g. 2) or bed codes separated by | (e.g. A-01-1|A-01-2). Existing rooms keep their beds and gain any new codes." },
-];
-export const MAX_ROWS = 5000;
-
-export type RowAction = "create" | "update" | "unchanged" | "error";
-export type RowResult = { line: number; values: Record<string, string>; action: RowAction; errors: string[]; note: string | null };
-export type Summary = { total: number; create: number; update: number; unchanged: number; error: number };
-
-export class ImportError extends Error {
-  constructor(public readonly code: "VALIDATION" | "NOT_FOUND" | "INVALID_STATE" | "HAS_ERRORS", message: string) { super(message); this.name = "ImportError"; }
-}
+export * from "./rules";
 
 const GENDERS: GenderPolicy[] = ["ANY", "MALE", "FEMALE"];
 const EMPLOYMENT: EmploymentStatus[] = ["ACTIVE", "ON_LEAVE", "TERMINATED"];
@@ -236,4 +223,22 @@ export function templateCsv(kind: ImportKind): string {
   const spec = KINDS.find((k) => k.kind === kind)!;
   const example = kind === "staff" ? [["E2001", "Amina", "Khan", "FEMALE", "Finance", "Example Ltd", "+971500000000", "ACTIVE"]] : [["HQ", "B", "Block B", "BUILDING", "B-01", "shared", "1", "MALE", "2"], ["HQ", "B", "", "", "B-02", "shared", "1", "MALE", "B-02-1|B-02-2|B-02-3"]];
   return toCsv(spec.columns, example);
+}
+
+// ---------------------------------------------------------------------------
+// Views for the API
+// ---------------------------------------------------------------------------
+
+/** One import batch, only within the caller's organisation. */
+export async function batchView(organizationId: string, id: string) {
+  const batch = await getBatch(id);
+  if (!batch || batch.organizationId !== organizationId) throw new ImportError("NOT_FOUND", "Import not found.");
+  return batch;
+}
+
+/** The export (or example template) for one kind, as CSV text; real exports are audited. */
+export async function exportFile(input: { kind: ImportKind; template: boolean; organizationId: string; actorId: string }) {
+  const csv = input.template ? templateCsv(input.kind) : input.kind === "staff" ? await exportStaffCsv(input.organizationId) : await exportAccommodationCsv(input.organizationId);
+  if (!input.template) await recordAudit({ actorId: input.actorId, action: "REPORT_EXPORTED", entityType: "Report", entityId: `import-${input.kind}`, after: { kind: input.kind } });
+  return csv;
 }

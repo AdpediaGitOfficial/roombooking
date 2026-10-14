@@ -1,11 +1,10 @@
 import { Suspense } from "react";
 import Link from "next/link";
-import { notFound } from "next/navigation";
 import { hasRole, requireRole } from "@/lib/auth/authorize";
-import { addDaysIso, zonedDateTime } from "@sam/core/lib/time";
+import { addDaysIso } from "@sam/core/lib/time";
 import { FACILITY_MANAGE_ROLES, FACILITY_OPERATE_ROLES, FACILITY_VIEW_ROLES } from "@sam/core/modules/facilities/access";
-import { availabilityForDay, bookingsForDay, facilityConfig, getFacility } from "@sam/core/modules/facilities/service";
-import { bookableUsers } from "@/modules/facilities/context";
+import { facilityConfig } from "@sam/core/modules/facilities/rules";
+import { api, orNotFound } from "@/lib/api";
 import { BookingStatusBadge, DayNav, SlotGrid, bookerName, bookingWhen } from "@/modules/facilities/components/views";
 import { AttendanceForm, BookingForm, CancelBookingForm, DecideBookingForm, FacilityConfigForm } from "@/modules/facilities/components/forms";
 
@@ -18,14 +17,9 @@ async function Content({ params, searchParams }: { params: Params; searchParams:
   const user = await requireRole(FACILITY_VIEW_ROLES, `/facilities/${facilityId}`);
   const canManage = hasRole(user, ...FACILITY_MANAGE_ROLES);
   const canOperate = hasRole(user, ...FACILITY_OPERATE_ROLES);
-  const facility = await getFacility(facilityId);
-  if (!facility) notFound();
-  const now = new Date();
+  const { facility, today, date, slots, bookings, users, now } = await orNotFound(api.facilities.get({ id: facilityId, date: rawDate }));
   const tz = facility.site.timezone;
-  const today = zonedDateTime(now, tz).date;
-  const date = rawDate && /^\d{4}-\d{2}-\d{2}$/.test(rawDate) ? rawDate : today;
   const { hours, rules } = facilityConfig(facility);
-  const [slots, bookings, users] = await Promise.all([availabilityForDay(facility, date, now), bookingsForDay(facility, date), canOperate ? bookableUsers() : null]);
   const base = `/facilities/${facility.id}`;
   const returnPath = `${base}?date=${date}`;
   return (

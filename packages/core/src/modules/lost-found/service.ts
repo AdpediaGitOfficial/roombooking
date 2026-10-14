@@ -7,32 +7,14 @@ import { prisma } from "../../lib/db";
 import { recordAudit } from "../../lib/audit";
 import { enqueueNotification } from "../../lib/notifications";
 import { storeImage, UploadError } from "../../lib/uploads";
+import { pageArgs, toPaged, type PageRequest } from "../../lib/paging";
 import { LostFoundError } from "./errors";
+import { OPEN, RETENTION_DAYS, claimantLabel, itemInclude, keywords, type Actor, type ItemFilter } from "./rules";
+
+export * from "./rules";
 
 type Tx = Prisma.TransactionClient;
 type Db = Tx | PrismaClient;
-
-/** Days an unclaimed item is kept before it is due for disposal (LF-05). */
-export const RETENTION_DAYS = Number(process.env.LOST_FOUND_RETENTION_DAYS ?? 90);
-export const CATEGORIES = ["Keys", "Phone / electronics", "Wallet / cards / ID", "Clothing", "Bag", "Jewellery / watch", "Documents", "Glasses", "Other"] as const;
-export const DISPOSAL_METHODS = ["Donated to charity", "Recycled", "Handed to police", "Destroyed", "Returned to site stock"] as const;
-
-export const itemInclude = {
-  site: { select: { id: true, name: true, timezone: true } },
-  custodian: { select: { id: true, name: true } },
-  registeredBy: { select: { id: true, name: true } },
-  handedOverBy: { select: { id: true, name: true } },
-  disposalAuthorisedBy: { select: { id: true, name: true } },
-  claims: {
-    include: { claimant: { select: { id: true, employeeId: true, firstName: true, lastName: true, userId: true } }, claimantUser: { select: { id: true, name: true, email: true } }, decidedBy: { select: { id: true, name: true } } },
-    orderBy: { createdAt: "desc" },
-  },
-  events: { include: { actor: { select: { id: true, name: true } } }, orderBy: { createdAt: "desc" } },
-} satisfies Prisma.LostFoundItemInclude;
-export type ItemRecord = Prisma.LostFoundItemGetPayload<{ include: typeof itemInclude }>;
-export type ClaimRecord = ItemRecord["claims"][number];
-
-export type Actor = { id: string; isOperator: boolean; isManager: boolean };
 
 function translateDbError(error: unknown): never {
   const e = error as { code?: string; message?: string; meta?: { target?: unknown } };
@@ -47,12 +29,6 @@ async function nextReference(tx: Tx): Promise<string> {
 
 async function logEvent(tx: Tx, itemId: string, type: string, actorId: string, from: LostFoundStatus | null, to: LostFoundStatus | null, notes?: string | null) {
   await tx.lostFoundEvent.create({ data: { itemId, type, actorId, fromStatus: from, toStatus: to, notes: notes?.trim() || null } });
-}
-
-export function claimantLabel(c: Pick<ClaimRecord, "claimant" | "claimantUser" | "claimantName">): string {
-  if (c.claimant) return `${c.claimant.firstName} ${c.claimant.lastName} (${c.claimant.employeeId})`;
-  if (c.claimantUser) return c.claimantUser.name;
-  return c.claimantName ?? "Unknown claimant";
 }
 
 // ---------------------------------------------------------------------------
@@ -272,19 +248,20 @@ export async function disposeItem(input: { itemId: string; actor: Actor; method:
 // Queries (LF-05 similar search, register, resident view)
 // ---------------------------------------------------------------------------
 
-export type ItemFilter = "open" | "reported" | "stored" | "claims" | "due" | "returned" | "disposed" | "all";
-export const ITEM_FILTERS: Array<[ItemFilter, string]> = [["open", "Open"], ["reported", "Reported"], ["stored", "Stored"], ["claims", "Claims to verify"], ["due", "Due for disposal"], ["returned", "Returned"], ["disposed", "Disposed"], ["all", "All"]];
-const OPEN: LostFoundStatus[] = ["REPORTED", "STORED", "CLAIM_PENDING"];
-
-export async function listItems(opts: { filter?: ItemFilter; q?: string | null; siteId?: string | null; now?: Date } = {}) {
+export async function listItems(opts: { filter?: ItemFilter; q?: string | null; siteId?: string | null; now?: Date } = {}, req: PageRequest = {}) {
   const now = opts.now ?? new Date();
+  const paging = pageArgs(req);
   const filter = opts.filter ?? "open";
   const where: Prisma.LostFoundItemWhereInput = {
     ...(opts.siteId ? { siteId: opts.siteId } : {}),
     ...(opts.q ? { OR: [{ reference: { contains: opts.q, mode: "insensitive" } }, { description: { contains: opts.q, mode: "insensitive" } }, { category: { contains: opts.q, mode: "insensitive" } }, { foundLocation: { contains: opts.q, mode: "insensitive" } }] } : {}),
     ...(filter === "open" ? { status: { in: OPEN } } : filter === "reported" ? { status: "REPORTED" } : filter === "stored" ? { status: "STORED" } : filter === "claims" ? { status: "CLAIM_PENDING" } : filter === "returned" ? { status: "RETURNED" } : filter === "disposed" ? { status: "DISPOSED" } : filter === "due" ? { status: { in: ["REPORTED", "STORED"] }, retainUntil: { lte: now } } : {}),
   };
-  return prisma.lostFoundItem.findMany({ where, include: { site: { select: { name: true } }, custodian: { select: { name: true } }, claims: { where: { outcome: "PENDING" }, select: { id: true } } }, orderBy: { foundAt: "desc" }, take: 500 });
+  const [rows, total] = await Promise.all([
+    prisma.lostFoundItem.findMany({ where, include: { site: { select: { name: true } }, custodian: { select: { name: true } }, claims: { where: { outcome: "PENDING" }, select: { id: true } } }, orderBy: [{ foundAt: "desc" }, { id: "asc" }], skip: paging.skip, take: paging.take }),
+    prisma.lostFoundItem.count({ where }),
+  ]);
+  return toPaged(rows, total, paging);
 }
 
 export async function getItem(id: string, db: Db = prisma) {
@@ -292,15 +269,6 @@ export async function getItem(id: string, db: Db = prisma) {
   if (!item) return null;
   const photos = await db.attachment.findMany({ where: { entityType: "LostFoundItem", entityId: id }, orderBy: { createdAt: "asc" } });
   return { item, photos };
-}
-
-export function isDueForDisposal(item: Pick<ItemRecord, "status" | "retainUntil">, now: Date = new Date()): boolean {
-  return (item.status === "REPORTED" || item.status === "STORED") && !!item.retainUntil && item.retainUntil <= now;
-}
-
-const STOP = new Set(["a", "an", "the", "and", "or", "of", "with", "in", "on", "at", "to", "for", "is", "it", "its", "was", "by", "from"]);
-export function keywords(text: string): string[] {
-  return [...new Set(text.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length >= 3 && !STOP.has(w)))];
 }
 
 /** Open items that look like the same thing: same category or shared description words, found within 14 days (LF-05). */
@@ -348,10 +316,62 @@ export async function lostFoundSummary(siteId?: string | null, now: Date = new D
   return { open, claims, due, returned30, disposed30 };
 }
 
-export function describeStatus(status: LostFoundStatus): string {
-  return { REPORTED: "Reported", STORED: "In storage", CLAIM_PENDING: "Claim pending", RETURNED: "Returned to owner", DISPOSED: "Disposed" }[status];
+
+// ---------------------------------------------------------------------------
+// Views and actions for the API
+// ---------------------------------------------------------------------------
+
+/** The register for a filter together with its summary tiles. */
+export async function getRegisterView(opts: { filter?: ItemFilter; q?: string | null }, req: PageRequest = {}, now: Date = new Date()) {
+  const [items, summary] = await Promise.all([listItems({ ...opts, now }, req), lostFoundSummary(null, now)]);
+  return { items, summary, now };
 }
 
-export function describeOutcome(outcome: ClaimOutcome): string {
-  return { PENDING: "Awaiting verification", VERIFIED: "Verified", REJECTED: "Rejected", WITHDRAWN: "Withdrawn" }[outcome];
+/** Sites and residents the register and claim forms pick from. */
+export async function registerOptions() {
+  const [sites, staff] = await Promise.all([
+    prisma.site.findMany({ where: { status: "ACTIVE" }, orderBy: { name: "asc" } }),
+    prisma.staffProfile.findMany({ where: { employmentStatus: "ACTIVE" }, orderBy: [{ lastName: "asc" }, { firstName: "asc" }] }),
+  ]);
+  return { sites: sites.map((s) => ({ id: s.id, label: s.name })), staff: staff.map((s) => ({ id: s.id, label: `${s.lastName}, ${s.firstName} (${s.employeeId})`, userId: s.userId })) };
+}
+
+/** One item for staff: full record with claims and timeline, photos, and look-alike open items. */
+export async function getItemView(id: string, now: Date = new Date()) {
+  const detail = await getItem(id);
+  if (!detail) throw new LostFoundError("NOT_FOUND", "Item not found.");
+  const { item } = detail;
+  const similar = OPEN.includes(item.status)
+    ? await similarItems({ description: item.description, category: item.category, foundAt: item.foundAt, siteId: item.siteId, excludeId: item.id })
+    : [];
+  return { ...detail, similar, now };
+}
+
+/** What a resident sees of one item: the public description and their own claim only. */
+export async function getMyItemView(userId: string, id: string) {
+  const item = await prisma.lostFoundItem.findUnique({
+    where: { id },
+    select: { id: true, reference: true, description: true, category: true, foundLocation: true, foundAt: true, status: true, handedOverAt: true, site: { select: { name: true } }, claims: { where: { claimantUserId: userId }, orderBy: { createdAt: "desc" } } },
+  });
+  if (!item) throw new LostFoundError("NOT_FOUND", "Item not found.");
+  const photos = await prisma.attachment.findMany({ where: { entityType: "LostFoundItem", entityId: id }, orderBy: { createdAt: "asc" } });
+  return { item, photos };
+}
+
+/** A resident's browse page: open found items (searchable) and their own claims. */
+export async function getMyPortal(userId: string, q?: string | null) {
+  const [items, claims] = await Promise.all([publicItems({ q: q || null }), myClaims(userId)]);
+  return { items, claims };
+}
+
+/** An operator records a claim for a resident (looked up by staff id) or a named walk-in. */
+export async function recordClaim(input: { itemId: string; actor: Actor; evidence: string; claimantStaffId?: string | null; claimantName?: string | null; claimantContact?: string | null }) {
+  const staff = input.claimantStaffId ? await prisma.staffProfile.findUnique({ where: { id: input.claimantStaffId } }) : null;
+  return submitClaim({ itemId: input.itemId, actor: input.actor, evidence: input.evidence, claimantId: staff?.id ?? null, claimantUserId: staff?.userId ?? null, claimantName: staff ? null : input.claimantName, claimantContact: input.claimantContact });
+}
+
+/** A resident claims an item for themselves. */
+export async function submitMyClaim(input: { itemId: string; actor: Actor; user: { id: string; name: string; email: string }; evidence: string; claimantContact?: string | null }) {
+  const staff = await prisma.staffProfile.findUnique({ where: { userId: input.user.id } });
+  return submitClaim({ itemId: input.itemId, actor: input.actor, evidence: input.evidence, claimantId: staff?.id ?? null, claimantUserId: input.user.id, claimantName: staff ? null : input.user.name, claimantContact: input.claimantContact || input.user.email });
 }

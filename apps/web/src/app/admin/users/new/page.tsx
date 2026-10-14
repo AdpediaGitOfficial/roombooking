@@ -1,13 +1,13 @@
 import { Suspense } from "react";
 import { requireRole } from "@/lib/auth/authorize";
 import { ALL_ROLES, USER_ADMIN_ROLES } from "@sam/core/modules/admin/access";
-import { scopeOptions, unlinkedStaff } from "@sam/core/modules/admin/users-service";
+import { api } from "@/lib/api";
 import { CreateUserForm } from "@/modules/admin/components/forms";
 import { PageHeader } from "@/components/shell/page-header";
 
 async function Content() {
-  const actor = await requireRole(USER_ADMIN_ROLES, "/admin/users/new");
-  const [options, staff] = await Promise.all([scopeOptions(), unlinkedStaff(actor.organizationId)]);
+  await requireRole(USER_ADMIN_ROLES, "/admin/users/new");
+  const { options, staff } = await api.users.options();
   return <CreateUserForm options={options} staff={staff} roles={ALL_ROLES} />;
 }
 

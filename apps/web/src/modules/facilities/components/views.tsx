@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { BookingStatus } from "@prisma/client";
 import { zonedDateTime } from "@sam/core/lib/time";
-import { describeBookingStatus, type BookingRecord, type Slot } from "@sam/core/modules/facilities/service";
+import { describeBookingStatus, type BookingRecord, type Slot } from "@sam/core/modules/facilities/rules";
 
 const STATUS_CLASS: Record<BookingStatus, string> = {
   PENDING_APPROVAL: "bg-amber-100 text-amber-900",

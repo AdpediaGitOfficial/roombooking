@@ -2,15 +2,14 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { requireUser } from "@/lib/auth/authorize";
 import { zonedDateTime } from "@sam/core/lib/time";
-import { facilityConfig, listFacilities, myBookings } from "@sam/core/modules/facilities/service";
-import { describeHours } from "@sam/core/modules/facilities/rules";
+import { describeHours, facilityConfig } from "@sam/core/modules/facilities/rules";
+import { api } from "@/lib/api";
 import { BookingCard } from "@/modules/facilities/components/views";
 import { CancelBookingForm } from "@/modules/facilities/components/forms";
 
 async function Content() {
-  const user = await requireUser("/my/facilities");
-  const now = new Date();
-  const [facilities, mine] = await Promise.all([listFacilities(), myBookings(user.id, now)]);
+  await requireUser("/my/facilities");
+  const { facilities, mine, now } = await api.facilities.mine();
   return (
     <>
       <section className="mt-6">

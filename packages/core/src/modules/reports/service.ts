@@ -3,7 +3,9 @@ import { prisma } from "../../lib/db";
 import { recordAudit } from "../../lib/audit";
 import { OCCUPYING_STATUSES, classifyBed, isoDate, mergeSummaries, summarize, todayInTimezone, type OccupancySummary } from "../accommodation/occupancy";
 
-export const ARRIVAL_WINDOW_DAYS = 14;
+import { ARRIVAL_WINDOW_DAYS } from "./rules";
+
+export { ARRIVAL_WINDOW_DAYS };
 
 const bedInclude = {
   allocations: {

@@ -1,17 +1,15 @@
 import { Suspense } from "react";
 import Link from "next/link";
-import { hasRole, requireRole } from "@/lib/auth/authorize";
-import { APPROVALS_AREA_ROLES, REQUEST_ADMIN_ROLES } from "@sam/core/modules/requests/access";
-import { delegatableRoles, delegateOptions, delegatorOptions, isoDay, listDelegations } from "@sam/core/modules/requests/delegations";
+import { requireRole } from "@/lib/auth/authorize";
+import { APPROVALS_AREA_ROLES } from "@sam/core/modules/requests/access";
+import { isoDay } from "@sam/core/modules/requests/delegation-rules";
+import { api } from "@/lib/api";
 import { CreateDelegationForm, RevokeButton } from "@/modules/requests/components/delegation-forms";
 import { PageHeader } from "@/components/shell/page-header";
 
 async function Content() {
   const user = await requireRole(APPROVALS_AREA_ROLES, "/approvals/delegations");
-  const isAdmin = hasRole(user, ...REQUEST_ADMIN_ROLES);
-  const myRoles = delegatableRoles(user.roleAssignments.map((r) => r.role));
-  const [rows, delegates, delegators] = await Promise.all([listDelegations({ id: user.id, isAdmin }), delegateOptions(user.organizationId, ""), isAdmin ? delegatorOptions(user.organizationId) : null]);
-  const today = isoDay(new Date());
+  const { rows, delegates, delegators, isAdmin, myRoles, today } = await api.delegations.view();
   const state = (d: (typeof rows)[number]) => (d.status === "REVOKED" ? "Ended" : d.live ? "Live now" : d.upcoming ? "Upcoming" : "Expired");
   return (
     <>

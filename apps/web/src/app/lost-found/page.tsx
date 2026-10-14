@@ -2,21 +2,22 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { hasRole, requireRole } from "@/lib/auth/authorize";
 import { LOST_FOUND_OPERATE_ROLES, LOST_FOUND_VIEW_ROLES } from "@sam/core/modules/lost-found/access";
-import { CATEGORIES, ITEM_FILTERS, RETENTION_DAYS, listItems, lostFoundSummary, type ItemFilter } from "@sam/core/modules/lost-found/service";
-import { registerOptions } from "@/modules/lost-found/context";
+import { CATEGORIES, ITEM_FILTERS, RETENTION_DAYS, type ItemFilter } from "@sam/core/modules/lost-found/rules";
+import { api } from "@/lib/api";
 import { StatusBadge, when } from "@/modules/lost-found/components/views";
 import { RegisterItemForm } from "@/modules/lost-found/components/forms";
 import { PageHeader } from "@/components/shell/page-header";
+import { Pager, pageHref } from "@/components/shell/pager";
 
-type Search = Promise<{ filter?: string; q?: string }>;
+type Search = Promise<{ filter?: string; q?: string; page?: string }>;
 
 async function Register({ searchParams }: { searchParams: Search }) {
   const user = await requireRole(LOST_FOUND_VIEW_ROLES, "/lost-found");
   const canOperate = hasRole(user, ...LOST_FOUND_OPERATE_ROLES);
-  const { filter: raw, q } = await searchParams;
+  const { filter: raw, q, page: rawPage } = await searchParams;
   const filter = (ITEM_FILTERS.some(([f]) => f === raw) ? raw : "open") as ItemFilter;
-  const now = new Date();
-  const [items, summary, options] = await Promise.all([listItems({ filter, q: q || null, now }), lostFoundSummary(null, now), canOperate ? registerOptions() : null]);
+  const [{ items: list, summary, now }, options] = await Promise.all([api.lostFound.register({ filter, q: q || undefined, page: Number(rawPage) || 1 }), canOperate ? api.lostFound.options() : null]);
+  const items = list.rows;
   return (
     <>
       <dl className="grid grid-cols-2 gap-3 sm:grid-cols-5">
@@ -56,6 +57,7 @@ async function Register({ searchParams }: { searchParams: Search }) {
             {items.length === 0 && <tr><td colSpan={6} className="px-3 py-6 text-center text-zinc-500">No items match.</td></tr>}
           </tbody>
         </table>
+        <Pager page={list.page} pages={list.pages} total={list.total} pageSize={list.pageSize} hrefFor={pageHref("/lost-found", { filter, q })} />
       </div>
       {options && <div className="mt-6"><RegisterItemForm sites={options.sites} categories={CATEGORIES} defaultFoundAt={now.toISOString().slice(0, 16)} retentionDays={RETENTION_DAYS} /></div>}
     </>

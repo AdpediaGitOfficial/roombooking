@@ -60,9 +60,9 @@ describe("items", () => {
     const updated = await updateItem({ itemId: item.id, actorId, name: "Soap bar 100g", category: "Toiletries", reorderThreshold: 10, storageLocation: "Store room B" });
     expect(updated.name).toBe("Soap bar 100g");
     expect(isLowStock(updated)).toBe(false);
-    expect((await listItems({ filter: "low", siteId })).some((i) => i.id === item.id)).toBe(false);
+    expect((await listItems({ filter: "low", siteId })).rows.some((i) => i.id === item.id)).toBe(false);
     await receiveStock({ itemId: item.id, actorId, quantity: 5, reference: "PO-1" });
-    expect((await listItems({ q: "soap", siteId }))[0].quantity).toBe(20);
+    expect((await listItems({ q: "soap", siteId })).rows[0].quantity).toBe(20);
     expect((await inventorySummary(siteId)).stockLines).toBeGreaterThanOrEqual(2);
   });
 });
@@ -175,7 +175,7 @@ describe("movements", () => {
     expect(retired.quantity).toBe(0);
     await expectError(receiveStock({ itemId: item.id, actorId, quantity: 1 }), "INVALID_STATE");
     await expectError(updateItem({ itemId: item.id, actorId, name: "x", category: "y" }), "INVALID_STATE");
-    expect((await listItems({ filter: "retired", siteId })).some((i) => i.id === item.id)).toBe(true);
+    expect((await listItems({ filter: "retired", siteId })).rows.some((i) => i.id === item.id)).toBe(true);
     await expect(prisma.inventoryTransaction.deleteMany({ where: { itemId: item.id } })).rejects.toThrow(/cannot be deleted/);
   });
 });

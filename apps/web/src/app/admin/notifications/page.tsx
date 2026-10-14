@@ -1,13 +1,9 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import type { NotificationChannel, NotificationStatus } from "@prisma/client";
-import { prisma } from "@sam/core/lib/db";
 import { requireRole } from "@/lib/auth/authorize";
 import { ADMIN_VIEW_ROLES } from "@sam/core/modules/admin/access";
-import { outboxStats } from "@sam/core/modules/notifications/worker";
-import { transportFromEnv } from "@sam/core/modules/notifications/transport";
-import { whatsappTransportFromEnv } from "@sam/core/modules/notifications/whatsapp";
-import { requiredTemplates } from "@sam/core/modules/notifications/whatsapp-templates";
+import { api } from "@/lib/api";
 import { RetryButton, RunWorkerButton, SendTestEmailButton, SendTestWhatsAppButton } from "@/modules/notifications/components/forms";
 import { PageHeader } from "@/components/shell/page-header";
 
@@ -18,15 +14,7 @@ async function Content({ searchParams }: { searchParams: Promise<{ status?: stri
   const { status: raw, channel: rawChannel } = await searchParams;
   const status = STATUSES.includes(raw as NotificationStatus) ? (raw as NotificationStatus) : null;
   const channel: NotificationChannel = rawChannel === "WHATSAPP" ? "WHATSAPP" : "EMAIL";
-  const describe = (f: () => { name: string; description: string }) => { try { const t = f(); return { name: t.name, description: t.description }; } catch (e) { return { name: "error", description: e instanceof Error ? e.message : String(e) }; } };
-  const transportInfo = describe(() => transportFromEnv());
-  const waInfo = describe(() => whatsappTransportFromEnv());
-  const [{ stats, due, dueWhatsApp, oldestQueuedAt, oldestWhatsAppQueuedAt }, recent, unread, consented] = await Promise.all([
-    outboxStats(),
-    prisma.notification.findMany({ where: { channel, ...(status ? { status } : {}) }, include: { recipient: { select: { name: true, email: true } } }, orderBy: { createdAt: "desc" }, take: 100 }),
-    prisma.notification.count({ where: { channel: "IN_APP", readAt: null } }),
-    prisma.user.count({ where: { whatsappNotifications: true, whatsappConsentAt: { not: null }, whatsappNumber: { not: null } } }),
-  ]);
+  const { stats, due, dueWhatsApp, oldestQueuedAt, oldestWhatsAppQueuedAt, recent, unread, consented, transport: transportInfo, whatsappTransport: waInfo, templates, whatsappLanguage } = await api.notifications.view({ channel, status: status ?? undefined });
   const email = stats.EMAIL ?? {};
   const wa = stats.WHATSAPP ?? {};
   const query = (c: NotificationChannel, s: string) => `/admin/notifications?channel=${c}${s ? `&status=${s}` : ""}`;
@@ -85,12 +73,12 @@ async function Content({ searchParams }: { searchParams: Promise<{ status?: stri
       {channel === "WHATSAPP" && (
         <section className="mt-6">
           <h2 className="section-title">Templates to approve with the provider</h2>
-          <p className="mt-1 text-xs text-zinc-500">Business-initiated WhatsApp messages must use pre-approved templates. Create these in WhatsApp Manager (language {process.env.WHATSAPP_LANGUAGE ?? "en"}); override names with WHATSAPP_TEMPLATE_MAP.</p>
+          <p className="mt-1 text-xs text-zinc-500">Business-initiated WhatsApp messages must use pre-approved templates. Create these in WhatsApp Manager (language {whatsappLanguage}); override names with WHATSAPP_TEMPLATE_MAP.</p>
           <div className="mt-2 overflow-x-auto card">
             <table className="w-full text-sm">
               <thead className="bg-zinc-50 text-left text-xs uppercase tracking-wide text-zinc-500"><tr><th className="px-3 py-2">Template</th><th className="px-3 py-2">Body</th><th className="px-3 py-2">Events</th></tr></thead>
               <tbody className="divide-y divide-zinc-200">
-                {requiredTemplates().map((t) => <tr key={t.name} data-template={t.name}><td className="px-3 py-2 font-mono text-xs">{t.name}</td><td className="px-3 py-2 text-xs">{t.body}</td><td className="px-3 py-2 text-xs text-zinc-500">{t.events.join(", ")}</td></tr>)}
+                {templates.map((t) => <tr key={t.name} data-template={t.name}><td className="px-3 py-2 font-mono text-xs">{t.name}</td><td className="px-3 py-2 text-xs">{t.body}</td><td className="px-3 py-2 text-xs text-zinc-500">{t.events.join(", ")}</td></tr>)}
               </tbody>
             </table>
           </div>

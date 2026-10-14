@@ -5,6 +5,10 @@ on:
     branches: ["**"]
   pull_request:
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   verify:
     runs-on: ubuntu-latest
@@ -36,3 +40,16 @@ jobs:
       - run: npm run db:seed
       - run: npm test
       - run: npm run build
+      # Boot the built services and check they find each other and the database.
+      - name: Smoke-test the built services
+        run: |
+          API_PORT=4000 API_HOST=127.0.0.1 npm run start:api > api.log 2>&1 &
+          PORT=3000 API_URL=http://127.0.0.1:4000 npm run start:web > web.log 2>&1 &
+          WORKER_HEALTH_PORT=4200 npm run start:worker > worker.log 2>&1 &
+          for i in $(seq 1 30); do curl -sf http://127.0.0.1:3000/api/health && break; sleep 2; done
+          curl -sf http://127.0.0.1:4000/ready
+          curl -sf http://127.0.0.1:4200/health
+          curl -sf -o /dev/null http://127.0.0.1:3000/login
+      - name: Service logs on failure
+        if: failure()
+        run: tail -n 50 api.log web.log worker.log

@@ -98,7 +98,7 @@ describe("claims, handover and disposal", () => {
     expect(row.status).toBe("CLAIM_PENDING");
     expect(Object.keys(row)).not.toContain("storageLocation");
     expect((await myClaims(residentUserId)).some((c) => c.id === claimId)).toBe(true);
-    expect((await listItems({ filter: "claims", siteId })).some((i) => i.id === itemId && i.claims.length === 3)).toBe(true);
+    expect((await listItems({ filter: "claims", siteId })).rows.some((i) => i.id === itemId && i.claims.length === 3)).toBe(true);
   });
 
   it("rejects with a reason, verifies one claim (closing the others), notifies the claimant and hands over", async () => {
@@ -141,7 +141,7 @@ describe("claims, handover and disposal", () => {
   it("disposal needs an administrator, no pending claim and an expired retention period", async () => {
     const item = await registerItem({ siteId, actorId: opId, description: "Single black sock", category: "Clothing", foundAt: "2026-07-01T07:00:00.000Z", storageLocation: "Bin 3", retentionDays: 30, now: new Date("2026-07-02T00:00:00.000Z") });
     expect(isDueForDisposal(item, NOW)).toBe(true);
-    expect((await listItems({ filter: "due", siteId, now: NOW })).some((i) => i.id === item.id)).toBe(true);
+    expect((await listItems({ filter: "due", siteId, now: NOW })).rows.some((i) => i.id === item.id)).toBe(true);
     await expectError(disposeItem({ itemId: item.id, actor: op(), method: "Recycled", note: "Unclaimed", now: NOW }), "FORBIDDEN");
     await expectError(disposeItem({ itemId: item.id, actor: admin(), method: "", note: "Unclaimed", now: NOW }), "VALIDATION");
     await expectError(disposeItem({ itemId: item.id, actor: admin(), method: "Recycled", note: "Unclaimed", now: new Date("2026-07-10T00:00:00.000Z") }), "INVALID_STATE");

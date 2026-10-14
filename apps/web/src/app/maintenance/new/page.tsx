@@ -1,14 +1,14 @@
 import { Suspense } from "react";
 import { requireRole } from "@/lib/auth/authorize";
 import { MAINTENANCE_COORDINATOR_ROLES } from "@sam/core/modules/maintenance/access";
-import { CATEGORIES } from "@sam/core/modules/maintenance/service";
-import { allRoomOptions, buildingOptions } from "@/modules/maintenance/context";
+import { CATEGORIES } from "@sam/core/modules/maintenance/rules";
+import { api } from "@/lib/api";
 import { NewWorkOrderForm } from "@/modules/maintenance/components/forms";
 import { PageHeader } from "@/components/shell/page-header";
 
 async function Content() {
   await requireRole(MAINTENANCE_COORDINATOR_ROLES, "/maintenance/new");
-  const [rooms, buildings] = await Promise.all([allRoomOptions(), buildingOptions()]);
+  const { rooms, buildings } = await api.maintenance.locationOptions();
   return <NewWorkOrderForm categories={CATEGORIES} rooms={rooms} buildings={buildings} returnTo="ops" />;
 }
 

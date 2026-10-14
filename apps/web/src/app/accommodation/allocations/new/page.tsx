@@ -1,13 +1,12 @@
 import { Suspense } from "react";
 import Link from "next/link";
-import { prisma } from "@sam/core/lib/db";
+import { api } from "@/lib/api";
 import { requireRole } from "@/lib/auth/authorize";
 import { ALLOCATION_OPERATE_ROLES } from "@sam/core/modules/allocations/access";
-import { findAvailableBeds, isIsoDate } from "@sam/core/modules/allocations/service";
-import { AllocationError } from "@sam/core/modules/allocations/errors";
+import { isIsoDate } from "@sam/core/modules/allocations/rules";
+import { ApiError } from "@sam/contract/index";
 import { AllocateForm } from "@/modules/allocations/components/forms";
 import { PageHeader } from "@/components/shell/page-header";
-import { OCCUPYING_STATUSES, todayInTimezone } from "@sam/core/modules/accommodation/occupancy";
 
 type Params = { staffId?: string; buildingId?: string; bedId?: string; startDate?: string; endDate?: string; reason?: string };
 
@@ -17,29 +16,21 @@ async function NewAllocation({ searchParams }: { searchParams: Promise<Params> }
   await requireRole(ALLOCATION_OPERATE_ROLES, "/accommodation/allocations/new");
   const params = await searchParams;
 
-  const [staff, buildings] = await Promise.all([
-    prisma.staffProfile.findMany({
-      where: { employmentStatus: "ACTIVE" },
-      orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
-      include: { allocations: { where: { status: { in: OCCUPYING_STATUSES } }, include: { bed: true }, take: 1 } },
-    }),
-    prisma.building.findMany({ where: { status: "ACTIVE" }, include: { site: true }, orderBy: [{ site: { name: "asc" } }, { code: "asc" }] }),
-  ]);
+  const { staff, buildings, today } = await api.allocations.formOptions();
 
   const selectedStaff = staff.find((s) => s.id === params.staffId) ?? null;
-  const defaultStart = todayInTimezone(buildings[0]?.site.timezone ?? "UTC");
-  const startDate = params.startDate || defaultStart;
+  const startDate = params.startDate || today;
   const endDate = params.endDate || "";
   const searched = Boolean(params.staffId && isIsoDate(startDate));
 
-  let beds: Awaited<ReturnType<typeof findAvailableBeds>> = [];
+  let beds: Awaited<ReturnType<typeof api.allocations.availableBeds>> = [];
   let searchError: string | null = null;
   if (searched && selectedStaff) {
     try {
-      beds = await findAvailableBeds({ startDate, endDate: endDate || null, buildingId: params.buildingId || null, gender: selectedStaff.gender });
+      beds = await api.allocations.availableBeds({ startDate, endDate: endDate || undefined, buildingId: params.buildingId || undefined, gender: selectedStaff.gender });
       if (params.bedId) beds = beds.filter((b) => b.id === params.bedId);
     } catch (error) {
-      if (error instanceof AllocationError) searchError = error.message;
+      if (error instanceof ApiError && error.status < 500) searchError = error.message;
       else throw error;
     }
   }

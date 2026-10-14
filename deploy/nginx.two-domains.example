@@ -1,0 +1,32 @@
+# Two domains: the web app and the API, each on its own port.
+#   accomodation.adpedia.in       -> web app on 127.0.0.1:2323
+#   api-accomodation.adpedia.in   -> API on 127.0.0.1:4343
+# .env:  WEB_PORT=2323  API_PORT=4343  API_URL=https://api-accomodation.adpedia.in
+#        APP_BASE_URL=https://accomodation.adpedia.in
+# Then: certbot --nginx -d accomodation.adpedia.in -d api-accomodation.adpedia.in
+
+server {
+    listen 80;
+    server_name accomodation.adpedia.in;
+    client_max_body_size 12m;
+    location / {
+        proxy_pass         http://127.0.0.1:2323;
+        proxy_http_version 1.1;
+        proxy_set_header   Host $host;
+        proxy_set_header   X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto $scheme;
+    }
+}
+
+server {
+    listen 80;
+    server_name api-accomodation.adpedia.in;
+    client_max_body_size 12m;           # photo uploads
+    location / {
+        proxy_pass         http://127.0.0.1:4343;
+        proxy_http_version 1.1;
+        proxy_set_header   Host $host;
+        proxy_set_header   X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto $scheme;
+    }
+}

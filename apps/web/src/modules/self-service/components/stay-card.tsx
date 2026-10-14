@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { StayAllocation } from "@sam/core/modules/self-service/service";
-import { isoDate } from "@sam/core/modules/accommodation/occupancy";
+import { isoDate } from "@sam/core/modules/accommodation/occupancy-rules";
 
 export function StayCard({ allocation, compact = false }: { allocation: StayAllocation | null; compact?: boolean }) {
   if (!allocation) {

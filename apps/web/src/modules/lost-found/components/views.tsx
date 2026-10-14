@@ -1,5 +1,5 @@
 import type { ClaimOutcome, LostFoundStatus } from "@prisma/client";
-import { describeOutcome, describeStatus } from "@sam/core/modules/lost-found/service";
+import { describeOutcome, describeStatus } from "@sam/core/modules/lost-found/rules";
 
 const STATUS_TONE: Record<LostFoundStatus, string> = {
   REPORTED: "bg-amber-100 text-amber-900",

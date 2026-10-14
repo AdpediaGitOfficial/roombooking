@@ -1,11 +1,11 @@
 import "server-only";
-import { prisma } from "@sam/core/lib/db";
+import { api } from "@/lib/api";
 import { requireUser, type CurrentUser } from "@/lib/auth/authorize";
 
 /** The signed-in user plus their own staff record (null when none is linked). */
 export async function requireResident(returnTo: string) {
   const user = await requireUser(returnTo);
-  const staff = await prisma.staffProfile.findUnique({ where: { userId: user.id } });
+  const staff = await api.me.staff();
   return { user, staff };
 }
 

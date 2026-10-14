@@ -1,16 +1,14 @@
 import { Suspense } from "react";
 import Link from "next/link";
-import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth/authorize";
-import { openAnnouncement } from "@sam/core/modules/broadcasts/service";
+import { api, orNotFound } from "@/lib/api";
 
 type Params = Promise<{ broadcastId: string }>;
 
 async function Content({ params }: { params: Params }) {
   const { broadcastId } = await params;
-  const user = await requireUser(`/my/announcements/${broadcastId}`);
-  const a = await openAnnouncement(user.id, broadcastId);
-  if (!a) notFound();
+  await requireUser(`/my/announcements/${broadcastId}`);
+  const a = await orNotFound(api.broadcasts.announcement({ id: broadcastId }));
   return (
     <>
       <h1 className="page-title">{a.title}</h1>

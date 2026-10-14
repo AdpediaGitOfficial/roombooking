@@ -3,7 +3,7 @@
 import { useActionState, useState } from "react";
 import type { Role } from "@prisma/client";
 import { FIELD_TYPES, type FieldType, type FormField, type VisibilityOp } from "@sam/core/modules/requests/forms";
-import { slugify, type StepInput } from "@sam/core/modules/requests/builder";
+import { slugify, type StepInput } from "@sam/core/modules/requests/builder-rules";
 import { createDraftAction, createTypeAction, draftAction, updateTypeAction, type BuilderState } from "../builder-actions";
 import { FieldList } from "./dynamic-form";
 

@@ -1,9 +1,11 @@
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import type { NextConfig } from "next";
 import { loadEnvConfig } from "@next/env";
 
 // One `.env` at the repository root configures every service in development.
-const repoRoot = path.resolve(process.cwd(), "../..");
+// Resolved from this file, not the working directory, so it is right however the process is started (PM2, npm -w, a shell).
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 loadEnvConfig(repoRoot);
 
 const nextConfig: NextConfig = {

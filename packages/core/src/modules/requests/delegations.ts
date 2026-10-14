@@ -1,43 +1,18 @@
 // Approval delegation and absence cover (WF-06). A delegator hands their
 // approver roles to a delegate for a date range; the delegate then sees and
 // decides the delegator's steps, and every such decision records both names.
-import type { DelegationStatus, Prisma, Role } from "@prisma/client";
+import type { Prisma, Role } from "@prisma/client";
 import { prisma } from "../../lib/db";
 import { recordAudit } from "../../lib/audit";
 import { enqueueNotification } from "../../lib/notifications";
-import { APPROVER_ROLES } from "./builder";
 import { RequestError } from "./errors";
+import { APPROVER_ROLES } from "./builder-rules";
+import { delegatableRoles, coveredRoles, delegationInclude, isLive, isoDay, type DelegatedRole } from "./delegation-rules";
 
-export type DelegatedRole = { role: Role; delegatorId: string; delegatorName: string; delegationId: string };
+export * from "./delegation-rules";
 
 const ISO = /^\d{4}-\d{2}-\d{2}$/;
 const day = (iso: string) => new Date(`${iso}T00:00:00.000Z`);
-export const isoDay = (d: Date) => d.toISOString().slice(0, 10);
-
-export const delegationInclude = {
-  delegator: { select: { id: true, name: true, email: true, roleAssignments: { select: { role: true } } } },
-  delegate: { select: { id: true, name: true, email: true } },
-  createdBy: { select: { id: true, name: true } },
-  revokedBy: { select: { id: true, name: true } },
-  _count: { select: { decisions: true } },
-} satisfies Prisma.ApprovalDelegationInclude;
-export type DelegationRecord = Prisma.ApprovalDelegationGetPayload<{ include: typeof delegationInclude }>;
-
-/** The approver roles a person can hand over: the route-eligible roles they hold. */
-export function delegatableRoles(roles: Role[]): Role[] {
-  return roles.filter((r) => APPROVER_ROLES.includes(r));
-}
-
-/** Roles a delegation covers right now: its listed roles, or every delegatable role the delegator currently holds. */
-export function coveredRoles(d: { roles: Role[]; delegator: { roleAssignments: Array<{ role: Role }> } }): Role[] {
-  const held = delegatableRoles(d.delegator.roleAssignments.map((r) => r.role));
-  return d.roles.length ? d.roles.filter((r) => held.includes(r)) : held;
-}
-
-export function isLive(d: { status: DelegationStatus; startsAt: Date; endsAt: Date }, now: Date = new Date()): boolean {
-  const today = isoDay(now);
-  return d.status === "ACTIVE" && isoDay(d.startsAt) <= today && today <= isoDay(d.endsAt);
-}
 
 export type CreateInput = { delegatorId: string; delegateId: string; roles?: Role[]; startsAt: string; endsAt: string; reason?: string | null; actor: { id: string; isAdmin: boolean }; now?: Date };
 

@@ -1,23 +1,21 @@
 import { Suspense } from "react";
 import Link from "next/link";
-import { notFound } from "next/navigation";
 import { hasRole, requireRole } from "@/lib/auth/authorize";
 import { KEY_MANAGE_ROLES, KEY_OPERATE_ROLES, KEY_VIEW_ROLES } from "@sam/core/modules/keys/access";
-import { getKey, holderLabel, isOverdue, keyLocation, openIssue } from "@sam/core/modules/keys/service";
-import { staffOptions } from "@/modules/keys/context";
+import { holderLabel, isOverdue, keyLocation, openIssue } from "@sam/core/modules/keys/rules";
+import { api, orNotFound } from "@/lib/api";
 import { KeyStatusBadge, TransactionHistory } from "@/modules/keys/components/views";
 import { IssueKeyForm, KeyExceptionForm, ReplaceKeyForm, ReturnKeyForm } from "@/modules/keys/components/forms";
 
 async function Content({ params }: { params: Promise<{ keyId: string }> }) {
   const { keyId } = await params;
   const user = await requireRole(KEY_VIEW_ROLES, `/keys/${keyId}`);
-  const key = await getKey(keyId);
-  if (!key) notFound();
+  const key = await orNotFound(api.keys.get({ id: keyId }));
   const canOperate = hasRole(user, ...KEY_OPERATE_ROLES);
   const canManage = hasRole(user, ...KEY_MANAGE_ROLES);
   const issue = openIssue(key);
   const now = new Date();
-  const staff = canOperate && key.status === "AVAILABLE" ? await staffOptions() : [];
+  const staff = canOperate && key.status === "AVAILABLE" ? await api.lookups.staff() : [];
 
   const exceptionKinds: Array<{ kind: string; label: string; danger?: boolean }> = [];
   if (canManage) {

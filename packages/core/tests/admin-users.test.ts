@@ -142,9 +142,17 @@ describe("update and list", () => {
     expect(v.user.accessExpiresAt?.toISOString().slice(0, 10)).toBe("2030-01-01");
     await expectError(updateUser({ actorId: adminId, userId: v.user.id, name: "Vendor User", email: v.user.email, vendorId: null }), "VALIDATION");
 
-    expect((await listUsers(orgId, { q: "renamed" })).map((u) => u.id)).toContain(a.user.id);
-    expect((await listUsers(orgId, { q: `vendor-${stamp}` })).map((u) => u.id)).toContain(v.user.id);
-    expect((await listUsers(orgId, { role: "VENDOR" })).every((u) => u.roleAssignments.some((r) => r.role === "VENDOR"))).toBe(true);
-    expect((await listUsers(orgId, { status: "INVITED" })).every((u) => u.status === "INVITED")).toBe(true);
+    expect((await listUsers(orgId, { q: "renamed" })).rows.map((u) => u.id)).toContain(a.user.id);
+    expect((await listUsers(orgId, { q: `vendor-${stamp}` })).rows.map((u) => u.id)).toContain(v.user.id);
+    expect((await listUsers(orgId, { role: "VENDOR" })).rows.every((u) => u.roleAssignments.some((r) => r.role === "VENDOR"))).toBe(true);
+    expect((await listUsers(orgId, { status: "INVITED" })).rows.every((u) => u.status === "INVITED")).toBe(true);
+
+    // Pages are bounded and report the total.
+    const first = await listUsers(orgId, {}, { page: 1, pageSize: 2 });
+    expect(first.rows.length).toBeLessThanOrEqual(2);
+    expect(first.total).toBeGreaterThanOrEqual(2);
+    expect(first.pages).toBe(Math.ceil(first.total / 2));
+    const second = await listUsers(orgId, {}, { page: 2, pageSize: 2 });
+    expect(second.rows.map((u) => u.id).filter((id) => first.rows.some((r) => r.id === id))).toEqual([]);
   });
 });
