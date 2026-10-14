@@ -11,6 +11,9 @@ export async function GET() {
     if (res.ok) return NextResponse.json({ status: "ok", api: "up", database: body.database ?? "up" });
     return NextResponse.json({ status: "degraded", api: "unavailable", database: body.database ?? "unknown" }, { status: 503 });
   } catch (error) {
+    // The target address and cause go to the server log only (pm2 logs sam-web), not to the caller.
+    const code = error instanceof Error && error.cause instanceof Error ? (error.cause as NodeJS.ErrnoException).code ?? error.cause.message : "";
+    console.error(`[health] cannot reach the API at ${API_URL}/ready: ${error instanceof Error ? error.message : "unknown error"} ${code}`.trim());
     return NextResponse.json({ status: "degraded", api: "down", error: error instanceof Error ? error.message : "unknown error" }, { status: 503 });
   }
 }
