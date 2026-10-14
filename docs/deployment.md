@@ -86,6 +86,13 @@ pm2 save
 pm2 startup       # prints one sudo command; run it so PM2 starts on boot
 ```
 
+Ports and addresses are not hardcoded: `ecosystem.config.cjs` reads `WEB_PORT`
+(default 3000), `API_PORT` (4000), `API_URL` and `WORKER_HEALTH_PORT` (4200) from
+`.env`. To use other ports, set them in `.env` before `pm2 start`; after changing
+them later, run `pm2 delete all && pm2 start ecosystem.config.cjs` (a plain
+`restart` keeps the old values). For two public domains (web and API) see
+`deploy/nginx.two-domains.example`.
+
 `ecosystem.config.cjs` defines three processes:
 
 - `sam-api`: PM2 cluster mode, 2 processes by default. Set `API_INSTANCES=4`
