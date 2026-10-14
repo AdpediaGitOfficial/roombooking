@@ -84,6 +84,9 @@ export function createClient<C extends Contract>(contract: C, options: ClientOpt
         try {
           res = await doFetch(url, { method: def.method, headers, body, signal: controller.signal, cache: "no-store" } as RequestInit);
         } catch (error) {
+          // The message shown to people stays generic; the cause goes to the server log (pm2 logs sam-web).
+          const cause = error instanceof Error ? `${error.name}: ${error.message}${error.cause instanceof Error ? ` (${(error.cause as NodeJS.ErrnoException).code ?? error.cause.message})` : ""}` : String(error);
+          console.error(`[api] ${def.method} ${url} could not be reached: ${cause}`);
           throw new ApiError(503, "UNAVAILABLE", error instanceof Error && error.name === "AbortError" ? "The service took too long to respond." : "The service is not reachable.");
         } finally {
           clearTimeout(timer);
